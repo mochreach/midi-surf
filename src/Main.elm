@@ -1,20 +1,27 @@
 module Main exposing (..)
 
 import Browser
-import Html exposing (Html, text, div, h1, img)
-import Html.Attributes exposing (src)
+import Html exposing (Html, div, text)
+import Ports exposing (listenForMIDIStatus)
+
 
 
 ---- MODEL ----
 
 
 type alias Model =
-    {}
+    { midiStatus : MIDIStatus }
+
+
+type MIDIStatus
+    = Initialising
+    | FailedToEstablishMIDI
+    | MIDIConnected
 
 
 init : ( Model, Cmd Msg )
 init =
-    ( {}, Cmd.none )
+    ( { midiStatus = Initialising }, Cmd.none )
 
 
 
@@ -22,12 +29,20 @@ init =
 
 
 type Msg
-    = NoOp
+    = MIDIStatusChanged Bool
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    ( model, Cmd.none )
+    case msg of
+        MIDIStatusChanged isConnected ->
+            ( if isConnected then
+                { model | midiStatus = MIDIConnected }
+
+              else
+                { model | midiStatus = FailedToEstablishMIDI }
+            , Cmd.none
+            )
 
 
 
@@ -36,10 +51,15 @@ update msg model =
 
 view : Model -> Html Msg
 view model =
-    div []
-        [ img [ src "/logo.svg" ] []
-        , h1 [] [ text "Your Elm App is working!" ]
-        ]
+    case model.midiStatus of
+        Initialising ->
+            div [] [ text "Initialising..." ]
+
+        FailedToEstablishMIDI ->
+            div [] [ text "Failed to establish MIDI connection." ]
+
+        MIDIConnected ->
+            div [] [ text "MIDI connection sucessful!" ]
 
 
 
@@ -52,5 +72,10 @@ main =
         { view = view
         , init = \_ -> init
         , update = update
-        , subscriptions = always Sub.none
+        , subscriptions = subscriptions
         }
+
+
+subscriptions : Model -> Sub Msg
+subscriptions _ =
+    listenForMIDIStatus MIDIStatusChanged

@@ -2,7 +2,7 @@ import "./main.css";
 import { Elm } from "./Main.elm";
 import * as serviceWorker from "./serviceWorker";
 
-Elm.Main.init({
+const app = Elm.Main.init({
   node: document.getElementById("root"),
 });
 
@@ -10,6 +10,8 @@ navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure);
 
 function onMIDISuccess(midiAccess) {
   console.log("MIDI ready!");
+  app.ports.listenForMIDIStatus.send(true);
+
   var inputs = midiAccess.inputs.values();
 
   midiAccess.onstatechange = function (e) {
@@ -25,6 +27,7 @@ function onMIDISuccess(midiAccess) {
 }
 
 function onMIDIFailure(msg) {
+  app.ports.listenForMIDIStatus.send(false);
   console.log("Failed to get MIDI access - " + msg);
 }
 
