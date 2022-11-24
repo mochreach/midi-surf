@@ -4,6 +4,8 @@ import Browser
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
+import Html.Events.Extra.Mouse as Mouse
+import Html.Events.Extra.Touch as Touch
 import Ports exposing (listenForMIDIStatus)
 
 
@@ -39,7 +41,10 @@ type Controller
 
 type MidiControl
     = Button
-    | Slider
+
+
+
+-- | Slider
 
 
 init : ( Model, Cmd Msg )
@@ -55,7 +60,12 @@ defaultPage : Page
 defaultPage =
     { label = "1"
     , gapSize = 5
-    , controller = Row <| List.map Control [ Button, Button, Button ]
+    , controller =
+        Control Button
+            |> List.repeat 12
+            |> Row
+            |> List.repeat 3
+            |> Column
     }
 
 
@@ -65,6 +75,8 @@ defaultPage =
 
 type Msg
     = MIDIStatusChanged Bool
+    | ButtonDown
+    | ButtonUp
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -78,6 +90,20 @@ update msg model =
                 { model | midiStatus = FailedToEstablishMIDI }
             , Cmd.none
             )
+
+        ButtonDown ->
+            let
+                _ =
+                    Debug.log "Pressed a button..." "I did too"
+            in
+            ( model, Cmd.none )
+
+        ButtonUp ->
+            let
+                _ =
+                    Debug.log "Released a button..." "I did too"
+            in
+            ( model, Cmd.none )
 
 
 
@@ -135,21 +161,33 @@ renderController gapSize controller =
             <|
                 List.map (renderController gapSize) subControls
 
-        Column _ ->
-            el
+        Column subControls ->
+            column
                 ([ padding gapSize
                  , spacing gapSize
                  , Background.color <| rgb255 21 221 23
                  ]
                     ++ fillSpace
                 )
-                none
+            <|
+                List.map (renderController gapSize) subControls
 
-        Control _ ->
+        Control midiControl ->
+            renderMidiControl gapSize midiControl
+
+
+renderMidiControl : Int -> MidiControl -> Element Msg
+renderMidiControl gapSize midiControl =
+    case midiControl of
+        Button ->
             el
                 ([ padding gapSize
                  , spacing gapSize
                  , Background.color <| rgb255 221 221 23
+                 , htmlAttribute <| Touch.onStart (\_ -> ButtonDown)
+                 , htmlAttribute <| Mouse.onDown (\_ -> ButtonDown)
+                 , htmlAttribute <| Touch.onEnd (\_ -> ButtonUp)
+                 , htmlAttribute <| Mouse.onUp (\_ -> ButtonUp)
                  ]
                     ++ fillSpace
                 )
