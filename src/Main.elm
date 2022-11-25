@@ -219,7 +219,7 @@ renderController controlStates gapSize idParts controller id =
             String.fromInt id :: idParts
     in
     case controller of
-        Module _ _ ->
+        Module _ subControls ->
             el
                 ([ padding gapSize
                  , spacing gapSize
@@ -227,8 +227,7 @@ renderController controlStates gapSize idParts controller id =
                  ]
                     ++ fillSpace
                 )
-                none
-                |> Debug.todo "Needs to do stuff"
+                (renderController controlStates gapSize updatedParts subControls 0)
 
         Row subControls ->
             row
