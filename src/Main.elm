@@ -1,13 +1,13 @@
 module Main exposing (..)
 
 import Browser
-import Dict exposing (Dict)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
 import Ports exposing (listenForMIDIStatus)
+import Time exposing (ZoneName(..))
 
 
 
@@ -16,7 +16,6 @@ import Ports exposing (listenForMIDIStatus)
 
 type alias Model =
     { midiStatus : MIDIStatus
-    , controlState : Dict String ControlState
     , page : Page
     }
 
@@ -40,62 +39,98 @@ type alias PageConfig =
     }
 
 
-createControlState : Page -> Dict String ControlState
-createControlState page =
-    getControllerIds [] page.controller 0
-        |> Dict.fromList
-
-
-getControllerIds : List String -> Controller -> Int -> List ( String, ControlState )
-getControllerIds idParts controller id =
-    let
-        updatedParts =
-            String.fromInt id :: idParts
-    in
-    case controller of
-        Module _ c ->
-            getControllerIds updatedParts c 0
-
-        Row controllers ->
-            List.map2
-                (getControllerIds updatedParts)
-                controllers
-                (List.range 0 <| List.length controllers)
-                |> List.concat
-
-        Column controllers ->
-            List.map2
-                (getControllerIds updatedParts)
-                controllers
-                (List.range 0 <| List.length controllers)
-                |> List.concat
-
-        Control _ ->
-            ( String.join "_" <| List.reverse updatedParts, Default )
-                |> List.singleton
-
-
 type Controller
     = Module String Controller
     | Row (List Controller)
     | Column (List Controller)
-    | Control MidiControl
+    | Button ButtonState
 
 
-type MidiControl
-    = Button
+updateWithId : String -> Controller -> { id : String, updateFn : Controller -> Controller } -> Controller
+updateWithId currentId toUpdate updateInfo =
+    let
+        { id, updateFn } =
+            updateInfo
+    in
+    case toUpdate of
+        Module label controller ->
+            if currentId == id then
+                updateFn controller
+
+            else
+                updateWithId (currentId ++ "_0") controller updateInfo
+                    |> Module label
+
+        Row contollers ->
+            List.indexedMap
+                (\i c ->
+                    updateWithId (currentId ++ "_" ++ String.fromInt i) c updateInfo
+                )
+                contollers
+                |> Row
+
+        Column contollers ->
+            if currentId == id then
+                updateFn toUpdate
+
+            else
+                List.indexedMap
+                    (\i c ->
+                        updateWithId (currentId ++ "_" ++ String.fromInt i) c updateInfo
+                    )
+                    contollers
+                    |> Column
+
+        Button state ->
+            if currentId == id then
+                updateFn toUpdate
+
+            else
+                Button state
 
 
-type ControlState
-    = Default
-    | Pressed
+type alias ButtonState =
+    { status : ButtonStatus
+    , label : String
+    }
+
+
+newButton : Controller
+newButton =
+    Button
+        { status = Off
+        , label = "[NEW]"
+        }
+
+
+buttonOn : Controller -> Controller
+buttonOn controller =
+    case controller of
+        Button state ->
+            Button { state | status = On }
+
+        _ ->
+            controller
+
+
+buttonOff : Controller -> Controller
+buttonOff controller =
+    case controller of
+        Button state ->
+            Button { state | status = Off }
+
+        _ ->
+            controller
+
+
+type ButtonStatus
+    = On
+    | Off
 
 
 init : ( Model, Cmd Msg )
 init =
     ( { midiStatus = Initialising
-      , controlState =
-            createControlState defaultPage
       , page = defaultPage
       }
     , Cmd.none
@@ -106,7 +141,7 @@ defaultPage : Page
 defaultPage =
     { label = "1"
     , controller =
-        Control Button
+        newButton
             |> List.repeat 8
             |> Row
             |> List.repeat 3
@@ -131,13 +166,6 @@ type Msg
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    let
-        maybeAlways value =
-            Maybe.map (\_ -> value)
-
-        setControlState id newState =
-            Dict.update id (maybeAlways newState) model.controlState
-    in
     case msg of
         MIDIStatusChanged isConnected ->
             ( if isConnected then
@@ -149,18 +177,38 @@ update msg model =
             )
 
         ButtonDown id ->
-            ( { model
-                | controlState =
-                    setControlState id Pressed
-              }
+            let
+                page =
+                    model.page
+
+                updatedPage =
+                    { page
+                        | controller =
+                            updateWithId
+                                "0"
+                                page.controller
+                                { id = id, updateFn = buttonOn }
+                    }
+            in
+            ( { model | page = updatedPage }
             , Cmd.none
             )
 
         ButtonUp id ->
-            ( { model
-                | controlState =
-                    setControlState id Default
-              }
+            let
+                page =
+                    model.page
+
+                updatedPage =
+                    { page
+                        | controller =
+                            updateWithId
+                                "0"
+                                page.controller
+                                { id = id, updateFn = buttonOff }
+                    }
+            in
+            ( { model | page = updatedPage }
             , Cmd.none
             )
 
@@ -174,7 +222,7 @@ view : Model -> Element Msg
 view model =
     column (padding 5 :: fillSpace)
         [ midiStatus model.midiStatus
-        , renderPage model.controlState model.page
+        , renderPage model.page
         ]
 
 
@@ -191,18 +239,18 @@ midiStatus status =
             el [] <| text "MIDI connection sucessful!"
 
 
-renderPage : Dict String ControlState -> Page -> Element Msg
-renderPage controlStates page =
+renderPage : Page -> Element Msg
+renderPage page =
     let
         { config, controller } =
             page
     in
     el ([ padding config.gapSize, Border.solid, Border.width 2 ] ++ fillSpace) <|
-        renderController config controlStates [] controller 0
+        renderController config [] controller 0
 
 
-renderController : PageConfig -> Dict String ControlState -> List String -> Controller -> Int -> Element Msg
-renderController config controlStates idParts controller id =
+renderController : PageConfig -> List String -> Controller -> Int -> Element Msg
+renderController config idParts controller id =
     let
         updatedParts =
             String.fromInt id :: idParts
@@ -216,7 +264,7 @@ renderController config controlStates idParts controller id =
                  ]
                     ++ fillSpace
                 )
-                (renderController config controlStates updatedParts subControls 0)
+                (renderController config updatedParts subControls 0)
 
         Row subControls ->
             row
@@ -228,7 +276,7 @@ renderController config controlStates idParts controller id =
                 )
             <|
                 List.map2
-                    (renderController config controlStates updatedParts)
+                    (renderController config updatedParts)
                     subControls
                     (List.range 0 <| List.length subControls)
 
@@ -242,73 +290,65 @@ renderController config controlStates idParts controller id =
                 )
             <|
                 List.map2
-                    (renderController config controlStates updatedParts)
+                    (renderController config updatedParts)
                     subControls
                     (List.range 0 <| List.length subControls)
 
-        Control midiControl ->
-            renderMidiControl
+        Button state ->
+            renderButton
                 config
-                controlStates
+                state
                 (updatedParts
                     |> List.reverse
                     |> String.join "_"
                 )
-                midiControl
 
 
-renderMidiControl : PageConfig -> Dict String ControlState -> String -> MidiControl -> Element Msg
-renderMidiControl config controlStates id midiControl =
-    let
-        controlState =
-            Dict.get id controlStates
-                |> Maybe.withDefault Default
-    in
-    case midiControl of
-        Button ->
-            el
-                ([ padding config.gapSize
-                 , spacing config.gapSize
-                 , case controlState of
-                    Default ->
-                        Background.color <| rgb255 221 221 23
+renderButton : PageConfig -> ButtonState -> String -> Element Msg
+renderButton config state id =
+    el
+        ([ padding config.gapSize
+         , spacing config.gapSize
+         , case state.status of
+            Off ->
+                Background.color <| rgb255 221 221 23
 
-                    Pressed ->
-                        Background.color <| rgb255 (221 // 2) (221 // 2) (23 // 2)
-                 , htmlAttribute <|
-                    Touch.onStart
-                        (\_ ->
-                            ButtonDown id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onDown
-                        (\_ ->
-                            ButtonDown id
-                        )
-                 , htmlAttribute <|
-                    Touch.onEnd
-                        (\_ ->
-                            ButtonUp id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onUp
-                        (\_ ->
-                            ButtonUp id
-                        )
-                 ]
-                    ++ fillSpace
+            On ->
+                Background.color <| rgb255 (221 // 2) (221 // 2) (23 // 2)
+         , htmlAttribute <|
+            Touch.onStart
+                (\_ ->
+                    ButtonDown id
                 )
-                (if config.debug then
-                    case controlState of
-                        Default ->
-                            text "Off"
-
-                        Pressed ->
-                            text "On"
-
-                 else
-                    none
+         , htmlAttribute <|
+            Mouse.onDown
+                (\_ ->
+                    ButtonDown id
                 )
+         , htmlAttribute <|
+            Touch.onEnd
+                (\_ ->
+                    ButtonUp id
+                )
+         , htmlAttribute <|
+            Mouse.onUp
+                (\_ ->
+                    ButtonUp id
+                )
+         ]
+            ++ fillSpace
+        )
+        (if config.debug then
+            case state.status of
+                Off ->
+                    text "Off"
+
+                On ->
+                    text "On"
+
+         else
+            none
+        )
 
 
 fillSpace : List (Attribute msg)
