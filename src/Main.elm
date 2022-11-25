@@ -46,6 +46,50 @@ type Controller
     | Button ButtonState
 
 
+getWithId : String -> String -> Controller -> Maybe Controller
+getWithId currentId id controller =
+    case controller of
+        Module _ subController ->
+            if currentId == id then
+                Just controller
+
+            else
+                getWithId (currentId ++ "_0") id subController
+
+        Row controllers ->
+            if currentId == id then
+                Just controller
+
+            else
+                List.indexedMap
+                    (\i c ->
+                        getWithId (currentId ++ "_" ++ String.fromInt i) id c
+                    )
+                    controllers
+                    |> List.filterMap identity
+                    |> List.head
+
+        Column controllers ->
+            if currentId == id then
+                Just controller
+
+            else
+                List.indexedMap
+                    (\i c ->
+                        getWithId (currentId ++ "_" ++ String.fromInt i) id c
+                    )
+                    controllers
+                    |> List.filterMap identity
+                    |> List.head
+
+        Button _ ->
+            if currentId == id then
+                Just controller
+
+            else
+                Nothing
+
+
 updateWithId : String -> Controller -> { id : String, updateFn : Controller -> Controller } -> Controller
 updateWithId currentId toUpdate updateInfo =
     let
@@ -61,15 +105,7 @@ updateWithId currentId toUpdate updateInfo =
                 updateWithId (currentId ++ "_0") controller updateInfo
                     |> Module label
 
-        Row contollers ->
-            List.indexedMap
-                (\i c ->
-                    updateWithId (currentId ++ "_" ++ String.fromInt i) c updateInfo
-                )
-                contollers
-                |> Row
-
-        Column contollers ->
+        Row controllers ->
             if currentId == id then
                 updateFn toUpdate
 
@@ -78,7 +114,19 @@ updateWithId currentId toUpdate updateInfo =
                     (\i c ->
                         updateWithId (currentId ++ "_" ++ String.fromInt i) c updateInfo
                     )
-                    contollers
+                    controllers
+                    |> Row
+
+        Column controllers ->
+            if currentId == id then
+                updateFn toUpdate
+
+            else
+                List.indexedMap
+                    (\i c ->
+                        updateWithId (currentId ++ "_" ++ String.fromInt i) c updateInfo
+                    )
+                    controllers
                     |> Column
 
         Button state ->
@@ -92,14 +140,16 @@ updateWithId currentId toUpdate updateInfo =
 type alias ButtonState =
     { status : ButtonStatus
     , label : String
+    , noteNumber : Int
     }
 
 
-newButton : Controller
-newButton =
+newButton : String -> Int -> Controller
+newButton label noteNumber =
     Button
         { status = Off
-        , label = "[NEW]"
+        , label = label
+        , noteNumber = noteNumber
         }
 
 
@@ -141,8 +191,7 @@ defaultPage : Page
 defaultPage =
     { label = "1"
     , controller =
-        newButton
-            |> List.repeat 8
+        List.map (\n -> newButton (String.fromInt n) n) (List.range 60 73)
             |> Row
             |> List.repeat 3
             |> Column
@@ -181,6 +230,9 @@ update msg model =
                 page =
                     model.page
 
+                button =
+                    getWithId "0" id page.controller
+
                 updatedPage =
                     { page
                         | controller =
@@ -191,13 +243,21 @@ update msg model =
                     }
             in
             ( { model | page = updatedPage }
-            , Cmd.none
+            , case button of
+                Just (Button state) ->
+                    Ports.sendNoteOn state.noteNumber
+
+                _ ->
+                    Cmd.none
             )
 
         ButtonUp id ->
             let
                 page =
                     model.page
+
+                button =
+                    getWithId "0" id page.controller
 
                 updatedPage =
                     { page
@@ -209,7 +269,12 @@ update msg model =
                     }
             in
             ( { model | page = updatedPage }
-            , Cmd.none
+            , case button of
+                Just (Button state) ->
+                    Ports.sendNoteOff state.noteNumber
+
+                _ ->
+                    Cmd.none
             )
 
 
