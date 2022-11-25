@@ -1,22 +1,36 @@
 module Main exposing (..)
 
+import Animator
 import Browser
+import Dict exposing (Dict)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
 import Ports exposing (listenForMIDIStatus)
+import Time
 
 
 
----- MODEL ----
+-- {{{ MODEL
 
 
 type alias Model =
     { midiStatus : MIDIStatus
+    , controlState : Animator.Timeline (Dict String ControlState)
     , page : Page
     }
+
+
+animator : Animator.Animator Model
+animator =
+    Animator.animator
+        |> Animator.watching
+            .controlState
+            (\newControlState model ->
+                { model | controlState = newControlState }
+            )
 
 
 type MIDIStatus
@@ -32,6 +46,41 @@ type alias Page =
     }
 
 
+createControlState : Page -> Dict String ControlState
+createControlState page =
+    getControllerIds [] page.controller 0
+        |> Dict.fromList
+
+
+getControllerIds : List String -> Controller -> Int -> List ( String, ControlState )
+getControllerIds idParts controller id =
+    let
+        updatedParts =
+            String.fromInt id :: idParts
+    in
+    case controller of
+        Module _ c ->
+            getControllerIds updatedParts c 0
+
+        Row controllers ->
+            List.map2
+                (getControllerIds updatedParts)
+                controllers
+                (List.range 0 <| List.length controllers)
+                |> List.concat
+
+        Column controllers ->
+            List.map2
+                (getControllerIds updatedParts)
+                controllers
+                (List.range 0 <| List.length controllers)
+                |> List.concat
+
+        Control _ ->
+            ( String.join "_" <| List.reverse updatedParts, Default )
+                |> List.singleton
+
+
 type Controller
     = Module String Controller
     | Row (List Controller)
@@ -43,13 +92,18 @@ type MidiControl
     = Button
 
 
-
--- | Slider
+type ControlState
+    = Default
+    | Pressed
 
 
 init : ( Model, Cmd Msg )
 init =
     ( { midiStatus = Initialising
+      , controlState =
+            createControlState defaultPage
+                |> Debug.log "IDs"
+                |> Animator.init
       , page = defaultPage
       }
     , Cmd.none
@@ -70,18 +124,32 @@ defaultPage =
 
 
 
----- UPDATE ----
+-- }}}
+-- {{{ UPDATE
 
 
 type Msg
-    = MIDIStatusChanged Bool
-    | ButtonDown
-    | ButtonUp
+    = AnimationStep Time.Posix
+    | MIDIStatusChanged Bool
+    | ButtonDown String
+    | ButtonUp String
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    let
+        maybeAlways value =
+            Maybe.map (\_ -> value)
+
+        setControlState id newState =
+            Dict.update id (maybeAlways newState) <| Animator.current model.controlState
+    in
     case msg of
+        AnimationStep newTime ->
+            ( Animator.update newTime animator model
+            , Cmd.none
+            )
+
         MIDIStatusChanged isConnected ->
             ( if isConnected then
                 { model | midiStatus = MIDIConnected }
@@ -91,30 +159,33 @@ update msg model =
             , Cmd.none
             )
 
-        ButtonDown ->
-            let
-                _ =
-                    Debug.log "Pressed a button..." "I did too"
-            in
-            ( model, Cmd.none )
+        ButtonDown id ->
+            ( { model
+                | controlState =
+                    Animator.go Animator.slowly (setControlState id Pressed) model.controlState
+              }
+            , Cmd.none
+            )
 
-        ButtonUp ->
-            let
-                _ =
-                    Debug.log "Released a button..." "I did too"
-            in
-            ( model, Cmd.none )
+        ButtonUp id ->
+            ( { model
+                | controlState =
+                    Animator.go Animator.slowly (setControlState id Default) model.controlState
+              }
+            , Cmd.none
+            )
 
 
 
----- VIEW ----
+-- }}}
+-- {{{ VIEW
 
 
 view : Model -> Element Msg
 view model =
-    column ([ padding 5 ] ++ fillSpace)
+    column (padding 5 :: fillSpace)
         [ midiStatus model.midiStatus
-        , renderPage model.page
+        , renderPage (Animator.current model.controlState) model.page
         ]
 
 
@@ -131,14 +202,22 @@ midiStatus status =
             el [] <| text "MIDI connection sucessful!"
 
 
-renderPage : Page -> Element Msg
-renderPage { label, gapSize, controller } =
+renderPage : Dict String ControlState -> Page -> Element Msg
+renderPage controlStates page =
+    let
+        { gapSize, controller } =
+            page
+    in
     el ([ padding gapSize, Border.solid, Border.width 2 ] ++ fillSpace) <|
-        renderController gapSize controller
+        renderController controlStates gapSize [] controller 0
 
 
-renderController : Int -> Controller -> Element Msg
-renderController gapSize controller =
+renderController : Dict String ControlState -> Int -> List String -> Controller -> Int -> Element Msg
+renderController controlStates gapSize idParts controller id =
+    let
+        updatedParts =
+            String.fromInt id :: idParts
+    in
     case controller of
         Module _ _ ->
             el
@@ -149,6 +228,7 @@ renderController gapSize controller =
                     ++ fillSpace
                 )
                 none
+                |> Debug.todo "Needs to do stuff"
 
         Row subControls ->
             row
@@ -159,7 +239,10 @@ renderController gapSize controller =
                     ++ fillSpace
                 )
             <|
-                List.map (renderController gapSize) subControls
+                List.map2
+                    (renderController controlStates gapSize updatedParts)
+                    subControls
+                    (List.range 0 <| List.length subControls)
 
         Column subControls ->
             column
@@ -170,24 +253,60 @@ renderController gapSize controller =
                     ++ fillSpace
                 )
             <|
-                List.map (renderController gapSize) subControls
+                List.map2
+                    (renderController controlStates gapSize updatedParts)
+                    subControls
+                    (List.range 0 <| List.length subControls)
 
         Control midiControl ->
-            renderMidiControl gapSize midiControl
+            renderMidiControl
+                controlStates
+                gapSize
+                (updatedParts
+                    |> List.reverse
+                    |> String.join "_"
+                )
+                midiControl
 
 
-renderMidiControl : Int -> MidiControl -> Element Msg
-renderMidiControl gapSize midiControl =
+renderMidiControl : Dict String ControlState -> Int -> String -> MidiControl -> Element Msg
+renderMidiControl controlStates gapSize id midiControl =
+    let
+        controlState =
+            Dict.get id controlStates
+                |> Maybe.withDefault Default
+    in
     case midiControl of
         Button ->
             el
                 ([ padding gapSize
                  , spacing gapSize
-                 , Background.color <| rgb255 221 221 23
-                 , htmlAttribute <| Touch.onStart (\_ -> ButtonDown)
-                 , htmlAttribute <| Mouse.onDown (\_ -> ButtonDown)
-                 , htmlAttribute <| Touch.onEnd (\_ -> ButtonUp)
-                 , htmlAttribute <| Mouse.onUp (\_ -> ButtonUp)
+                 , case controlState of
+                    Default ->
+                        Background.color <| rgb255 221 221 23
+
+                    Pressed ->
+                        Background.color <| rgb255 (221 // 2) (221 // 2) (23 // 2)
+                 , htmlAttribute <|
+                    Touch.onStart
+                        (\_ ->
+                            ButtonDown id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onDown
+                        (\_ ->
+                            ButtonDown id
+                        )
+                 , htmlAttribute <|
+                    Touch.onEnd
+                        (\_ ->
+                            ButtonUp id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onUp
+                        (\_ ->
+                            ButtonUp id
+                        )
                  ]
                     ++ fillSpace
                 )
@@ -200,7 +319,8 @@ fillSpace =
 
 
 
----- PROGRAM ----
+-- }}}
+-- {{{ PROGRAM
 
 
 main : Program () Model Msg
@@ -214,5 +334,12 @@ main =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    listenForMIDIStatus MIDIStatusChanged
+subscriptions model =
+    Sub.batch
+        [ listenForMIDIStatus MIDIStatusChanged
+        , Animator.toSubscription AnimationStep model animator
+        ]
+
+
+
+-- }}}
