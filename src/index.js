@@ -8,12 +8,12 @@ const app = Elm.Main.init({
 let midiOut = null;
 
 app.ports.sendNoteOn.subscribe(function(noteNumber) {
-    midiOut.send([0x94, noteNumber, 0x7f]);
+    midiOut.send([0x95, noteNumber, 0x7f]);
     console.log("On", noteNumber);
 });
 
 app.ports.sendNoteOff.subscribe(function(noteNumber) {
-    midiOut.send([0x84, noteNumber, 0x7f]);
+    midiOut.send([0x85, noteNumber, 0x7f]);
     console.log("Off", noteNumber);
 });
 

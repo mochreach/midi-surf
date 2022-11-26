@@ -190,16 +190,43 @@ init =
 defaultPage : Page
 defaultPage =
     { label = "1"
-    , controller =
-        List.map (\n -> newButton (String.fromInt n) n) (List.range 60 73)
-            |> Row
-            |> List.repeat 3
-            |> Column
+    , controller = isomorphicKeyboard
     , config =
         { gapSize = 5
         , debug = True
         }
     }
+
+
+isomorphicKeyboard : Controller
+isomorphicKeyboard =
+    let
+        noteRange =
+            List.range 36 128
+
+        rowNumbers =
+            List.range 0 9
+    in
+    List.map (makeIsomorphicRow noteRange 5 14) rowNumbers
+        |> List.reverse
+        |> Column
+
+
+makeIsomorphicRow : List Int -> Int -> Int -> Int -> Controller
+makeIsomorphicRow noteRange offset rowLength rowNumber =
+    let
+        start =
+            offset * rowNumber
+
+        includedRange =
+            List.range start (start + rowLength)
+    in
+    noteRange
+        |> List.indexedMap Tuple.pair
+        |> List.filter (\( i, _ ) -> List.member i includedRange)
+        |> List.map Tuple.second
+        |> List.map (\i -> newButton (String.fromInt i) i)
+        |> Row
 
 
 
@@ -403,16 +430,19 @@ renderButton config state id =
          ]
             ++ fillSpace
         )
-        (if config.debug then
+        ((if config.debug then
             case state.status of
                 Off ->
-                    text "Off"
+                    "Off\n"
 
                 On ->
-                    text "On"
+                    "On\n"
 
-         else
-            none
+          else
+            ""
+         )
+            ++ state.label
+            |> text
         )
 
 
