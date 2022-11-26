@@ -4,10 +4,11 @@ import Browser
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
+import Element.Input as Input
+import Html exposing (Html)
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
 import Ports exposing (listenForMIDIStatus)
-import Time exposing (ZoneName(..))
 
 
 
@@ -17,13 +18,24 @@ import Time exposing (ZoneName(..))
 type alias Model =
     { midiStatus : MIDIStatus
     , page : Page
+    , popup : Maybe PopUp
     }
 
 
 type MIDIStatus
     = Initialising
     | FailedToEstablishMIDI
-    | MIDIConnected
+    | MIDIConnected (List String)
+
+
+type PopUp
+    = MidiMenu MidiMenuModel
+
+
+type alias MidiMenuModel =
+    { devices : List String
+    , selected : Maybe String
+    }
 
 
 type alias Page =
@@ -182,6 +194,9 @@ init : ( Model, Cmd Msg )
 init =
     ( { midiStatus = Initialising
       , page = defaultPage
+      , popup =
+            Just <|
+                MidiMenu { devices = [], selected = Nothing }
       }
     , Cmd.none
     )
@@ -235,7 +250,8 @@ makeIsomorphicRow noteRange offset rowLength rowNumber =
 
 
 type Msg
-    = MIDIStatusChanged Bool
+    = MIDIStatusChanged (List String)
+    | ClosePopUp
     | ButtonDown String
     | ButtonUp String
 
@@ -243,12 +259,17 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        MIDIStatusChanged isConnected ->
-            ( if isConnected then
-                { model | midiStatus = MIDIConnected }
+        MIDIStatusChanged devices ->
+            ( if List.isEmpty devices |> not then
+                { model | midiStatus = MIDIConnected devices }
 
               else
                 { model | midiStatus = FailedToEstablishMIDI }
+            , Cmd.none
+            )
+
+        ClosePopUp ->
+            ( { model | popup = Nothing }
             , Cmd.none
             )
 
@@ -310,12 +331,28 @@ update msg model =
 -- {{{ VIEW
 
 
-view : Model -> Element Msg
+view : Model -> Html Msg
 view model =
-    column (padding 5 :: fillSpace)
-        [ midiStatus model.midiStatus
-        , renderPage model.page
-        ]
+    layout
+        (case model.popup of
+            Just (MidiMenu state) ->
+                (Element.inFront <|
+                    el
+                        (Background.color (rgba 0.5 0.5 0.5 0.8)
+                            :: fillSpace
+                        )
+                        (midiMenu state.devices)
+                )
+                    :: fillSpace
+
+            Nothing ->
+                fillSpace
+        )
+    <|
+        column (padding 5 :: fillSpace)
+            [ midiStatus model.midiStatus
+            , renderPage model.page
+            ]
 
 
 midiStatus : MIDIStatus -> Element Msg
@@ -327,8 +364,35 @@ midiStatus status =
         FailedToEstablishMIDI ->
             el [] <| text "Failed to establish MIDI connection."
 
-        MIDIConnected ->
-            el [] <| text "MIDI connection sucessful!"
+        MIDIConnected devices ->
+            el [] <| text <| "MIDI connection: " ++ String.fromInt (List.length devices)
+
+
+midiMenu : List String -> Element Msg
+midiMenu devices =
+    el [ centerX, centerY ] <|
+        column
+            [ padding 10
+            , spacing 5
+            , Background.color (rgb 1.0 1.0 1.0)
+            ]
+            (paragraph [] [ text "Select MIDI Device" ]
+                :: (case devices of
+                        [] ->
+                            [ paragraph [] [ text "No MIDI devices connected." ] ]
+
+                        _ ->
+                            List.map text devices
+                   )
+                ++ [ Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , Border.color <| rgb255 0 0 0
+                        ]
+                        { onPress = Just ClosePopUp, label = text "Cancel" }
+                   ]
+            )
 
 
 renderPage : Page -> Element Msg
@@ -459,7 +523,7 @@ fillSpace =
 main : Program () Model Msg
 main =
     Browser.element
-        { view = view >> layout []
+        { view = view
         , init = \_ -> init
         , update = update
         , subscriptions = subscriptions

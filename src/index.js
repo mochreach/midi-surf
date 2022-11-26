@@ -29,10 +29,8 @@ navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure);
 
 function onMIDISuccess(midiAccess) {
     console.log("MIDI ready!");
-    app.ports.listenForMIDIStatus.send(true);
-
     let outputs = Array.from(midiAccess.outputs.values());
-    console.log(outputs);
+    app.ports.listenForMIDIStatus.send(outputs.map(x => x.name));
 
     // this should be changed to outputs.get("name")
     midiOut = outputs[2];
