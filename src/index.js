@@ -5,11 +5,23 @@ import * as serviceWorker from "./serviceWorker";
 const app = Elm.Main.init({
     node: document.getElementById("root"),
 });
+
+let midiAccess = null;
 let midiOut = null;
+
+app.ports.connectToDevice.subscribe(function (id) {
+    if (midiAccess) {
+        midiOut = midiAccess.outputs.get(id);
+        if (midiOut) {
+            console.log(midiOut);
+            app.ports.connectedToDevice.send(midiOut.name);
+        }
+    }
+});
 
 app.ports.sendNoteOn.subscribe(function (noteNumber) {
     if (midiOut) {
-        midiOut.send([0x95, noteNumber, 0x7f]);
+        midiOut.send([0x96, noteNumber, 0x7f]);
         console.log("On", noteNumber);
     } else {
         console.log("midiOut undefined: Cannot send note off.");
@@ -18,7 +30,7 @@ app.ports.sendNoteOn.subscribe(function (noteNumber) {
 
 app.ports.sendNoteOff.subscribe(function (noteNumber) {
     if (midiOut) {
-        midiOut.send([0x85, noteNumber, 0x7f]);
+        midiOut.send([0x86, noteNumber, 0x7f]);
         console.log("Off", noteNumber);
     } else {
         console.log("midiOut undefined: Cannot send note off.");
@@ -27,14 +39,11 @@ app.ports.sendNoteOff.subscribe(function (noteNumber) {
 
 navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure);
 
-function onMIDISuccess(midiAccess) {
+function onMIDISuccess(mAccess) {
     console.log("MIDI ready!");
-    let outputs = Array.from(midiAccess.outputs.values());
-    app.ports.listenForMIDIStatus.send(outputs.map(x => x.name));
-
-    // this should be changed to outputs.get("name")
-    midiOut = outputs[2];
-    console.log(midiOut);
+    midiAccess = mAccess;
+    let midiDevices = Array.from(midiAccess.outputs.values());
+    app.ports.listenForMIDIStatus.send(midiDevices.map(x => [x.id, x.name]));
 
     midiAccess.onstatechange = function (e) {
         console.log(e.port.name);

@@ -4,10 +4,13 @@ import Browser
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
+import Element.Events as Events
 import Element.Input as Input
+import FeatherIcons as Icons
 import Html exposing (Html)
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
+import Material.Icons exposing (model_training)
 import Ports exposing (listenForMIDIStatus)
 
 
@@ -25,7 +28,8 @@ type alias Model =
 type MIDIStatus
     = Initialising
     | FailedToEstablishMIDI
-    | MIDIConnected (List String)
+    | MidiAvailable (List ( String, String ))
+    | MidiConnected String
 
 
 type PopUp
@@ -33,7 +37,7 @@ type PopUp
 
 
 type alias MidiMenuModel =
-    { devices : List String
+    { devices : List ( String, String )
     , selected : Maybe String
     }
 
@@ -194,9 +198,7 @@ init : ( Model, Cmd Msg )
 init =
     ( { midiStatus = Initialising
       , page = defaultPage
-      , popup =
-            Just <|
-                MidiMenu { devices = [], selected = Nothing }
+      , popup = Nothing
       }
     , Cmd.none
     )
@@ -220,9 +222,9 @@ isomorphicKeyboard =
             List.range 36 128
 
         rowNumbers =
-            List.range 0 9
+            List.range 2 8
     in
-    List.map (makeIsomorphicRow noteRange 5 14) rowNumbers
+    List.map (makeIsomorphicRow noteRange 5 12) rowNumbers
         |> List.reverse
         |> Column
 
@@ -250,7 +252,10 @@ makeIsomorphicRow noteRange offset rowLength rowNumber =
 
 
 type Msg
-    = MIDIStatusChanged (List String)
+    = MIDIStatusChanged (List ( String, String ))
+    | OpenMidiMenu
+    | ConnectToDevice String
+    | ConnectedToDevice String
     | ClosePopUp
     | ButtonDown String
     | ButtonUp String
@@ -261,10 +266,41 @@ update msg model =
     case msg of
         MIDIStatusChanged devices ->
             ( if List.isEmpty devices |> not then
-                { model | midiStatus = MIDIConnected devices }
+                { model | midiStatus = MidiAvailable devices }
 
               else
                 { model | midiStatus = FailedToEstablishMIDI }
+            , Cmd.none
+            )
+
+        OpenMidiMenu ->
+            ( { model
+                | popup =
+                    Just <|
+                        MidiMenu
+                            { devices =
+                                case model.midiStatus of
+                                    MidiAvailable devices ->
+                                        devices
+
+                                    _ ->
+                                        []
+                            , selected = Nothing
+                            }
+              }
+            , Cmd.none
+            )
+
+        ConnectToDevice id ->
+            ( model
+            , Ports.connectToDevice id
+            )
+
+        ConnectedToDevice name ->
+            ( { model
+                | midiStatus = MidiConnected name
+                , popup = Nothing
+              }
             , Cmd.none
             )
 
@@ -336,10 +372,11 @@ view model =
     layout
         (case model.popup of
             Just (MidiMenu state) ->
-                (Element.inFront <|
+                (inFront <|
                     el
-                        (Background.color (rgba 0.5 0.5 0.5 0.8)
-                            :: fillSpace
+                        ([ Background.color (rgba 0.5 0.5 0.5 0.8)
+                         ]
+                            ++ fillSpace
                         )
                         (midiMenu state.devices)
                 )
@@ -349,9 +386,27 @@ view model =
                 fillSpace
         )
     <|
-        column (padding 5 :: fillSpace)
-            [ midiStatus model.midiStatus
-            , renderPage model.page
+        row fillSpace
+            [ column
+                [ height fill, padding 5 ]
+                [ Input.button
+                    [ padding 10
+                    , Border.rounded 10
+                    , Border.width 5
+                    ]
+                    { onPress = Just OpenMidiMenu
+                    , label =
+                        Icons.gitPullRequest
+                            |> Icons.withSize 36
+                            |> Icons.toHtml []
+                            |> html
+                    }
+                ]
+            , column
+                (padding 5 :: fillSpace)
+                [ midiStatus model.midiStatus
+                , renderPage model.page
+                ]
             ]
 
 
@@ -359,21 +414,24 @@ midiStatus : MIDIStatus -> Element Msg
 midiStatus status =
     case status of
         Initialising ->
-            el [] <| text "Initialising..."
+            paragraph [] [ text "Initialising..." ]
 
         FailedToEstablishMIDI ->
-            el [] <| text "Failed to establish MIDI connection."
+            paragraph [] [ text "Failed to establish MIDI connection." ]
 
-        MIDIConnected devices ->
-            el [] <| text <| "MIDI connection: " ++ String.fromInt (List.length devices)
+        MidiAvailable devices ->
+            paragraph [] [ text <| "MIDI connection: " ++ String.fromInt (List.length devices) ]
+
+        MidiConnected device ->
+            paragraph [] [ text <| "MIDI Out: " ++ device ]
 
 
-midiMenu : List String -> Element Msg
+midiMenu : List ( String, String ) -> Element Msg
 midiMenu devices =
     el [ centerX, centerY ] <|
         column
             [ padding 10
-            , spacing 5
+            , spacing 10
             , Background.color (rgb 1.0 1.0 1.0)
             ]
             (paragraph [] [ text "Select MIDI Device" ]
@@ -382,7 +440,7 @@ midiMenu devices =
                             [ paragraph [] [ text "No MIDI devices connected." ] ]
 
                         _ ->
-                            List.map text devices
+                            List.map deviceItem devices
                    )
                 ++ [ Input.button
                         [ padding 5
@@ -393,6 +451,18 @@ midiMenu devices =
                         { onPress = Just ClosePopUp, label = text "Cancel" }
                    ]
             )
+
+
+deviceItem : ( String, String ) -> Element Msg
+deviceItem ( id, name ) =
+    Input.button
+        [ padding 10
+        , width fill
+        , Background.color <| rgb 0.8 0.8 0.8
+        ]
+        { onPress = Just <| ConnectToDevice id
+        , label = text name
+        }
 
 
 renderPage : Page -> Element Msg
@@ -467,7 +537,11 @@ renderButton config state id =
          , spacing config.gapSize
          , case state.status of
             Off ->
-                Background.color <| rgb255 221 221 23
+                if modBy 12 state.noteNumber /= 0 then
+                    Background.color <| rgb255 221 221 23
+
+                else
+                    Background.color <| rgb255 100 100 200
 
             On ->
                 Background.color <| rgb255 (221 // 2) (221 // 2) (23 // 2)
@@ -533,7 +607,8 @@ main =
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
-        [ listenForMIDIStatus MIDIStatusChanged
+        [ Ports.listenForMIDIStatus MIDIStatusChanged
+        , Ports.connectedToDevice ConnectedToDevice
         ]
 
 
