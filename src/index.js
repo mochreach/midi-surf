@@ -21,7 +21,7 @@ app.ports.connectToDevice.subscribe(function (id) {
 
 app.ports.sendNoteOn.subscribe(function (noteNumber) {
     if (midiOut) {
-        midiOut.send([0x96, noteNumber, 0x7f]);
+        midiOut.send([0x91, noteNumber, 0x7f]);
         console.log("On", noteNumber);
     } else {
         console.log("midiOut undefined: Cannot send note off.");
@@ -30,7 +30,7 @@ app.ports.sendNoteOn.subscribe(function (noteNumber) {
 
 app.ports.sendNoteOff.subscribe(function (noteNumber) {
     if (midiOut) {
-        midiOut.send([0x86, noteNumber, 0x7f]);
+        midiOut.send([0x81, noteNumber, 0x7f]);
         console.log("Off", noteNumber);
     } else {
         console.log("midiOut undefined: Cannot send note off.");

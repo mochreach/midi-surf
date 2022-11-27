@@ -5,12 +5,12 @@ import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Events as Events
+import Element.Font as Font
 import Element.Input as Input
 import FeatherIcons as Icons
 import Html exposing (Html)
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
-import Material.Icons exposing (model_training)
 import Ports exposing (listenForMIDIStatus)
 
 
@@ -219,12 +219,12 @@ isomorphicKeyboard : Controller
 isomorphicKeyboard =
     let
         noteRange =
-            List.range 36 128
+            List.range 36 127
 
         rowNumbers =
-            List.range 2 8
+            List.range 0 10
     in
-    List.map (makeIsomorphicRow noteRange 5 12) rowNumbers
+    List.map (makeIsomorphicRow noteRange 5 18) rowNumbers
         |> List.reverse
         |> Column
 
@@ -370,7 +370,7 @@ update msg model =
 view : Model -> Html Msg
 view model =
     layout
-        (case model.popup of
+        ((case model.popup of
             Just (MidiMenu state) ->
                 (inFront <|
                     el
@@ -384,6 +384,15 @@ view model =
 
             Nothing ->
                 fillSpace
+         )
+            ++ [ Font.family
+                    [ Font.external
+                        { name = "Roboto"
+                        , url = "https://fonts.googleapis.com/css?family=Space+Mono"
+                        }
+                    , Font.monospace
+                    ]
+               ]
         )
     <|
         row fillSpace
@@ -471,7 +480,14 @@ renderPage page =
         { config, controller } =
             page
     in
-    el ([ padding config.gapSize, Border.solid, Border.width 2 ] ++ fillSpace) <|
+    el
+        ([ Border.rounded 10
+         , Border.solid
+         , Border.width 2
+         ]
+            ++ fillSpace
+        )
+    <|
         renderController config [] controller 0
 
 
@@ -486,7 +502,8 @@ renderController config idParts controller id =
             el
                 ([ padding config.gapSize
                  , spacing config.gapSize
-                 , Background.color <| rgb255 3 5 5
+                 , Border.dotted
+                 , Border.width 2
                  ]
                     ++ fillSpace
                 )
@@ -494,9 +511,8 @@ renderController config idParts controller id =
 
         Row subControls ->
             row
-                ([ padding config.gapSize
-                 , spacing config.gapSize
-                 , Background.color <| rgb255 21 39 200
+                ([ paddingXY config.gapSize 0
+                 , spacingXY config.gapSize 0
                  ]
                     ++ fillSpace
                 )
@@ -508,9 +524,8 @@ renderController config idParts controller id =
 
         Column subControls ->
             column
-                ([ padding config.gapSize
-                 , spacing config.gapSize
-                 , Background.color <| rgb255 21 221 23
+                ([ paddingXY 0 config.gapSize
+                 , spacingXY 0 config.gapSize
                  ]
                     ++ fillSpace
                 )
@@ -535,13 +550,19 @@ renderButton config state id =
     el
         ([ padding config.gapSize
          , spacing config.gapSize
+         , Border.width 2
+         , Border.rounded 10
+         , Border.solid
          , case state.status of
             Off ->
-                if modBy 12 state.noteNumber /= 0 then
-                    Background.color <| rgb255 221 221 23
+                if modBy 12 state.noteNumber == 0 then
+                    Background.color <| rgb255 100 100 200
+
+                else if List.member (modBy 12 state.noteNumber) [ 1, 3, 6, 8, 10 ] then
+                    Background.color <| rgb255 170 170 18
 
                 else
-                    Background.color <| rgb255 100 100 200
+                    Background.color <| rgb255 221 221 23
 
             On ->
                 Background.color <| rgb255 (221 // 2) (221 // 2) (23 // 2)
