@@ -1,6 +1,7 @@
 module Main exposing (..)
 
 import Browser
+import Controller exposing (Controller)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -39,12 +40,17 @@ type Mode
 
 type PopUp
     = MidiMenu MidiMenuModel
+    | EditMenu EditMenuModel
 
 
 type alias MidiMenuModel =
     { devices : List ( String, String )
     , selected : Maybe String
     }
+
+
+type EditMenuModel
+    = EditButton EditButtonState
 
 
 type alias Page =
@@ -60,201 +66,10 @@ type alias PageConfig =
     }
 
 
-type Controller
-    = Module String Controller
-    | Row (List Controller)
-    | Column (List Controller)
-    | Button ButtonState
-    | Space
-
-
-type EditOperation
-    = Add
-    | Remove
-
-
-type alias ButtonState =
-    { status : ButtonStatus
-    , label : String
+type alias EditButtonState =
+    { label : String
     , noteNumber : Int
     }
-
-
-getWithId : String -> String -> Controller -> Maybe Controller
-getWithId currentId id controller =
-    case controller of
-        Module _ subController ->
-            if currentId == id then
-                Just controller
-
-            else
-                getWithId (currentId ++ "_0") id subController
-
-        Row controllers ->
-            if currentId == id then
-                Just controller
-
-            else
-                List.indexedMap
-                    (\i c ->
-                        getWithId (currentId ++ "_" ++ String.fromInt i) id c
-                    )
-                    controllers
-                    |> List.filterMap identity
-                    |> List.head
-
-        Column controllers ->
-            if currentId == id then
-                Just controller
-
-            else
-                List.indexedMap
-                    (\i c ->
-                        getWithId (currentId ++ "_" ++ String.fromInt i) id c
-                    )
-                    controllers
-                    |> List.filterMap identity
-                    |> List.head
-
-        Button _ ->
-            if currentId == id then
-                Just controller
-
-            else
-                Nothing
-
-        Space ->
-            if currentId == id then
-                Just controller
-
-            else
-                Nothing
-
-
-updateWithId : String -> Controller -> { id : String, updateFn : Controller -> Controller } -> Controller
-updateWithId currentId toUpdate updateInfo =
-    let
-        { id, updateFn } =
-            updateInfo
-    in
-    case toUpdate of
-        Module label controller ->
-            if currentId == id then
-                updateFn controller
-
-            else
-                updateWithId (currentId ++ "_0") controller updateInfo
-                    |> Module label
-
-        Row controllers ->
-            if currentId == id then
-                updateFn toUpdate
-
-            else
-                List.indexedMap
-                    (\i c ->
-                        updateWithId (currentId ++ "_" ++ String.fromInt i) c updateInfo
-                    )
-                    controllers
-                    |> Row
-
-        Column controllers ->
-            if currentId == id then
-                updateFn toUpdate
-
-            else
-                List.indexedMap
-                    (\i c ->
-                        updateWithId (currentId ++ "_" ++ String.fromInt i) c updateInfo
-                    )
-                    controllers
-                    |> Column
-
-        Button state ->
-            if currentId == id then
-                updateFn toUpdate
-
-            else
-                Button state
-
-        Space ->
-            if currentId == id then
-                updateFn toUpdate
-
-            else
-                Space
-
-
-addSpace : Controller -> Controller
-addSpace controller =
-    case controller of
-        Row subControls ->
-            subControls
-                ++ [ Space ]
-                |> Row
-
-        Column subControls ->
-            subControls
-                ++ [ Space ]
-                |> Column
-
-        _ ->
-            controller
-
-
-removeItem : Controller -> Controller
-removeItem controller =
-    case controller of
-        Row subControls ->
-            subControls
-                |> List.reverse
-                |> List.drop 1
-                |> List.reverse
-                |> Row
-
-        Column subControls ->
-            subControls
-                |> List.reverse
-                |> List.drop 1
-                |> List.reverse
-                |> Column
-
-        _ ->
-            controller
-
-
-newButton : String -> Int -> Controller
-newButton label noteNumber =
-    Button
-        { status = Off
-        , label = label
-        , noteNumber = noteNumber
-        }
-
-
-buttonOn : Controller -> Controller
-buttonOn controller =
-    case controller of
-        Button state ->
-            Button { state | status = On }
-
-        _ ->
-            controller
-
-
-buttonOff : Controller -> Controller
-buttonOff controller =
-    case controller of
-        Button state ->
-            Button { state | status = Off }
-
-        _ ->
-            controller
-
-
-type ButtonStatus
-    = On
-    | Off
 
 
 init : ( Model, Cmd Msg )
@@ -290,7 +105,7 @@ isomorphicKeyboard =
     in
     List.map (makeIsomorphicRow noteRange 5 18) rowNumbers
         |> List.reverse
-        |> Column
+        |> Controller.Column
 
 
 makeIsomorphicRow : List Int -> Int -> Int -> Int -> Controller
@@ -306,8 +121,8 @@ makeIsomorphicRow noteRange offset rowLength rowNumber =
         |> List.indexedMap Tuple.pair
         |> List.filter (\( i, _ ) -> List.member i includedRange)
         |> List.map Tuple.second
-        |> List.map (\i -> newButton (String.fromInt i) i)
-        |> Row
+        |> List.map (\i -> Controller.newButton (String.fromInt i) i)
+        |> Controller.Row
 
 
 
@@ -323,6 +138,7 @@ type Msg
     | ConnectedToDevice String
     | AddSpace String
     | RemoveItem String
+    | EditController String
     | ButtonDown String
     | ButtonUp String
     | ClosePopUp
@@ -392,10 +208,10 @@ update msg model =
                 updatedPage =
                     { page
                         | controller =
-                            updateWithId
+                            Controller.updateWithId
                                 "0"
                                 page.controller
-                                { id = id, updateFn = addSpace }
+                                { id = id, updateFn = Controller.addSpace }
                     }
             in
             ( { model | page = updatedPage }
@@ -410,13 +226,25 @@ update msg model =
                 updatedPage =
                     { page
                         | controller =
-                            updateWithId
+                            Controller.updateWithId
                                 "0"
                                 page.controller
-                                { id = id, updateFn = removeItem }
+                                { id = id, updateFn = Controller.removeItem }
                     }
             in
             ( { model | page = updatedPage }
+            , Cmd.none
+            )
+
+        EditController id ->
+            let
+                page =
+                    model.page
+
+                controller =
+                    Controller.getWithId "0" id page.controller
+            in
+            ( model
             , Cmd.none
             )
 
@@ -426,20 +254,20 @@ update msg model =
                     model.page
 
                 button =
-                    getWithId "0" id page.controller
+                    Controller.getWithId "0" id page.controller
 
                 updatedPage =
                     { page
                         | controller =
-                            updateWithId
+                            Controller.updateWithId
                                 "0"
                                 page.controller
-                                { id = id, updateFn = buttonOn }
+                                { id = id, updateFn = Controller.buttonOn }
                     }
             in
             ( { model | page = updatedPage }
             , case button of
-                Just (Button state) ->
+                Just (Controller.Button state) ->
                     Ports.sendNoteOn state.noteNumber
 
                 _ ->
@@ -452,20 +280,20 @@ update msg model =
                     model.page
 
                 button =
-                    getWithId "0" id page.controller
+                    Controller.getWithId "0" id page.controller
 
                 updatedPage =
                     { page
                         | controller =
-                            updateWithId
+                            Controller.updateWithId
                                 "0"
                                 page.controller
-                                { id = id, updateFn = buttonOff }
+                                { id = id, updateFn = Controller.buttonOff }
                     }
             in
             ( { model | page = updatedPage }
             , case button of
-                Just (Button state) ->
+                Just (Controller.Button state) ->
                     Ports.sendNoteOff state.noteNumber
 
                 _ ->
@@ -487,13 +315,22 @@ view : Model -> Html Msg
 view model =
     layout
         ((case model.popup of
-            Just (MidiMenu state) ->
+            Just popup ->
                 (inFront <|
-                    el
-                        (Background.color (rgba 0.5 0.5 0.5 0.8)
-                            :: fillSpace
-                        )
-                        (midiMenu state.devices)
+                    case popup of
+                        MidiMenu state ->
+                            el
+                                (Background.color (rgba 0.5 0.5 0.5 0.8)
+                                    :: fillSpace
+                                )
+                                (midiMenu state.devices)
+
+                        EditMenu _ ->
+                            el
+                                (Background.color (rgba 0.5 0.5 0.5 0.8)
+                                    :: fillSpace
+                                )
+                                none
                 )
                     :: fillSpace
 
@@ -640,7 +477,7 @@ renderController mode config idParts controller id =
             String.fromInt id :: idParts
     in
     case controller of
-        Module _ subControls ->
+        Controller.Module _ subControls ->
             el
                 ([ padding config.gapSize
                  , spacing config.gapSize
@@ -651,7 +488,7 @@ renderController mode config idParts controller id =
                 )
                 (renderController mode config updatedParts subControls 0)
 
-        Row subControls ->
+        Controller.Row subControls ->
             case mode of
                 Normal ->
                     row
@@ -672,11 +509,12 @@ renderController mode config idParts controller id =
                          , spacing 5
                          , Border.width 2
                          , Border.rounded 10
+                         , Border.dashed
                          ]
                             ++ fillSpace
                         )
                         [ renderEditButton config
-                            Remove
+                            Controller.Remove
                             (updatedParts
                                 |> List.reverse
                                 |> String.join "_"
@@ -694,14 +532,14 @@ renderController mode config idParts controller id =
                                 (List.range 0 <| List.length subControls)
                         , renderEditButton
                             config
-                            Add
+                            Controller.Add
                             (updatedParts
                                 |> List.reverse
                                 |> String.join "_"
                             )
                         ]
 
-        Column subControls ->
+        Controller.Column subControls ->
             case mode of
                 Normal ->
                     column
@@ -722,11 +560,12 @@ renderController mode config idParts controller id =
                          , spacing 5
                          , Border.width 2
                          , Border.rounded 10
+                         , Border.dashed
                          ]
                             ++ fillSpace
                         )
                         [ renderEditButton config
-                            Remove
+                            Controller.Remove
                             (updatedParts
                                 |> List.reverse
                                 |> String.join "_"
@@ -744,91 +583,137 @@ renderController mode config idParts controller id =
                                 (List.range 0 <| List.length subControls)
                         , renderEditButton
                             config
-                            Add
+                            Controller.Add
                             (updatedParts
                                 |> List.reverse
                                 |> String.join "_"
                             )
                         ]
 
-        Button state ->
+        Controller.Button state ->
             renderButton
                 config
+                mode
                 state
                 (updatedParts
                     |> List.reverse
                     |> String.join "_"
                 )
 
-        Space ->
+        Controller.Space ->
             el ([ Background.color <| rgb 0.9 0.9 0.9, Border.rounded 10 ] ++ fillSpace) none
 
 
-renderButton : PageConfig -> ButtonState -> String -> Element Msg
-renderButton config state id =
-    el
-        ([ padding config.gapSize
-         , spacing config.gapSize
-         , Border.width 2
-         , Border.rounded 10
-         , Border.solid
-         , Font.size 12
-         , case state.status of
-            Off ->
-                if modBy 12 state.noteNumber == 0 then
+renderButton : PageConfig -> Mode -> Controller.ButtonState -> String -> Element Msg
+renderButton config mode state id =
+    case mode of
+        Normal ->
+            el
+                ([ padding config.gapSize
+                 , spacing config.gapSize
+                 , Border.width 2
+                 , Border.rounded 10
+                 , Border.solid
+                 , Font.size 14
+                 , case state.status of
+                    Controller.Off ->
+                        if modBy 12 state.noteNumber == 0 then
+                            Background.color <| rgb255 100 100 200
+
+                        else if List.member (modBy 12 state.noteNumber) [ 1, 3, 6, 8, 10 ] then
+                            Background.color <| rgb255 170 170 18
+
+                        else
+                            Background.color <| rgb255 221 221 23
+
+                    Controller.On ->
+                        Background.color <| rgb255 (221 // 2) (221 // 2) (23 // 2)
+                 , htmlAttribute <|
+                    Touch.onStart
+                        (\_ ->
+                            ButtonDown id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onDown
+                        (\_ ->
+                            ButtonDown id
+                        )
+                 , htmlAttribute <|
+                    Touch.onEnd
+                        (\_ ->
+                            ButtonUp id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onUp
+                        (\_ ->
+                            ButtonUp id
+                        )
+                 ]
+                    ++ fillSpace
+                )
+                ((if config.debug then
+                    case state.status of
+                        Controller.Off ->
+                            "Off\n"
+
+                        Controller.On ->
+                            "On\n"
+
+                  else
+                    ""
+                 )
+                    ++ state.label
+                    |> text
+                )
+
+        Edit ->
+            el
+                ([ padding config.gapSize
+                 , spacing config.gapSize
+                 , Border.width 2
+                 , Border.rounded 10
+                 , Border.dashed
+                 , Font.size 14
+                 , if modBy 12 state.noteNumber == 0 then
                     Background.color <| rgb255 100 100 200
 
-                else if List.member (modBy 12 state.noteNumber) [ 1, 3, 6, 8, 10 ] then
+                   else if List.member (modBy 12 state.noteNumber) [ 1, 3, 6, 8, 10 ] then
                     Background.color <| rgb255 170 170 18
 
-                else
+                   else
                     Background.color <| rgb255 221 221 23
-
-            On ->
-                Background.color <| rgb255 (221 // 2) (221 // 2) (23 // 2)
-         , htmlAttribute <|
-            Touch.onStart
-                (\_ ->
-                    ButtonDown id
+                 , htmlAttribute <|
+                    Touch.onStart
+                        (\_ ->
+                            ButtonDown id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onDown
+                        (\_ ->
+                            ButtonDown id
+                        )
+                 , htmlAttribute <|
+                    Touch.onEnd
+                        (\_ ->
+                            ButtonUp id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onUp
+                        (\_ ->
+                            ButtonUp id
+                        )
+                 ]
+                    ++ fillSpace
                 )
-         , htmlAttribute <|
-            Mouse.onDown
-                (\_ ->
-                    ButtonDown id
+                (state.label
+                    |> text
                 )
-         , htmlAttribute <|
-            Touch.onEnd
-                (\_ ->
-                    ButtonUp id
-                )
-         , htmlAttribute <|
-            Mouse.onUp
-                (\_ ->
-                    ButtonUp id
-                )
-         ]
-            ++ fillSpace
-        )
-        ((if config.debug then
-            case state.status of
-                Off ->
-                    "Off\n"
-
-                On ->
-                    "On\n"
-
-          else
-            ""
-         )
-            ++ state.label
-            |> text
-        )
 
 
-renderEditButton : PageConfig -> EditOperation -> String -> Element Msg
+renderEditButton : PageConfig -> Controller.EditOperation -> String -> Element Msg
 renderEditButton config editOperation parentId =
     case editOperation of
-        Add ->
+        Controller.Add ->
             Input.button
                 [ centerX
                 , padding config.gapSize
@@ -844,7 +729,7 @@ renderEditButton config editOperation parentId =
                         |> html
                 }
 
-        Remove ->
+        Controller.Remove ->
             Input.button
                 [ centerX
                 , padding config.gapSize
