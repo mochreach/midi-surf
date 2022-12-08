@@ -619,11 +619,7 @@ renderPage mode page =
             page
     in
     el
-        ([ Border.rounded 10
-         , Border.solid
-         , Border.width 2
-         ]
-            ++ fillSpace
+        (fillSpace
             ++ (case mode of
                     Normal ->
                         []
@@ -671,7 +667,14 @@ renderController mode config idParts controller id =
                             (List.range 0 <| List.length subControls)
 
                 Edit ->
-                    row ([ paddingXY 5 0, spacing 5 ] ++ fillSpace)
+                    row
+                        ([ paddingXY 5 0
+                         , spacing 5
+                         , Border.width 2
+                         , Border.rounded 10
+                         ]
+                            ++ fillSpace
+                        )
                         [ renderEditButton config
                             Remove
                             (updatedParts
@@ -681,8 +684,6 @@ renderController mode config idParts controller id =
                         , row
                             ([ spacingXY config.gapSize 0
                              , padding config.gapSize
-                             , Border.width 2
-                             , Border.rounded 10
                              ]
                                 ++ fillSpace
                             )
@@ -716,7 +717,14 @@ renderController mode config idParts controller id =
                             (List.range 0 <| List.length subControls)
 
                 Edit ->
-                    column ([ paddingXY 5 0, spacing 5 ] ++ fillSpace)
+                    column
+                        ([ paddingXY 0 5
+                         , spacing 5
+                         , Border.width 2
+                         , Border.rounded 10
+                         ]
+                            ++ fillSpace
+                        )
                         [ renderEditButton config
                             Remove
                             (updatedParts
@@ -726,8 +734,6 @@ renderController mode config idParts controller id =
                         , column
                             ([ spacingXY 0 config.gapSize
                              , padding config.gapSize
-                             , Border.width 2
-                             , Border.rounded 10
                              ]
                                 ++ fillSpace
                             )
@@ -766,6 +772,7 @@ renderButton config state id =
          , Border.width 2
          , Border.rounded 10
          , Border.solid
+         , Font.size 12
          , case state.status of
             Off ->
                 if modBy 12 state.noteNumber == 0 then
@@ -823,7 +830,8 @@ renderEditButton config editOperation parentId =
     case editOperation of
         Add ->
             Input.button
-                [ padding config.gapSize
+                [ centerX
+                , padding config.gapSize
                 , spacing config.gapSize
                 , Border.rounded 10
                 , Border.width 2
@@ -838,7 +846,8 @@ renderEditButton config editOperation parentId =
 
         Remove ->
             Input.button
-                [ padding config.gapSize
+                [ centerX
+                , padding config.gapSize
                 , spacing config.gapSize
                 , Border.rounded 10
                 , Border.width 2
