@@ -41,7 +41,7 @@ type Mode
 
 type PopUp
     = MidiMenu MidiMenuModel
-    | EditMenu EditMenuModel
+    | EditMenu EditMenuState
 
 
 type alias MidiMenuModel =
@@ -50,7 +50,7 @@ type alias MidiMenuModel =
     }
 
 
-type EditMenuModel
+type EditMenuState
     = EditButton EditButtonState
 
 
@@ -245,7 +245,20 @@ update msg model =
                 controller =
                     Controller.getWithId "0" id page.controller
             in
-            ( model
+            ( { model
+                | popup =
+                    case controller of
+                        Just (Controller.Button { noteNumber, label }) ->
+                            Just <|
+                                EditMenu <|
+                                    EditButton
+                                        { noteNumber = noteNumber
+                                        , label = label
+                                        }
+
+                        _ ->
+                            Nothing
+              }
             , Cmd.none
             )
 
@@ -326,12 +339,12 @@ view model =
                                 )
                                 (midiMenu state.devices)
 
-                        EditMenu _ ->
+                        EditMenu state ->
                             el
                                 (Background.color (rgba 0.5 0.5 0.5 0.8)
                                     :: fillSpace
                                 )
-                                none
+                                (editMenu state)
                 )
                     :: fillSpace
 
@@ -435,6 +448,24 @@ midiMenu devices =
                         { onPress = Just ClosePopUp, label = text "Cancel" }
                    ]
             )
+
+
+editMenu : EditMenuState -> Element Msg
+editMenu state =
+    el [ centerX, centerY ] <|
+        column
+            [ padding 10
+            , spacing 10
+            , Background.color (rgb 1.0 1.0 1.0)
+            ]
+            [ Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , Border.color <| rgb255 0 0 0
+                ]
+                { onPress = Just ClosePopUp, label = text "Cancel" }
+            ]
 
 
 deviceItem : ( String, String ) -> Element Msg
@@ -670,7 +701,7 @@ renderButton config mode state id =
                 )
 
         Edit ->
-            el
+            Input.button
                 ([ padding config.gapSize
                  , spacing config.gapSize
                  , Border.width 2
@@ -684,32 +715,14 @@ renderButton config mode state id =
 
                    else
                     Background.color <| rgb255 221 221 23
-                 , htmlAttribute <|
-                    Touch.onStart
-                        (\_ ->
-                            ButtonDown id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onDown
-                        (\_ ->
-                            ButtonDown id
-                        )
-                 , htmlAttribute <|
-                    Touch.onEnd
-                        (\_ ->
-                            ButtonUp id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onUp
-                        (\_ ->
-                            ButtonUp id
-                        )
                  ]
                     ++ fillSpace
                 )
-                (state.label
-                    |> text
-                )
+                { onPress = Just <| EditController id
+                , label =
+                    state.label
+                        |> text
+                }
 
 
 renderEditButton : PageConfig -> Controller.EditOperation -> String -> Element Msg
