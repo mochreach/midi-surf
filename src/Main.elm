@@ -7,6 +7,7 @@ import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
+import Element.Lazy as Lazy
 import FeatherIcons as Icons
 import Html exposing (Html)
 import Html.Events.Extra.Mouse as Mouse
@@ -347,7 +348,8 @@ view model =
                ]
         )
     <|
-        row fillSpace
+        row
+            fillSpace
             [ column
                 [ height fill
                 , padding 5
@@ -356,7 +358,6 @@ view model =
                 ]
                 [ Input.button
                     [ padding 10
-                    , Border.rounded 10
                     , Border.width 4
                     ]
                     { onPress = Just OpenMidiMenu
@@ -368,7 +369,6 @@ view model =
                     }
                 , Input.button
                     [ padding 10
-                    , Border.rounded 10
                     , Border.width 4
                     , Background.color <|
                         case model.mode of
@@ -478,7 +478,8 @@ renderController mode config idParts controller id =
     in
     case controller of
         Controller.Module _ subControls ->
-            el
+            Lazy.lazy2
+                el
                 ([ padding config.gapSize
                  , spacing config.gapSize
                  , Border.dotted
@@ -491,7 +492,7 @@ renderController mode config idParts controller id =
         Controller.Row subControls ->
             case mode of
                 Normal ->
-                    row
+                    Lazy.lazy2 row
                         ([ paddingXY config.gapSize 0
                          , spacingXY config.gapSize 0
                          ]
@@ -504,11 +505,10 @@ renderController mode config idParts controller id =
                             (List.range 0 <| List.length subControls)
 
                 Edit ->
-                    row
+                    Lazy.lazy2 row
                         ([ paddingXY 5 0
                          , spacing 5
                          , Border.width 2
-                         , Border.rounded 10
                          , Border.dashed
                          ]
                             ++ fillSpace
@@ -542,7 +542,7 @@ renderController mode config idParts controller id =
         Controller.Column subControls ->
             case mode of
                 Normal ->
-                    column
+                    Lazy.lazy2 column
                         ([ paddingXY 0 config.gapSize
                          , spacingXY 0 config.gapSize
                          ]
@@ -555,11 +555,10 @@ renderController mode config idParts controller id =
                             (List.range 0 <| List.length subControls)
 
                 Edit ->
-                    column
+                    Lazy.lazy2 column
                         ([ paddingXY 0 5
                          , spacing 5
                          , Border.width 2
-                         , Border.rounded 10
                          , Border.dashed
                          ]
                             ++ fillSpace
@@ -601,7 +600,7 @@ renderController mode config idParts controller id =
                 )
 
         Controller.Space ->
-            el ([ Background.color <| rgb 0.9 0.9 0.9, Border.rounded 10 ] ++ fillSpace) none
+            el ((Background.color <| rgb 0.9 0.9 0.9) :: fillSpace) none
 
 
 renderButton : PageConfig -> Mode -> Controller.ButtonState -> String -> Element Msg
@@ -609,12 +608,11 @@ renderButton config mode state id =
     case mode of
         Normal ->
             el
-                ([ padding config.gapSize
-                 , spacing config.gapSize
+                ([ padding 0
+                 , spacing 0
                  , Border.width 2
-                 , Border.rounded 10
-                 , Border.solid
-                 , Font.size 14
+
+                 -- , Border.solid
                  , case state.status of
                     Controller.Off ->
                         if modBy 12 state.noteNumber == 0 then
@@ -664,6 +662,11 @@ renderButton config mode state id =
                  )
                     ++ state.label
                     |> text
+                    |> el
+                        [ centerX
+                        , centerY
+                        , Font.size 14
+                        ]
                 )
 
         Edit ->
@@ -671,7 +674,6 @@ renderButton config mode state id =
                 ([ padding config.gapSize
                  , spacing config.gapSize
                  , Border.width 2
-                 , Border.rounded 10
                  , Border.dashed
                  , Font.size 14
                  , if modBy 12 state.noteNumber == 0 then
@@ -718,7 +720,6 @@ renderEditButton config editOperation parentId =
                 [ centerX
                 , padding config.gapSize
                 , spacing config.gapSize
-                , Border.rounded 10
                 , Border.width 2
                 ]
                 { onPress = Just <| AddSpace parentId
@@ -734,7 +735,6 @@ renderEditButton config editOperation parentId =
                 [ centerX
                 , padding config.gapSize
                 , spacing config.gapSize
-                , Border.rounded 10
                 , Border.width 2
                 ]
                 { onPress = Just <| RemoveItem parentId
