@@ -1,7 +1,7 @@
 module Main exposing (..)
 
 import Browser
-import Controller exposing (Controller)
+import Controller exposing (Controller, updateWithId)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -41,7 +41,7 @@ type Mode
 
 type PopUp
     = MidiMenu MidiMenuModel
-    | EditMenu EditMenuState
+    | EditMenu String EditMenuState
 
 
 type alias MidiMenuModel =
@@ -69,8 +69,24 @@ type alias PageConfig =
 
 type alias EditButtonState =
     { label : String
-    , noteNumber : Int
+    , noteNumber : String
     }
+
+
+editStateToButton : EditButtonState -> Maybe Controller
+editStateToButton { label, noteNumber } =
+    case ( String.isEmpty label, String.toInt noteNumber ) of
+        ( False, Just nn ) ->
+            Controller.newButton label nn
+                |> Just
+
+        _ ->
+            Nothing
+
+
+validLabel : EditButtonState -> Bool
+validLabel { label } =
+    not <| String.isEmpty label
 
 
 init : ( Model, Cmd Msg )
@@ -139,7 +155,9 @@ type Msg
     | ConnectedToDevice String
     | AddSpace String
     | RemoveItem String
-    | EditController String
+    | OpenEditController String
+    | FinishedEdit Controller
+    | UpdateControllerState EditMenuState
     | ButtonDown String
     | ButtonUp String
     | ClosePopUp
@@ -237,7 +255,7 @@ update msg model =
             , Cmd.none
             )
 
-        EditController id ->
+        OpenEditController id ->
             let
                 page =
                     model.page
@@ -250,9 +268,9 @@ update msg model =
                     case controller of
                         Just (Controller.Button { noteNumber, label }) ->
                             Just <|
-                                EditMenu <|
+                                EditMenu id <|
                                     EditButton
-                                        { noteNumber = noteNumber
+                                        { noteNumber = String.fromInt noteNumber
                                         , label = label
                                         }
 
@@ -261,6 +279,50 @@ update msg model =
               }
             , Cmd.none
             )
+
+        FinishedEdit controller ->
+            case model.popup of
+                Just (EditMenu id _) ->
+                    let
+                        page =
+                            model.page
+
+                        updatedPage =
+                            { page
+                                | controller =
+                                    Controller.updateWithId
+                                        "0"
+                                        page.controller
+                                        { id = id, updateFn = \_ -> controller }
+                            }
+                    in
+                    ( { model
+                        | popup = Nothing
+                        , page = updatedPage
+                      }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( { model | popup = Nothing }
+                    , Cmd.none
+                    )
+
+        UpdateControllerState state ->
+            case model.popup of
+                Just (EditMenu id _) ->
+                    ( { model
+                        | popup =
+                            Just <|
+                                EditMenu id state
+                      }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( { model | popup = Nothing }
+                    , Cmd.none
+                    )
 
         ButtonDown id ->
             let
@@ -339,7 +401,7 @@ view model =
                                 )
                                 (midiMenu state.devices)
 
-                        EditMenu state ->
+                        EditMenu _ state ->
                             el
                                 (Background.color (rgba 0.5 0.5 0.5 0.8)
                                     :: fillSpace
@@ -451,21 +513,73 @@ midiMenu devices =
 
 
 editMenu : EditMenuState -> Element Msg
-editMenu state =
-    el [ centerX, centerY ] <|
-        column
-            [ padding 10
-            , spacing 10
-            , Background.color (rgb 1.0 1.0 1.0)
-            ]
-            [ Input.button
-                [ padding 5
-                , Border.width 2
-                , Border.solid
-                , Border.color <| rgb255 0 0 0
-                ]
-                { onPress = Just ClosePopUp, label = text "Cancel" }
-            ]
+editMenu menuType =
+    case menuType of
+        EditButton state ->
+            el [ centerX, centerY ] <|
+                column
+                    [ padding 10
+                    , spacing 10
+                    , Background.color (rgb 1.0 1.0 1.0)
+                    ]
+                    [ Input.text
+                        [ Border.width 2
+                        , Border.rounded 0
+                        , Border.color (rgb 0.0 0.0 0.0)
+                        ]
+                        { onChange =
+                            \newLabel ->
+                                { state | label = newLabel }
+                                    |> EditButton
+                                    |> UpdateControllerState
+                        , text = state.label
+                        , placeholder = Just <| Input.placeholder [] (text "enter label")
+                        , label = Input.labelAbove [] (text "Label")
+                        }
+                    , Input.text
+                        [ Border.width 2
+                        , Border.rounded 0
+                        , Border.color (rgb 0.0 0.0 0.0)
+                        ]
+                        { onChange =
+                            \newNoteNumber ->
+                                { state | noteNumber = newNoteNumber }
+                                    |> EditButton
+                                    |> UpdateControllerState
+                        , text = state.noteNumber
+                        , placeholder = Just <| Input.placeholder [] (text "enter note#")
+                        , label = Input.labelAbove [] (text "Note Number")
+                        }
+                    , case editStateToButton state of
+                        Just controller ->
+                            Input.button
+                                [ padding 5
+                                , Border.width 2
+                                , Border.solid
+                                , Border.color <| rgb 0.7 0.7 0.7
+                                ]
+                                { onPress = Just <| FinishedEdit controller
+                                , label = text "Ok"
+                                }
+
+                        Nothing ->
+                            Input.button
+                                [ padding 5
+                                , Border.width 2
+                                , Border.solid
+                                , Border.color <| rgb 0 0 0
+                                ]
+                                { onPress = Nothing
+                                , label = text "Ok"
+                                }
+                    , Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , Border.color <| rgb255 0 0 0
+                        ]
+                        { onPress = Just ClosePopUp, label = text "Cancel" }
+                    ]
 
 
 deviceItem : ( String, String ) -> Element Msg
@@ -718,7 +832,7 @@ renderButton config mode state id =
                  ]
                     ++ fillSpace
                 )
-                { onPress = Just <| EditController id
+                { onPress = Just <| OpenEditController id
                 , label =
                     state.label
                         |> text
