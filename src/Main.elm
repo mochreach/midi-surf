@@ -51,7 +51,10 @@ type alias MidiMenuModel =
 
 
 type EditMenuState
-    = EditButton EditButtonState
+    = EditModule
+    | EditColumn
+    | EditRow
+    | EditButton EditButtonState
 
 
 type alias Page =
@@ -71,6 +74,14 @@ type alias EditButtonState =
     { label : String
     , noteNumber : String
     , channel : String
+    }
+
+
+defaultButton : EditButtonState
+defaultButton =
+    { label = ""
+    , noteNumber = "60"
+    , channel = "1"
     }
 
 
@@ -152,8 +163,9 @@ type Msg
     | AddSpace String
     | RemoveItem String
     | OpenEditController String
-    | FinishedEdit Controller
+    | SetEditType EditMenuState
     | UpdateControllerState EditMenuState
+    | FinishedEdit Controller
     | ButtonDown String
     | ButtonUp String
     | ClosePopUp
@@ -276,6 +288,18 @@ update msg model =
               }
             , Cmd.none
             )
+
+        SetEditType editType ->
+            let
+                newPopup =
+                    case model.popup of
+                        Just (EditMenu id _) ->
+                            Just <| EditMenu id editType
+
+                        _ ->
+                            Nothing
+            in
+            ( { model | popup = newPopup }, Cmd.none )
 
         FinishedEdit controller ->
             case model.popup of
@@ -517,9 +541,36 @@ midiMenu devices =
 
 editMenu : EditMenuState -> Element Msg
 editMenu menuType =
-    case menuType of
-        EditButton state ->
-            el [ centerX, centerY ] <|
+    wrappedRow [ centerX, centerY, spacing 10 ]
+        [ el
+            [ alignTop
+            , padding 10
+            , spacing 10
+            , Background.color (rgb 1.0 1.0 1.0)
+            ]
+          <|
+            Input.radio
+                [ spacing 10 ]
+                { onChange = SetEditType
+                , selected = Just menuType
+                , label = Input.labelAbove [] (text "Type")
+                , options =
+                    [ Input.option EditModule (text "Module")
+                    , Input.option EditColumn (text "Column")
+                    , Input.option EditRow (text "Row")
+                    , Input.option
+                        (case menuType of
+                            EditButton _ ->
+                                menuType
+
+                            _ ->
+                                EditButton defaultButton
+                        )
+                        (text "Button")
+                    ]
+                }
+        , case menuType of
+            EditButton state ->
                 column
                     [ padding 10
                     , spacing 10
@@ -600,6 +651,22 @@ editMenu menuType =
                             { onPress = Just ClosePopUp, label = text "Cancel" }
                         ]
                     ]
+
+            _ ->
+                column
+                    [ padding 10
+                    , spacing 10
+                    , Background.color (rgb 1.0 1.0 1.0)
+                    ]
+                    [ Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , Border.color <| rgb255 0 0 0
+                        ]
+                        { onPress = Just ClosePopUp, label = text "Cancel" }
+                    ]
+        ]
 
 
 deviceItem : ( String, String ) -> Element Msg
