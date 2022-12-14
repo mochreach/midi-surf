@@ -1,7 +1,7 @@
 module Main exposing (..)
 
 import Browser
-import Controller exposing (Controller, updateWithId)
+import Controller exposing (Controller)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -70,23 +70,19 @@ type alias PageConfig =
 type alias EditButtonState =
     { label : String
     , noteNumber : String
+    , channel : String
     }
 
 
 editStateToButton : EditButtonState -> Maybe Controller
-editStateToButton { label, noteNumber } =
-    case ( String.isEmpty label, String.toInt noteNumber ) of
-        ( False, Just nn ) ->
-            Controller.newButton label nn
+editStateToButton { label, noteNumber, channel } =
+    case ( String.isEmpty label, String.toInt noteNumber, Controller.stringToChannel channel ) of
+        ( False, Just nn, Just ch ) ->
+            Controller.newButton label nn ch
                 |> Just
 
         _ ->
             Nothing
-
-
-validLabel : EditButtonState -> Bool
-validLabel { label } =
-    not <| String.isEmpty label
 
 
 init : ( Model, Cmd Msg )
@@ -138,7 +134,7 @@ makeIsomorphicRow noteRange offset rowLength rowNumber =
         |> List.indexedMap Tuple.pair
         |> List.filter (\( i, _ ) -> List.member i includedRange)
         |> List.map Tuple.second
-        |> List.map (\i -> Controller.newButton (String.fromInt i) i)
+        |> List.map (\i -> Controller.newButton (String.fromInt i) i Controller.Ch7)
         |> Controller.Row
 
 
@@ -266,12 +262,13 @@ update msg model =
             ( { model
                 | popup =
                     case controller of
-                        Just (Controller.Button { noteNumber, label }) ->
+                        Just (Controller.Button { noteNumber, label, channel }) ->
                             Just <|
                                 EditMenu id <|
                                     EditButton
                                         { noteNumber = String.fromInt noteNumber
                                         , label = label
+                                        , channel = Controller.channelToString channel
                                         }
 
                         _ ->
@@ -344,7 +341,10 @@ update msg model =
             ( { model | page = updatedPage }
             , case button of
                 Just (Controller.Button state) ->
-                    Ports.sendNoteOn state.noteNumber
+                    Ports.sendNoteOn
+                        { noteNumber = state.noteNumber
+                        , channel = Controller.channelToMidiNumber state.channel
+                        }
 
                 _ ->
                     Cmd.none
@@ -370,7 +370,10 @@ update msg model =
             ( { model | page = updatedPage }
             , case button of
                 Just (Controller.Button state) ->
-                    Ports.sendNoteOff state.noteNumber
+                    Ports.sendNoteOff
+                        { noteNumber = state.noteNumber
+                        , channel = Controller.channelToMidiNumber state.channel
+                        }
 
                 _ ->
                     Cmd.none
@@ -550,35 +553,52 @@ editMenu menuType =
                         , placeholder = Just <| Input.placeholder [] (text "enter note#")
                         , label = Input.labelAbove [] (text "Note Number")
                         }
-                    , case editStateToButton state of
-                        Just controller ->
-                            Input.button
-                                [ padding 5
-                                , Border.width 2
-                                , Border.solid
-                                , Border.color <| rgb 0.7 0.7 0.7
-                                ]
-                                { onPress = Just <| FinishedEdit controller
-                                , label = text "Ok"
-                                }
-
-                        Nothing ->
-                            Input.button
-                                [ padding 5
-                                , Border.width 2
-                                , Border.solid
-                                , Border.color <| rgb 0 0 0
-                                ]
-                                { onPress = Nothing
-                                , label = text "Ok"
-                                }
-                    , Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , Border.color <| rgb255 0 0 0
+                    , Input.text
+                        [ Border.width 2
+                        , Border.rounded 0
+                        , Border.color (rgb 0.0 0.0 0.0)
                         ]
-                        { onPress = Just ClosePopUp, label = text "Cancel" }
+                        { onChange =
+                            \newChannel ->
+                                { state | channel = newChannel }
+                                    |> EditButton
+                                    |> UpdateControllerState
+                        , text = state.channel
+                        , placeholder = Just <| Input.placeholder [] (text "enter channel#")
+                        , label = Input.labelAbove [] (text "Channel")
+                        }
+                    , row [ spacing 2 ]
+                        [ case editStateToButton state of
+                            Just controller ->
+                                Input.button
+                                    [ padding 5
+                                    , Border.width 2
+                                    , Border.solid
+                                    , Border.color <| rgb 0 0 0
+                                    ]
+                                    { onPress = Just <| FinishedEdit controller
+                                    , label = text "Ok"
+                                    }
+
+                            Nothing ->
+                                Input.button
+                                    [ padding 5
+                                    , Border.width 2
+                                    , Border.solid
+                                    , Border.color <| rgb 0.7 0.7 0.7
+                                    , Font.color <| rgb 0.7 0.7 0.7
+                                    ]
+                                    { onPress = Nothing
+                                    , label = text "Ok"
+                                    }
+                        , Input.button
+                            [ padding 5
+                            , Border.width 2
+                            , Border.solid
+                            , Border.color <| rgb255 0 0 0
+                            ]
+                            { onPress = Just ClosePopUp, label = text "Cancel" }
+                        ]
                     ]
 
 
@@ -797,10 +817,10 @@ renderButton config mode state id =
                 ((if config.debug then
                     case state.status of
                         Controller.Off ->
-                            "Off\n"
+                            "Off\n" ++ Controller.channelToString state.channel ++ "\n"
 
                         Controller.On ->
-                            "On\n"
+                            "Off\n" ++ Controller.channelToString state.channel ++ "\n"
 
                   else
                     ""

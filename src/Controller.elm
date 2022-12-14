@@ -1,14 +1,18 @@
 module Controller exposing
     ( ButtonState
     , ButtonStatus(..)
+    , Channel(..)
     , Controller(..)
     , EditOperation(..)
     , addSpace
     , buttonOff
     , buttonOn
+    , channelToMidiNumber
+    , channelToString
     , getWithId
     , newButton
     , removeItem
+    , stringToChannel
     , updateWithId
     )
 
@@ -25,12 +29,191 @@ type alias ButtonState =
     { status : ButtonStatus
     , label : String
     , noteNumber : Int
+    , channel : Channel
     }
 
 
 type ButtonStatus
     = On
     | Off
+
+
+type Channel
+    = Ch1
+    | Ch2
+    | Ch3
+    | Ch4
+    | Ch5
+    | Ch6
+    | Ch7
+    | Ch8
+    | Ch9
+    | Ch10
+    | Ch11
+    | Ch12
+    | Ch13
+    | Ch14
+    | Ch15
+    | Ch16
+
+
+stringToChannel : String -> Maybe Channel
+stringToChannel string =
+    case string of
+        "1" ->
+            Just Ch1
+
+        "2" ->
+            Just Ch2
+
+        "3" ->
+            Just Ch3
+
+        "4" ->
+            Just Ch4
+
+        "5" ->
+            Just Ch5
+
+        "6" ->
+            Just Ch6
+
+        "7" ->
+            Just Ch7
+
+        "8" ->
+            Just Ch8
+
+        "9" ->
+            Just Ch9
+
+        "10" ->
+            Just Ch10
+
+        "11" ->
+            Just Ch11
+
+        "12" ->
+            Just Ch12
+
+        "13" ->
+            Just Ch13
+
+        "14" ->
+            Just Ch14
+
+        "15" ->
+            Just Ch15
+
+        "16" ->
+            Just Ch16
+
+        _ ->
+            Nothing
+
+
+channelToString : Channel -> String
+channelToString ch =
+    case ch of
+        Ch1 ->
+            "1"
+
+        Ch2 ->
+            "2"
+
+        Ch3 ->
+            "3"
+
+        Ch4 ->
+            "4"
+
+        Ch5 ->
+            "5"
+
+        Ch6 ->
+            "6"
+
+        Ch7 ->
+            "7"
+
+        Ch8 ->
+            "8"
+
+        Ch9 ->
+            "9"
+
+        Ch10 ->
+            "10"
+
+        Ch11 ->
+            "11"
+
+        Ch12 ->
+            "12"
+
+        Ch13 ->
+            "13"
+
+        Ch14 ->
+            "14"
+
+        Ch15 ->
+            "15"
+
+        Ch16 ->
+            "16"
+
+
+channelToMidiNumber : Channel -> Int
+channelToMidiNumber ch =
+    case ch of
+        Ch1 ->
+            0
+
+        Ch2 ->
+            1
+
+        Ch3 ->
+            2
+
+        Ch4 ->
+            3
+
+        Ch5 ->
+            4
+
+        Ch6 ->
+            5
+
+        Ch7 ->
+            6
+
+        Ch8 ->
+            7
+
+        Ch9 ->
+            8
+
+        Ch10 ->
+            9
+
+        Ch11 ->
+            10
+
+        Ch12 ->
+            11
+
+        Ch13 ->
+            12
+
+        Ch14 ->
+            13
+
+        Ch15 ->
+            14
+
+        Ch16 ->
+            15
 
 
 type EditOperation
@@ -181,12 +364,13 @@ removeItem controller =
             controller
 
 
-newButton : String -> Int -> Controller
-newButton label noteNumber =
+newButton : String -> Int -> Channel -> Controller
+newButton label noteNumber channel =
     Button
         { status = Off
         , label = label
         , noteNumber = noteNumber
+        , channel = channel
         }
 
 

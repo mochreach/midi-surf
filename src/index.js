@@ -19,18 +19,21 @@ app.ports.connectToDevice.subscribe(function (id) {
     }
 });
 
-app.ports.sendNoteOn.subscribe(function (noteNumber) {
+app.ports.sendNoteOn.subscribe(function (midiMsg) {
     if (midiOut) {
-        midiOut.send([0x97, noteNumber, 0x7f]);
+        let {noteNumber, channel} = midiMsg;
+        console.log(noteNumber, channel);
+        midiOut.send([0x90 + channel, noteNumber, 0x7f]);
         console.log("On", noteNumber);
     } else {
         console.log("midiOut undefined: Cannot send note off.");
     }
 });
 
-app.ports.sendNoteOff.subscribe(function (noteNumber) {
+app.ports.sendNoteOff.subscribe(function (midiMsg) {
     if (midiOut) {
-        midiOut.send([0x87, noteNumber, 0x7f]);
+        let {noteNumber, channel} = midiMsg;
+        midiOut.send([0x80 + channel, noteNumber, 0x7f]);
         console.log("Off", noteNumber);
     } else {
         console.log("midiOut undefined: Cannot send note off.");

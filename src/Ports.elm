@@ -16,7 +16,7 @@ port connectedToDevice : (String -> msg) -> Sub msg
 port connectToDevice : String -> Cmd msg
 
 
-port sendNoteOn : Int -> Cmd msg
+port sendNoteOn : { noteNumber : Int, channel : Int } -> Cmd msg
 
 
-port sendNoteOff : Int -> Cmd msg
+port sendNoteOff : { noteNumber : Int, channel : Int } -> Cmd msg
