@@ -1,20 +1,20 @@
 module Midi exposing
-    ( MidiConnection
-    , MidiStatus(..)
-    , midiStatus
+    ( Device
+    , Status(..)
+    , statusView
     )
 
 import Element exposing (..)
 
 
-type MidiStatus
+type Status
     = Initialising
     | FailedToEstablishMidi
-    | MidiAvailable (List MidiConnection)
+    | MidiAvailable (List Device)
 
 
-midiStatus : MidiStatus -> Element msg
-midiStatus status =
+statusView : Status -> Element msg
+statusView status =
     case status of
         Initialising ->
             paragraph [] [ text "Initialising..." ]
@@ -26,9 +26,8 @@ midiStatus status =
             paragraph [] [ text <| "MIDI connection: " ++ String.fromInt (List.length devices) ]
 
 
-type alias MidiConnection =
-    { id : String
-    , name : String
+type alias Device =
+    { name : String
     , input : Maybe Bool
     , output : Maybe Bool
     }

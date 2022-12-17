@@ -1,5 +1,5 @@
 port module Ports exposing
-    ( midiStatus
+    ( midiDevices
     , sendNoteOff
     , sendNoteOn
     )
@@ -7,7 +7,7 @@ port module Ports exposing
 import Midi
 
 
-port midiStatus : (List Midi.MidiConnection -> msg) -> Sub msg
+port midiDevices : (List Midi.Device -> msg) -> Sub msg
 
 
 port sendNoteOn : { noteNumber : Int, channel : Int } -> Cmd msg

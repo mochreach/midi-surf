@@ -14,6 +14,19 @@ navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure);
 function onMIDISuccess(mAccess) {
     console.log("MIDI ready!");
     midiAccess = mAccess;
+    initialiseDevices(midiAccess)
+
+
+
+    midiAccess.onstatechange = function (e) {
+        initialiseDevices(midiAccess)
+        console.log(e.port.name + " changed state!");
+    };
+}
+
+function initialiseDevices(midiAccess) {
+    midiDevices = new Map();
+
     midiAccess.inputs.forEach((input => {
         midiDevices.set(input.name, {input: input, output: null});
     }));
@@ -26,9 +39,27 @@ function onMIDISuccess(mAccess) {
         }
     }));
 
-    midiAccess.onstatechange = function (e) {
-        console.log(e.port.name);
-    };
+    let devices = Array.from(midiDevices.entries()).map(makeMidiStatusFromDevice);
+    console.log(devices);
+    app.ports.midiDevices.send(devices);
+}
+
+function makeMidiStatusFromDevice(entry) {
+    let [name, device] = entry;
+    let input = null;
+    let output = null;
+    if (device.input != null) {
+        input = true
+    }
+    if (device.output != null) {
+        output = true
+    }
+    let midiStatus = {
+        name: name,
+        input: input,
+        output: output,
+    }
+    return midiStatus;
 }
 
 function onMIDIFailure(msg) {

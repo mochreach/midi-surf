@@ -10,9 +10,10 @@ import Element.Input as Input
 import Element.Lazy as Lazy
 import FeatherIcons as Icons
 import Html exposing (Html)
+import Html.Attributes exposing (name)
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
-import Midi exposing (MidiStatus)
+import Midi exposing (Status(..))
 import Ports
 
 
@@ -21,7 +22,7 @@ import Ports
 
 
 type alias Model =
-    { midiStatus : MidiStatus
+    { midiStatus : Status
     , mode : Mode
     , page : Page
     , popup : Maybe PopUp
@@ -34,14 +35,8 @@ type Mode
 
 
 type PopUp
-    = MidiMenu MidiMenuModel
+    = MidiMenu
     | EditMenu String EditMenuState
-
-
-type alias MidiMenuModel =
-    { devices : List ( String, String )
-    , selected : Maybe String
-    }
 
 
 type EditMenuState
@@ -149,7 +144,7 @@ makeIsomorphicRow noteRange offset rowLength rowNumber =
 
 
 type Msg
-    = MIDIStatusChanged (List ( String, String ))
+    = MidiDevicesChanged (List Midi.Device)
     | ToggleNormalEdit
     | OpenMidiMenu
     | AddSpace String
@@ -166,12 +161,8 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        MIDIStatusChanged devices ->
-            -- ( if List.isEmpty devices |> not then
-            --     { model | midiStatus = MidiAvailable devices }
-            --   else
-            --     { model | midiStatus = FailedToEstablishMIDI }
-            ( model
+        MidiDevicesChanged devices ->
+            ( { model | midiStatus = Midi.MidiAvailable devices }
             , Cmd.none
             )
 
@@ -189,20 +180,11 @@ update msg model =
             )
 
         OpenMidiMenu ->
-            -- ( { model
-            --     | popup =
-            --         Just <|
-            --             MidiMenu
-            --                 { devices =
-            --                     case model.midiStatus of
-            --                         MidiAvailable devices ->
-            --                             devices
-            --                         _ ->
-            --                             []
-            --                 , selected = Nothing
-            --                 }
-            --   }
-            ( model
+            ( { model
+                | popup =
+                    Just <|
+                        MidiMenu
+              }
             , Cmd.none
             )
 
@@ -400,12 +382,18 @@ view model =
             Just popup ->
                 (inFront <|
                     case popup of
-                        MidiMenu state ->
+                        MidiMenu ->
                             el
                                 (Background.color (rgba 0.5 0.5 0.5 0.8)
                                     :: fillSpace
                                 )
-                                (midiMenu state.devices)
+                                (case model.midiStatus of
+                                    Midi.MidiAvailable devices ->
+                                        midiMenu devices
+
+                                    _ ->
+                                        midiMenu []
+                                )
 
                         EditMenu _ state ->
                             el
@@ -467,15 +455,14 @@ view model =
                             |> html
                     }
                 ]
-            , column
+            , el
                 (padding 5 :: fillSpace)
-                [ Midi.midiStatus model.midiStatus
-                , renderPage model.mode model.page
-                ]
+              <|
+                renderPage model.mode model.page
             ]
 
 
-midiMenu : List ( String, String ) -> Element Msg
+midiMenu : List Midi.Device -> Element Msg
 midiMenu devices =
     el [ centerX, centerY ] <|
         column
@@ -483,7 +470,7 @@ midiMenu devices =
             , spacing 10
             , Background.color (rgb 1.0 1.0 1.0)
             ]
-            (paragraph [] [ text "Select MIDI Device" ]
+            (paragraph [] [ text "MIDI Devices" ]
                 :: (case devices of
                         [] ->
                             [ paragraph [] [ text "No MIDI devices connected." ] ]
@@ -500,6 +487,29 @@ midiMenu devices =
                         { onPress = Just ClosePopUp, label = text "Cancel" }
                    ]
             )
+
+
+deviceItem : Midi.Device -> Element Msg
+deviceItem { name, input, output } =
+    row
+        [ padding 10
+        , spacing 10
+        , width fill
+        ]
+        [ text name
+        , text <|
+            if Maybe.withDefault False input then
+                "True"
+
+            else
+                "False"
+        , text <|
+            if Maybe.withDefault False output then
+                "True"
+
+            else
+                "False"
+        ]
 
 
 editMenu : EditMenuState -> Element Msg
@@ -630,18 +640,6 @@ editMenu menuType =
                         { onPress = Just ClosePopUp, label = text "Cancel" }
                     ]
         ]
-
-
-deviceItem : ( String, String ) -> Element Msg
-deviceItem ( id, name ) =
-    Input.button
-        [ padding 10
-        , width fill
-        , Background.color <| rgb 0.8 0.8 0.8
-        ]
-        { onPress = Nothing --Just <| ConnectToDevice id
-        , label = text name
-        }
 
 
 renderPage : Mode -> Page -> Element Msg
@@ -946,9 +944,8 @@ main =
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
-        -- [ Ports.midiStatus MIDIStatusChanged
-        -- , Ports.connectedToDevice ConnectedToDevice
-        []
+        [ Ports.midiDevices MidiDevicesChanged
+        ]
 
 
 
