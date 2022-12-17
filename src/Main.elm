@@ -12,6 +12,7 @@ import FeatherIcons as Icons
 import Html exposing (Html)
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
+import Midi exposing (MidiStatus)
 import Ports
 
 
@@ -20,18 +21,11 @@ import Ports
 
 
 type alias Model =
-    { midiStatus : MIDIStatus
+    { midiStatus : MidiStatus
     , mode : Mode
     , page : Page
     , popup : Maybe PopUp
     }
-
-
-type MIDIStatus
-    = Initialising
-    | FailedToEstablishMIDI
-    | MidiAvailable (List ( String, String ))
-    | MidiConnected String
 
 
 type Mode
@@ -98,7 +92,7 @@ editStateToButton { label, noteNumber, channel } =
 
 init : ( Model, Cmd Msg )
 init =
-    ( { midiStatus = Initialising
+    ( { midiStatus = Midi.Initialising
       , mode = Normal
       , page = defaultPage
       , popup = Nothing
@@ -158,8 +152,6 @@ type Msg
     = MIDIStatusChanged (List ( String, String ))
     | ToggleNormalEdit
     | OpenMidiMenu
-    | ConnectToDevice String
-    | ConnectedToDevice String
     | AddSpace String
     | RemoveItem String
     | OpenEditController String
@@ -175,11 +167,11 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         MIDIStatusChanged devices ->
-            ( if List.isEmpty devices |> not then
-                { model | midiStatus = MidiAvailable devices }
-
-              else
-                { model | midiStatus = FailedToEstablishMIDI }
+            -- ( if List.isEmpty devices |> not then
+            --     { model | midiStatus = MidiAvailable devices }
+            --   else
+            --     { model | midiStatus = FailedToEstablishMIDI }
+            ( model
             , Cmd.none
             )
 
@@ -197,33 +189,20 @@ update msg model =
             )
 
         OpenMidiMenu ->
-            ( { model
-                | popup =
-                    Just <|
-                        MidiMenu
-                            { devices =
-                                case model.midiStatus of
-                                    MidiAvailable devices ->
-                                        devices
-
-                                    _ ->
-                                        []
-                            , selected = Nothing
-                            }
-              }
-            , Cmd.none
-            )
-
-        ConnectToDevice id ->
+            -- ( { model
+            --     | popup =
+            --         Just <|
+            --             MidiMenu
+            --                 { devices =
+            --                     case model.midiStatus of
+            --                         MidiAvailable devices ->
+            --                             devices
+            --                         _ ->
+            --                             []
+            --                 , selected = Nothing
+            --                 }
+            --   }
             ( model
-            , Ports.connectToDevice id
-            )
-
-        ConnectedToDevice name ->
-            ( { model
-                | midiStatus = MidiConnected name
-                , popup = Nothing
-              }
             , Cmd.none
             )
 
@@ -490,26 +469,10 @@ view model =
                 ]
             , column
                 (padding 5 :: fillSpace)
-                [ midiStatus model.midiStatus
+                [ Midi.midiStatus model.midiStatus
                 , renderPage model.mode model.page
                 ]
             ]
-
-
-midiStatus : MIDIStatus -> Element Msg
-midiStatus status =
-    case status of
-        Initialising ->
-            paragraph [] [ text "Initialising..." ]
-
-        FailedToEstablishMIDI ->
-            paragraph [] [ text "Failed to establish MIDI connection." ]
-
-        MidiAvailable devices ->
-            paragraph [] [ text <| "MIDI connection: " ++ String.fromInt (List.length devices) ]
-
-        MidiConnected device ->
-            paragraph [] [ text <| "MIDI Out: " ++ device ]
 
 
 midiMenu : List ( String, String ) -> Element Msg
@@ -676,7 +639,7 @@ deviceItem ( id, name ) =
         , width fill
         , Background.color <| rgb 0.8 0.8 0.8
         ]
-        { onPress = Just <| ConnectToDevice id
+        { onPress = Nothing --Just <| ConnectToDevice id
         , label = text name
         }
 
@@ -983,9 +946,9 @@ main =
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
-        [ Ports.listenForMIDIStatus MIDIStatusChanged
-        , Ports.connectedToDevice ConnectedToDevice
-        ]
+        -- [ Ports.midiStatus MIDIStatusChanged
+        -- , Ports.connectedToDevice ConnectedToDevice
+        []
 
 
 

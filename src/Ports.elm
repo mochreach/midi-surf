@@ -1,19 +1,13 @@
 port module Ports exposing
-    ( connectToDevice
-    , connectedToDevice
-    , listenForMIDIStatus
+    ( midiStatus
     , sendNoteOff
     , sendNoteOn
     )
 
-
-port listenForMIDIStatus : (List ( String, String ) -> msg) -> Sub msg
-
-
-port connectedToDevice : (String -> msg) -> Sub msg
+import Midi
 
 
-port connectToDevice : String -> Cmd msg
+port midiStatus : (List Midi.MidiConnection -> msg) -> Sub msg
 
 
 port sendNoteOn : { noteNumber : Int, channel : Int } -> Cmd msg
