@@ -1,5 +1,6 @@
 module Main exposing (..)
 
+import Array exposing (Array)
 import Browser
 import Controller exposing (Controller)
 import Element exposing (..)
@@ -156,6 +157,7 @@ type Msg
     | ButtonDown String
     | ButtonUp String
     | ClosePopUp
+    | IncomingMidi (Array Int)
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -366,6 +368,15 @@ update msg model =
 
         ClosePopUp ->
             ( { model | popup = Nothing }
+            , Cmd.none
+            )
+
+        IncomingMidi midiMsg ->
+            let
+                _ =
+                    Debug.log "Msg" <| Midi.intArrayToMidiMsg midiMsg
+            in
+            ( model
             , Cmd.none
             )
 
@@ -945,6 +956,7 @@ subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
         [ Ports.midiDevices MidiDevicesChanged
+        , Ports.incomingMidi IncomingMidi
         ]
 
 

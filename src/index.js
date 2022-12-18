@@ -16,8 +16,6 @@ function onMIDISuccess(mAccess) {
     midiAccess = mAccess;
     initialiseDevices(midiAccess)
 
-
-
     midiAccess.onstatechange = function (e) {
         initialiseDevices(midiAccess)
         console.log(e.port.name + " changed state!");
@@ -29,7 +27,15 @@ function initialiseDevices(midiAccess) {
 
     midiAccess.inputs.forEach((input => {
         midiDevices.set(input.name, {input: input, output: null});
+
+        input.onmidimessage = (message) => {
+            // Ignore clock messages
+            if (message.data[0] != 0xF8) {
+                app.ports.incomingMidi.send(Array.from(message.data));
+            }
+        }
     }));
+
     midiAccess.outputs.forEach((output => {
         console.log(output.name);
         if (output.name in midiDevices) {
@@ -40,7 +46,6 @@ function initialiseDevices(midiAccess) {
     }));
 
     let devices = Array.from(midiDevices.entries()).map(makeMidiStatusFromDevice);
-    console.log(devices);
     app.ports.midiDevices.send(devices);
 }
 
