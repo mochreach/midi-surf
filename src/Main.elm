@@ -559,7 +559,16 @@ view model =
                 , spacing 5
                 , Border.widthEach { bottom = 0, top = 0, left = 0, right = 4 }
                 ]
-                [ Input.button
+                [ el
+                    [ centerX
+                    , width fill
+                    , paddingXY 0 12
+                    , Background.color <| rgb 0.0 0.0 0.0
+                    , Font.bold
+                    , Font.color <| rgb 1.0 1.0 1.0
+                    ]
+                    (text "MIDI\nSurf")
+                , Input.button
                     [ padding 10
                     , Border.width 4
                     ]
@@ -593,7 +602,7 @@ view model =
                     }
                 ]
             , el
-                (padding 5 :: fillSpace)
+                (padding 2 :: fillSpace)
               <|
                 renderPage model.mode model.page
             ]
@@ -1115,7 +1124,7 @@ renderButton config mode state id =
             el
                 ([ padding 0
                  , spacing 0
-                 , Border.width 2
+                 , Border.width 4
 
                  -- , Border.solid
                  , case state.status of
