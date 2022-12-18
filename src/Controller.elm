@@ -28,8 +28,9 @@ type Controller
 type alias ButtonState =
     { status : ButtonStatus
     , label : String
-    , noteNumber : Int
     , channel : Channel
+    , noteNumber : Int
+    , velocity : Int
     }
 
 
@@ -364,13 +365,14 @@ removeItem controller =
             controller
 
 
-newButton : String -> Int -> Channel -> Controller
-newButton label noteNumber channel =
+newButton : String -> Channel -> Int -> Int -> Controller
+newButton label channel noteNumber velocity =
     Button
         { status = Off
         , label = label
-        , noteNumber = noteNumber
         , channel = channel
+        , noteNumber = noteNumber
+        , velocity = velocity
         }
 
 

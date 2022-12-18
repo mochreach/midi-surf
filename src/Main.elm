@@ -62,28 +62,39 @@ type alias PageConfig =
 
 type alias EditButtonState =
     { label : String
-    , noteNumber : String
     , channel : String
+    , noteNumber : String
+    , velocity : String
     }
 
 
 defaultButton : EditButtonState
 defaultButton =
     { label = ""
-    , noteNumber = "60"
     , channel = "1"
+    , noteNumber = "60"
+    , velocity = "100"
     }
 
 
 editStateToButton : EditButtonState -> Maybe Controller
-editStateToButton { label, noteNumber, channel } =
-    case ( String.isEmpty label, String.toInt noteNumber, Controller.stringToChannel channel ) of
-        ( False, Just nn, Just ch ) ->
-            Controller.newButton label nn ch
-                |> Just
+editStateToButton { label, noteNumber, channel, velocity } =
+    if String.isEmpty label then
+        Nothing
 
-        _ ->
-            Nothing
+    else
+        case
+            ( Controller.stringToChannel channel
+            , String.toInt noteNumber
+            , String.toInt velocity
+            )
+        of
+            ( Just ch, Just nn, Just vel ) ->
+                Controller.newButton label ch nn vel
+                    |> Just
+
+            _ ->
+                Nothing
 
 
 init : ( Model, Cmd Msg )
@@ -135,7 +146,7 @@ makeIsomorphicRow noteRange offset rowLength rowNumber =
         |> List.indexedMap Tuple.pair
         |> List.filter (\( i, _ ) -> List.member i includedRange)
         |> List.map Tuple.second
-        |> List.map (\i -> Controller.newButton (String.fromInt i) i Controller.Ch7)
+        |> List.map (\i -> Controller.newButton (String.fromInt i) Controller.Ch7 i 100)
         |> Controller.Row
 
 
@@ -237,13 +248,14 @@ update msg model =
             ( { model
                 | popup =
                     case controller of
-                        Just (Controller.Button { noteNumber, label, channel }) ->
+                        Just (Controller.Button { noteNumber, label, channel, velocity }) ->
                             Just <|
                                 EditMenu id <|
                                     EditButton
                                         { noteNumber = String.fromInt noteNumber
                                         , label = label
                                         , channel = Controller.channelToString channel
+                                        , velocity = String.fromInt velocity
                                         }
 
                         _ ->
@@ -330,6 +342,7 @@ update msg model =
                 Just (Controller.Button state) ->
                     Ports.sendNoteOn
                         { noteNumber = state.noteNumber
+                        , velocity = state.velocity
                         , channel = Controller.channelToMidiNumber state.channel
                         }
 
@@ -359,6 +372,7 @@ update msg model =
                 Just (Controller.Button state) ->
                     Ports.sendNoteOff
                         { noteNumber = state.noteNumber
+                        , velocity = 0
                         , channel = Controller.channelToMidiNumber state.channel
                         }
 
@@ -580,6 +594,20 @@ editMenu menuType =
                         , Border.color (rgb 0.0 0.0 0.0)
                         ]
                         { onChange =
+                            \newChannel ->
+                                { state | channel = newChannel }
+                                    |> EditButton
+                                    |> UpdateControllerState
+                        , text = state.channel
+                        , placeholder = Just <| Input.placeholder [] (text "enter channel#")
+                        , label = Input.labelAbove [] (text "Channel")
+                        }
+                    , Input.text
+                        [ Border.width 2
+                        , Border.rounded 0
+                        , Border.color (rgb 0.0 0.0 0.0)
+                        ]
+                        { onChange =
                             \newNoteNumber ->
                                 { state | noteNumber = newNoteNumber }
                                     |> EditButton
@@ -594,13 +622,13 @@ editMenu menuType =
                         , Border.color (rgb 0.0 0.0 0.0)
                         ]
                         { onChange =
-                            \newChannel ->
-                                { state | channel = newChannel }
+                            \newVelocity ->
+                                { state | velocity = newVelocity }
                                     |> EditButton
                                     |> UpdateControllerState
-                        , text = state.channel
-                        , placeholder = Just <| Input.placeholder [] (text "enter channel#")
-                        , label = Input.labelAbove [] (text "Channel")
+                        , text = state.velocity
+                        , placeholder = Just <| Input.placeholder [] (text "enter velocity")
+                        , label = Input.labelAbove [] (text "Velocity")
                         }
                     , row [ spacing 2 ]
                         [ case editStateToButton state of
