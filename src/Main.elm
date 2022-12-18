@@ -14,7 +14,7 @@ import Html exposing (Html)
 import Html.Attributes exposing (name)
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
-import Midi exposing (Status(..))
+import Midi exposing (MidiMsg(..), Status(..))
 import Ports
 
 
@@ -47,6 +47,23 @@ type EditMenuState
     | EditButton EditButtonState
 
 
+updateWithMidiMsg : MidiMsg -> EditMenuState -> EditMenuState
+updateWithMidiMsg midiMsg state =
+    case state of
+        EditModule ->
+            state
+
+        EditColumn ->
+            state
+
+        EditRow ->
+            state
+
+        EditButton buttonState ->
+            updateEditButtonWithMidiMsg midiMsg buttonState
+                |> EditButton
+
+
 type alias Page =
     { label : String
     , controller : Controller
@@ -77,6 +94,20 @@ defaultButton =
     }
 
 
+updateEditButtonWithMidiMsg : MidiMsg -> EditButtonState -> EditButtonState
+updateEditButtonWithMidiMsg midiMsg state =
+    case Debug.log "Msg" midiMsg of
+        NoteOn noteOnParams ->
+            { state
+                | channel = String.fromInt noteOnParams.channel
+                , noteNumber = String.fromInt noteOnParams.pitch
+                , velocity = String.fromInt noteOnParams.velocity
+            }
+
+        _ ->
+            state
+
+
 editStateToButton : EditButtonState -> Maybe Controller
 editStateToButton { label, noteNumber, channel, velocity } =
     if String.isEmpty label then
@@ -90,6 +121,7 @@ editStateToButton { label, noteNumber, channel, velocity } =
             )
         of
             ( Just ch, Just nn, Just vel ) ->
+                -- TODO: These values should not exceed 127, handle with midi module
                 Controller.newButton label ch nn vel
                     |> Just
 
@@ -386,11 +418,17 @@ update msg model =
             )
 
         IncomingMidi midiMsg ->
-            let
-                _ =
-                    Debug.log "Msg" <| Midi.intArrayToMidiMsg midiMsg
-            in
-            ( model
+            ( { model
+                | popup =
+                    case model.popup of
+                        Just (EditMenu id state) ->
+                            updateWithMidiMsg (Midi.intArrayToMidiMsg midiMsg) state
+                                |> EditMenu id
+                                |> Just
+
+                        _ ->
+                            model.popup
+              }
             , Cmd.none
             )
 

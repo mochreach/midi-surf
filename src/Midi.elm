@@ -1,5 +1,6 @@
 module Midi exposing
     ( Device
+    , MidiMsg(..)
     , Status(..)
     , intArrayToMidiMsg
     , statusView
@@ -93,10 +94,10 @@ intArrayToMidiMsg intArray =
         ( Just _, Just byte1, _ ) ->
             case ( msgNibble, channelNibble, thirdByte ) of
                 ( Just 8, Just channel, Just velocity ) ->
-                    NoteOn { channel = channel, pitch = byte1, velocity = velocity }
+                    NoteOff { channel = channel, pitch = byte1, velocity = velocity }
 
                 ( Just 9, Just channel, Just velocity ) ->
-                    NoteOff { channel = channel, pitch = byte1, velocity = velocity }
+                    NoteOn { channel = channel, pitch = byte1, velocity = velocity }
 
                 ( Just 10, Just channel, Just pressure ) ->
                     KeyPressure { channel = channel, key = byte1, pressure = pressure }
