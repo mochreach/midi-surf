@@ -9,6 +9,7 @@ module Controller exposing
     , buttonOn
     , channelToMidiNumber
     , channelToString
+    , controllerToString
     , getWithId
     , newButton
     , removeItem
@@ -23,6 +24,30 @@ type Controller
     | Column (List Controller)
     | Button ButtonState
     | Space
+
+
+controllerToString : Controller -> String
+controllerToString controller =
+    case controller of
+        Module label _ ->
+            "Module: " ++ label
+
+        Row subcontrols ->
+            "Row: " ++ (String.fromInt <| List.length subcontrols) ++ " items"
+
+        Column subcontrols ->
+            "Column: " ++ (String.fromInt <| List.length subcontrols) ++ " items"
+
+        Button { channel, noteNumber, velocity } ->
+            "Button: "
+                ++ channelToString channel
+                ++ " "
+                ++ String.fromInt noteNumber
+                ++ " "
+                ++ String.fromInt velocity
+
+        Space ->
+            "Space"
 
 
 type alias ButtonState =
@@ -218,7 +243,8 @@ channelToMidiNumber ch =
 
 
 type EditOperation
-    = Add
+    = EditContainer
+    | Add
     | Remove
 
 

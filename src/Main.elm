@@ -42,8 +42,8 @@ type PopUp
 
 type EditMenuState
     = EditModule
-    | EditColumn
-    | EditRow
+    | EditColumn (List Controller)
+    | EditRow (List Controller)
     | EditButton EditButtonState
     | EditSpace
 
@@ -54,10 +54,10 @@ updateWithMidiMsg midiMsg state =
         EditModule ->
             state
 
-        EditColumn ->
+        EditColumn _ ->
             state
 
-        EditRow ->
+        EditRow _ ->
             state
 
         EditButton buttonState ->
@@ -286,14 +286,24 @@ update msg model =
                 | popup =
                     case controller of
                         Just (Controller.Button { noteNumber, label, channel, velocity }) ->
-                            Just <|
-                                EditMenu id <|
-                                    EditButton
-                                        { noteNumber = String.fromInt noteNumber
-                                        , label = label
-                                        , channel = Controller.channelToString channel
-                                        , velocity = String.fromInt velocity
-                                        }
+                            EditButton
+                                { noteNumber = String.fromInt noteNumber
+                                , label = label
+                                , channel = Controller.channelToString channel
+                                , velocity = String.fromInt velocity
+                                }
+                                |> EditMenu id
+                                |> Just
+
+                        Just (Controller.Row subControls) ->
+                            EditRow subControls
+                                |> EditMenu id
+                                |> Just
+
+                        Just (Controller.Column subControls) ->
+                            EditColumn subControls
+                                |> EditMenu id
+                                |> Just
 
                         _ ->
                             Nothing
@@ -597,8 +607,8 @@ editMenu menuType =
                 , label = Input.labelAbove [] (text "Type")
                 , options =
                     [ Input.option EditModule (text "Module")
-                    , Input.option EditColumn (text "Column")
-                    , Input.option EditRow (text "Row")
+                    , Input.option (EditColumn []) (text "Column")
+                    , Input.option (EditRow []) (text "Row")
                     , Input.option
                         (case menuType of
                             EditButton _ ->
@@ -612,101 +622,14 @@ editMenu menuType =
                     ]
                 }
         , case menuType of
-            EditButton state ->
-                column
-                    [ padding 10
-                    , spacing 10
-                    , Background.color (rgb 1.0 1.0 1.0)
-                    ]
-                    [ Input.text
-                        [ Border.width 2
-                        , Border.rounded 0
-                        , Border.color (rgb 0.0 0.0 0.0)
-                        ]
-                        { onChange =
-                            \newLabel ->
-                                { state | label = newLabel }
-                                    |> EditButton
-                                    |> UpdateControllerState
-                        , text = state.label
-                        , placeholder = Just <| Input.placeholder [] (text "enter label")
-                        , label = Input.labelAbove [] (text "Label")
-                        }
-                    , Input.text
-                        [ Border.width 2
-                        , Border.rounded 0
-                        , Border.color (rgb 0.0 0.0 0.0)
-                        ]
-                        { onChange =
-                            \newChannel ->
-                                { state | channel = newChannel }
-                                    |> EditButton
-                                    |> UpdateControllerState
-                        , text = state.channel
-                        , placeholder = Just <| Input.placeholder [] (text "enter channel#")
-                        , label = Input.labelAbove [] (text "Channel")
-                        }
-                    , Input.text
-                        [ Border.width 2
-                        , Border.rounded 0
-                        , Border.color (rgb 0.0 0.0 0.0)
-                        ]
-                        { onChange =
-                            \newNoteNumber ->
-                                { state | noteNumber = newNoteNumber }
-                                    |> EditButton
-                                    |> UpdateControllerState
-                        , text = state.noteNumber
-                        , placeholder = Just <| Input.placeholder [] (text "enter note#")
-                        , label = Input.labelAbove [] (text "Note Number")
-                        }
-                    , Input.text
-                        [ Border.width 2
-                        , Border.rounded 0
-                        , Border.color (rgb 0.0 0.0 0.0)
-                        ]
-                        { onChange =
-                            \newVelocity ->
-                                { state | velocity = newVelocity }
-                                    |> EditButton
-                                    |> UpdateControllerState
-                        , text = state.velocity
-                        , placeholder = Just <| Input.placeholder [] (text "enter velocity")
-                        , label = Input.labelAbove [] (text "Velocity")
-                        }
-                    , row [ spacing 2 ]
-                        [ case editStateToButton state of
-                            Just controller ->
-                                Input.button
-                                    [ padding 5
-                                    , Border.width 2
-                                    , Border.solid
-                                    , Border.color <| rgb 0 0 0
-                                    ]
-                                    { onPress = Just <| FinishedEdit controller
-                                    , label = text "Ok"
-                                    }
+            EditRow subControls ->
+                editRowPane subControls
 
-                            Nothing ->
-                                Input.button
-                                    [ padding 5
-                                    , Border.width 2
-                                    , Border.solid
-                                    , Border.color <| rgb 0.7 0.7 0.7
-                                    , Font.color <| rgb 0.7 0.7 0.7
-                                    ]
-                                    { onPress = Nothing
-                                    , label = text "Ok"
-                                    }
-                        , Input.button
-                            [ padding 5
-                            , Border.width 2
-                            , Border.solid
-                            , Border.color <| rgb255 0 0 0
-                            ]
-                            { onPress = Just ClosePopUp, label = text "Cancel" }
-                        ]
-                    ]
+            EditColumn subControls ->
+                editColumnPane subControls
+
+            EditButton state ->
+                editButtonPane state
 
             _ ->
                 column
@@ -722,6 +645,146 @@ editMenu menuType =
                         ]
                         { onPress = Just ClosePopUp, label = text "Cancel" }
                     ]
+        ]
+
+
+editRowPane : List Controller -> Element Msg
+editRowPane subControls =
+    column
+        [ padding 10
+        , spacing 10
+        , Background.color (rgb 1.0 1.0 1.0)
+        ]
+        ((List.map Controller.controllerToString subControls
+            |> List.map text
+         )
+            ++ [ Input.button
+                    [ padding 5
+                    , Border.width 2
+                    , Border.solid
+                    , Border.color <| rgb255 0 0 0
+                    ]
+                    { onPress = Just ClosePopUp, label = text "Cancel" }
+               ]
+        )
+
+
+editColumnPane : List Controller -> Element Msg
+editColumnPane subControls =
+    column
+        [ padding 10
+        , spacing 10
+        , Background.color (rgb 1.0 1.0 1.0)
+        ]
+        ((List.map Controller.controllerToString subControls
+            |> List.map text
+         )
+            ++ [ Input.button
+                    [ padding 5
+                    , Border.width 2
+                    , Border.solid
+                    , Border.color <| rgb255 0 0 0
+                    ]
+                    { onPress = Just ClosePopUp, label = text "Cancel" }
+               ]
+        )
+
+
+editButtonPane : EditButtonState -> Element Msg
+editButtonPane state =
+    column
+        [ padding 10
+        , spacing 10
+        , Background.color (rgb 1.0 1.0 1.0)
+        ]
+        [ Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , Border.color (rgb 0.0 0.0 0.0)
+            ]
+            { onChange =
+                \newLabel ->
+                    { state | label = newLabel }
+                        |> EditButton
+                        |> UpdateControllerState
+            , text = state.label
+            , placeholder = Just <| Input.placeholder [] (text "enter label")
+            , label = Input.labelAbove [] (text "Label")
+            }
+        , Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , Border.color (rgb 0.0 0.0 0.0)
+            ]
+            { onChange =
+                \newChannel ->
+                    { state | channel = newChannel }
+                        |> EditButton
+                        |> UpdateControllerState
+            , text = state.channel
+            , placeholder = Just <| Input.placeholder [] (text "enter channel#")
+            , label = Input.labelAbove [] (text "Channel")
+            }
+        , Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , Border.color (rgb 0.0 0.0 0.0)
+            ]
+            { onChange =
+                \newNoteNumber ->
+                    { state | noteNumber = newNoteNumber }
+                        |> EditButton
+                        |> UpdateControllerState
+            , text = state.noteNumber
+            , placeholder = Just <| Input.placeholder [] (text "enter note#")
+            , label = Input.labelAbove [] (text "Note Number")
+            }
+        , Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , Border.color (rgb 0.0 0.0 0.0)
+            ]
+            { onChange =
+                \newVelocity ->
+                    { state | velocity = newVelocity }
+                        |> EditButton
+                        |> UpdateControllerState
+            , text = state.velocity
+            , placeholder = Just <| Input.placeholder [] (text "enter velocity")
+            , label = Input.labelAbove [] (text "Velocity")
+            }
+        , row [ spacing 2 ]
+            [ case editStateToButton state of
+                Just controller ->
+                    Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , Border.color <| rgb 0 0 0
+                        ]
+                        { onPress = Just <| FinishedEdit controller
+                        , label = text "Ok"
+                        }
+
+                Nothing ->
+                    Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , Border.color <| rgb 0.7 0.7 0.7
+                        , Font.color <| rgb 0.7 0.7 0.7
+                        ]
+                        { onPress = Nothing
+                        , label = text "Ok"
+                        }
+            , Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , Border.color <| rgb255 0 0 0
+                ]
+                { onPress = Just ClosePopUp, label = text "Cancel" }
+            ]
         ]
 
 
@@ -790,6 +853,12 @@ renderController mode config idParts controller id =
                             ++ fillSpace
                         )
                         [ renderEditButton config
+                            Controller.EditContainer
+                            (updatedParts
+                                |> List.reverse
+                                |> String.join "_"
+                            )
+                        , renderEditButton config
                             Controller.Remove
                             (updatedParts
                                 |> List.reverse
@@ -840,6 +909,12 @@ renderController mode config idParts controller id =
                             ++ fillSpace
                         )
                         [ renderEditButton config
+                            Controller.EditContainer
+                            (updatedParts
+                                |> List.reverse
+                                |> String.join "_"
+                            )
+                        , renderEditButton config
                             Controller.Remove
                             (updatedParts
                                 |> List.reverse
@@ -973,6 +1048,21 @@ renderButton config mode state id =
 renderEditButton : PageConfig -> Controller.EditOperation -> String -> Element Msg
 renderEditButton config editOperation parentId =
     case editOperation of
+        Controller.EditContainer ->
+            Input.button
+                [ centerX
+                , padding config.gapSize
+                , spacing config.gapSize
+                , Border.width 2
+                ]
+                { onPress = Just <| OpenEditController parentId
+                , label =
+                    Icons.edit2
+                        |> Icons.withSize 36
+                        |> Icons.toHtml []
+                        |> html
+                }
+
         Controller.Add ->
             Input.button
                 [ centerX
