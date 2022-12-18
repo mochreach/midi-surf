@@ -45,6 +45,7 @@ type EditMenuState
     | EditColumn
     | EditRow
     | EditButton EditButtonState
+    | EditSpace
 
 
 updateWithMidiMsg : MidiMsg -> EditMenuState -> EditMenuState
@@ -62,6 +63,9 @@ updateWithMidiMsg midiMsg state =
         EditButton buttonState ->
             updateEditButtonWithMidiMsg midiMsg buttonState
                 |> EditButton
+
+        EditSpace ->
+            state
 
 
 type alias Page =
@@ -99,7 +103,8 @@ updateEditButtonWithMidiMsg midiMsg state =
     case Debug.log "Msg" midiMsg of
         NoteOn noteOnParams ->
             { state
-                | channel = String.fromInt noteOnParams.channel
+              -- Adding 1 to the channel so that they're labelled 1-16
+                | channel = String.fromInt (noteOnParams.channel + 1)
                 , noteNumber = String.fromInt noteOnParams.pitch
                 , velocity = String.fromInt noteOnParams.velocity
             }
@@ -603,6 +608,7 @@ editMenu menuType =
                                 EditButton defaultButton
                         )
                         (text "Button")
+                    , Input.option EditSpace (text "Space")
                     ]
                 }
         , case menuType of
