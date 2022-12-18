@@ -54,11 +54,45 @@ updateWithMidiMsg midiMsg state =
         EditModule ->
             state
 
-        EditColumn _ ->
-            state
+        EditColumn subControls ->
+            case midiMsg of
+                Midi.NoteOn { channel, pitch, velocity } ->
+                    let
+                        ch =
+                            Controller.midiNumberToChannel channel
+                                |> Maybe.withDefault Controller.Ch1
 
-        EditRow _ ->
-            state
+                        label =
+                            "Ch"
+                                ++ Controller.channelToString ch
+                                ++ "#"
+                                ++ String.fromInt pitch
+                    in
+                    List.append subControls [ Controller.newButton label ch pitch velocity ]
+                        |> EditColumn
+
+                _ ->
+                    state
+
+        EditRow subControls ->
+            case midiMsg of
+                Midi.NoteOn { channel, pitch, velocity } ->
+                    let
+                        ch =
+                            Controller.midiNumberToChannel channel
+                                |> Maybe.withDefault Controller.Ch1
+
+                        label =
+                            "Ch"
+                                ++ Controller.channelToString ch
+                                ++ "#"
+                                ++ String.fromInt pitch
+                    in
+                    List.append subControls [ Controller.newButton label ch pitch velocity ]
+                        |> EditRow
+
+                _ ->
+                    state
 
         EditButton buttonState ->
             updateEditButtonWithMidiMsg midiMsg buttonState
@@ -342,12 +376,16 @@ update msg model =
                     ( { model
                         | popup = Nothing
                         , page = updatedPage
+                        , mode = Normal
                       }
                     , Cmd.none
                     )
 
                 _ ->
-                    ( { model | popup = Nothing }
+                    ( { model
+                        | popup = Nothing
+                        , mode = Normal
+                      }
                     , Cmd.none
                     )
 
@@ -592,7 +630,7 @@ deviceItem { name, input, output } =
 
 editMenu : EditMenuState -> Element Msg
 editMenu menuType =
-    wrappedRow [ centerX, centerY, spacing 10 ]
+    wrappedRow [ centerX, padding 20, spacing 10 ]
         [ el
             [ alignTop
             , padding 10
@@ -655,16 +693,58 @@ editRowPane subControls =
         , spacing 10
         , Background.color (rgb 1.0 1.0 1.0)
         ]
-        ((List.map Controller.controllerToString subControls
-            |> List.map text
-         )
-            ++ [ Input.button
-                    [ padding 5
-                    , Border.width 2
-                    , Border.solid
-                    , Border.color <| rgb255 0 0 0
+        (row [ spacing 10 ]
+            [ Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , Border.color <| rgb255 0 0 0
+                ]
+                { onPress =
+                    List.append subControls [ Controller.Space ]
+                        |> EditRow
+                        |> UpdateControllerState
+                        |> Just
+                , label = text "Add"
+                }
+            , Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , Border.color <| rgb255 0 0 0
+                ]
+                { onPress =
+                    List.reverse subControls
+                        |> List.tail
+                        |> Maybe.withDefault []
+                        |> List.reverse
+                        |> EditRow
+                        |> UpdateControllerState
+                        |> Just
+                , label = text "Remove"
+                }
+            ]
+            :: (List.map Controller.controllerToString subControls
+                    |> List.map text
+               )
+            ++ [ row [ spacing 2 ]
+                    [ Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , Border.color <| rgb 0 0 0
+                        ]
+                        { onPress = Just <| FinishedEdit <| Controller.Row subControls
+                        , label = text "Ok"
+                        }
+                    , Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , Border.color <| rgb255 0 0 0
+                        ]
+                        { onPress = Just ClosePopUp, label = text "Cancel" }
                     ]
-                    { onPress = Just ClosePopUp, label = text "Cancel" }
                ]
         )
 
@@ -676,16 +756,58 @@ editColumnPane subControls =
         , spacing 10
         , Background.color (rgb 1.0 1.0 1.0)
         ]
-        ((List.map Controller.controllerToString subControls
-            |> List.map text
-         )
-            ++ [ Input.button
-                    [ padding 5
-                    , Border.width 2
-                    , Border.solid
-                    , Border.color <| rgb255 0 0 0
+        (row [ spacing 10 ]
+            [ Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , Border.color <| rgb255 0 0 0
+                ]
+                { onPress =
+                    List.append subControls [ Controller.Space ]
+                        |> EditColumn
+                        |> UpdateControllerState
+                        |> Just
+                , label = text "Add"
+                }
+            , Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , Border.color <| rgb255 0 0 0
+                ]
+                { onPress =
+                    List.reverse subControls
+                        |> List.tail
+                        |> Maybe.withDefault []
+                        |> List.reverse
+                        |> EditColumn
+                        |> UpdateControllerState
+                        |> Just
+                , label = text "Remove"
+                }
+            ]
+            :: (List.map Controller.controllerToString subControls
+                    |> List.map text
+               )
+            ++ [ row [ spacing 2 ]
+                    [ Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , Border.color <| rgb 0 0 0
+                        ]
+                        { onPress = Just <| FinishedEdit <| Controller.Column subControls
+                        , label = text "Ok"
+                        }
+                    , Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , Border.color <| rgb255 0 0 0
+                        ]
+                        { onPress = Just ClosePopUp, label = text "Cancel" }
                     ]
-                    { onPress = Just ClosePopUp, label = text "Cancel" }
                ]
         )
 

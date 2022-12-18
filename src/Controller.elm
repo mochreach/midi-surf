@@ -11,6 +11,7 @@ module Controller exposing
     , channelToString
     , controllerToString
     , getWithId
+    , midiNumberToChannel
     , newButton
     , removeItem
     , stringToChannel
@@ -240,6 +241,61 @@ channelToMidiNumber ch =
 
         Ch16 ->
             15
+
+
+midiNumberToChannel : Int -> Maybe Channel
+midiNumberToChannel n =
+    case n of
+        0 ->
+            Ch1 |> Just
+
+        1 ->
+            Ch2 |> Just
+
+        2 ->
+            Ch3 |> Just
+
+        3 ->
+            Ch4 |> Just
+
+        4 ->
+            Ch5 |> Just
+
+        5 ->
+            Ch6 |> Just
+
+        6 ->
+            Ch7 |> Just
+
+        7 ->
+            Ch8 |> Just
+
+        8 ->
+            Ch9 |> Just
+
+        9 ->
+            Ch10 |> Just
+
+        10 ->
+            Ch11 |> Just
+
+        11 ->
+            Ch12 |> Just
+
+        12 ->
+            Ch13 |> Just
+
+        13 ->
+            Ch14 |> Just
+
+        14 ->
+            Ch15 |> Just
+
+        15 ->
+            Ch16 |> Just
+
+        _ ->
+            Nothing
 
 
 type EditOperation
