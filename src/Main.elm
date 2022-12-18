@@ -6,6 +6,7 @@ import Controller exposing (Controller)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
+import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
 import Element.Lazy as Lazy
@@ -32,7 +33,7 @@ type alias Model =
 
 type Mode
     = Normal
-    | Edit
+    | Edit Bool
 
 
 type PopUp
@@ -254,11 +255,14 @@ update msg model =
             ( { model
                 | mode =
                     case model.mode of
-                        Edit ->
-                            Normal
-
                         Normal ->
-                            Edit
+                            Edit False
+
+                        Edit False ->
+                            Edit True
+
+                        Edit True ->
+                            Normal
               }
             , Cmd.none
             )
@@ -339,6 +343,11 @@ update msg model =
                                 |> EditMenu id
                                 |> Just
 
+                        Just Controller.Space ->
+                            EditSpace
+                                |> EditMenu id
+                                |> Just
+
                         _ ->
                             Nothing
               }
@@ -376,7 +385,16 @@ update msg model =
                     ( { model
                         | popup = Nothing
                         , page = updatedPage
-                        , mode = Normal
+                        , mode =
+                            case model.mode of
+                                Normal ->
+                                    Normal
+
+                                Edit False ->
+                                    Normal
+
+                                Edit True ->
+                                    Edit True
                       }
                     , Cmd.none
                     )
@@ -560,8 +578,11 @@ view model =
                             Normal ->
                                 rgb 1.0 1.0 1.0
 
-                            Edit ->
+                            Edit False ->
                                 rgb 0.4 0.4 0.4
+
+                            Edit True ->
+                                rgb 0.2 0.2 0.2
                     ]
                     { onPress = Just ToggleNormalEdit
                     , label =
@@ -922,7 +943,7 @@ renderPage mode page =
                     Normal ->
                         []
 
-                    Edit ->
+                    Edit _ ->
                         [ paddingXY config.gapSize 0
                         ]
                )
@@ -965,7 +986,7 @@ renderController mode config idParts controller id =
                             subControls
                             (List.range 0 <| List.length subControls)
 
-                Edit ->
+                Edit _ ->
                     Lazy.lazy2 row
                         ([ paddingXY 5 0
                          , spacing 5
@@ -1021,7 +1042,7 @@ renderController mode config idParts controller id =
                             subControls
                             (List.range 0 <| List.length subControls)
 
-                Edit ->
+                Edit _ ->
                     Lazy.lazy2 column
                         ([ paddingXY 0 5
                          , spacing 5
@@ -1073,7 +1094,18 @@ renderController mode config idParts controller id =
                 )
 
         Controller.Space ->
-            el ((Background.color <| rgb 0.9 0.9 0.9) :: fillSpace) none
+            el
+                ([ Background.color <| rgb 0.9 0.9 0.9
+                 , Events.onClick <|
+                    OpenEditController
+                        (updatedParts
+                            |> List.reverse
+                            |> String.join "_"
+                        )
+                 ]
+                    ++ fillSpace
+                )
+                none
 
 
 renderButton : PageConfig -> Mode -> Controller.ButtonState -> String -> Element Msg
@@ -1142,7 +1174,7 @@ renderButton config mode state id =
                         ]
                 )
 
-        Edit ->
+        Edit _ ->
             Input.button
                 ([ padding config.gapSize
                  , spacing config.gapSize
