@@ -37,13 +37,13 @@ function initialiseDevices(midiAccess) {
     }));
 
     midiAccess.outputs.forEach((output => {
-        console.log(output.name);
-        if (output.name in midiDevices) {
-            midiDevices[output.name].output = output;
+        if (midiDevices.has(output.name)) {
+            midiDevices.get(output.name).output = output;
         } else {
             midiDevices.set(output.name, {input: null, output: output});
         }
     }));
+    console.log(midiDevices);
 
     let devices = Array.from(midiDevices.entries()).map(makeMidiStatusFromDevice);
     app.ports.midiDevices.send(devices);

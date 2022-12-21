@@ -229,8 +229,9 @@ makeIsomorphicRow noteRange offset rowLength rowNumber =
 
 type Msg
     = MidiDevicesChanged (List Midi.Device)
-    | ToggleNormalEdit
     | OpenMidiMenu
+    | SetMidiIO
+    | ToggleNormalEdit
     | AddSpace String
     | RemoveItem String
     | OpenEditController String
@@ -251,6 +252,18 @@ update msg model =
             , Cmd.none
             )
 
+        OpenMidiMenu ->
+            ( { model
+                | popup =
+                    Just <|
+                        MidiMenu
+              }
+            , Cmd.none
+            )
+
+        SetMidiIO ->
+            ( model, Cmd.none )
+
         ToggleNormalEdit ->
             ( { model
                 | mode =
@@ -263,15 +276,6 @@ update msg model =
 
                         Edit True ->
                             Normal
-              }
-            , Cmd.none
-            )
-
-        OpenMidiMenu ->
-            ( { model
-                | popup =
-                    Just <|
-                        MidiMenu
               }
             , Cmd.none
             )
@@ -531,7 +535,7 @@ view model =
 
                         EditMenu _ state ->
                             el
-                                (Background.color colourScheme.lightGrey
+                                (Background.color (rgba 0.5 0.5 0.5 0.8)
                                     :: fillSpace
                                 )
                                 (editMenu state)
@@ -601,10 +605,10 @@ view model =
                             |> html
                     }
                 ]
-            , el
+            , Lazy.lazy2
+                el
                 (padding 2 :: fillSpace)
-              <|
-                renderPage model.mode model.page
+                (renderPage model.mode model.page)
             ]
 
 
@@ -615,14 +619,15 @@ midiMenu devices =
             [ padding 10
             , spacing 10
             , Background.color <| colourScheme.white
+            , Border.width 4
             ]
-            (paragraph [] [ text "MIDI Devices" ]
+            (paragraph [ Font.bold ] [ text "MIDI Devices" ]
                 :: (case devices of
                         [] ->
                             [ paragraph [] [ text "No MIDI devices connected." ] ]
 
                         _ ->
-                            List.map deviceItem devices
+                            [ deviceTable devices ]
                    )
                 ++ [ Input.button
                         [ padding 5
@@ -635,27 +640,46 @@ midiMenu devices =
             )
 
 
-deviceItem : Midi.Device -> Element Msg
-deviceItem { name, input, output } =
-    row
-        [ padding 10
-        , spacing 10
-        , width fill
-        ]
-        [ text name
-        , text <|
-            if Maybe.withDefault False input then
-                "True"
+deviceTable : List Midi.Device -> Element Msg
+deviceTable devices =
+    table
+        [ padding 10, spacing 10 ]
+        { data = devices
+        , columns =
+            [ { header = el [ Font.underline ] <| Element.text "Name"
+              , width = fill
+              , view =
+                    \{ name } ->
+                        Element.text name
+              }
+            , { header = el [ Font.underline ] <| Element.text "Input"
+              , width = fill
+              , view =
+                    \{ input } ->
+                        (case input of
+                            Just True ->
+                                el [ centerX ] <| Input.defaultCheckbox True
 
-            else
-                "False"
-        , text <|
-            if Maybe.withDefault False output then
-                "True"
+                            _ ->
+                                el [ centerX ] <| Input.defaultCheckbox False
+                        )
+                            |> el [ width fill ]
+              }
+            , { header = el [ Font.underline ] <| Element.text "Output"
+              , width = fill
+              , view =
+                    \{ output } ->
+                        (case output of
+                            Just True ->
+                                el [ centerX ] <| Input.defaultCheckbox True
 
-            else
-                "False"
-        ]
+                            _ ->
+                                el [ centerX ] <| Input.defaultCheckbox False
+                        )
+                            |> el [ width fill ]
+              }
+            ]
+        }
 
 
 editMenu : EditMenuState -> Element Msg
