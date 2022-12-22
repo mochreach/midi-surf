@@ -97,6 +97,18 @@ app.ports.sendNoteOff.subscribe(function (midiMsg) {
     }));
 });
 
+app.ports.sendCC.subscribe(function (midiMsg) {
+    midiDevices.forEach(((device) => {
+        if (device.output != null) {
+            let {channel, controller, value} = midiMsg;
+            device.output.send([0xB0 + channel, controller, value]);
+            console.log(device.output.name, "CC", channel, value);
+        } else {
+            console.log("Midi output not available for device: " + device.output.name);
+        }
+    }));
+});
+
 // If you want your app to work offline and load faster, you can change
 // unregister() to register() below. Note this comes with some pitfalls.
 // Learn more about service workers: https://bit.ly/CRA-PWA

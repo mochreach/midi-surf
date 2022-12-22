@@ -2,7 +2,7 @@ module Main exposing (..)
 
 import Array exposing (Array)
 import Browser
-import Controller exposing (Controller)
+import Controller exposing (Controller, FaderStatus(..))
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -46,6 +46,7 @@ type EditMenuState
     | EditColumn (List Controller)
     | EditRow (List Controller)
     | EditButton EditButtonState
+    | EditFader EditFaderState
     | EditSpace
 
 
@@ -72,6 +73,32 @@ updateWithMidiMsg midiMsg state =
                     List.append subControls [ Controller.newButton label ch pitch velocity ]
                         |> EditColumn
 
+                Midi.ControllerChange { channel, controller } ->
+                    let
+                        ch =
+                            Controller.midiNumberToChannel channel
+                                |> Maybe.withDefault Controller.Ch1
+
+                        label =
+                            "Ch"
+                                ++ Controller.channelToString ch
+                                ++ " CC "
+                                ++ String.fromInt controller
+                    in
+                    List.append
+                        subControls
+                        [ Controller.Fader
+                            { status = Controller.Set
+                            , label = label
+                            , channel = ch
+                            , ccNumber = controller
+                            , valuePercent = 50
+                            , valueMin = 0
+                            , valueMax = 127
+                            }
+                        ]
+                        |> EditColumn
+
                 _ ->
                     state
 
@@ -92,12 +119,42 @@ updateWithMidiMsg midiMsg state =
                     List.append subControls [ Controller.newButton label ch pitch velocity ]
                         |> EditRow
 
+                Midi.ControllerChange { channel, controller } ->
+                    let
+                        ch =
+                            Controller.midiNumberToChannel channel
+                                |> Maybe.withDefault Controller.Ch1
+
+                        label =
+                            "Ch"
+                                ++ Controller.channelToString ch
+                                ++ " CC "
+                                ++ String.fromInt controller
+                    in
+                    List.append
+                        subControls
+                        [ Controller.Fader
+                            { status = Controller.Set
+                            , label = label
+                            , channel = ch
+                            , ccNumber = controller
+                            , valuePercent = 50
+                            , valueMin = 0
+                            , valueMax = 127
+                            }
+                        ]
+                        |> EditRow
+
                 _ ->
                     state
 
         EditButton buttonState ->
             updateEditButtonWithMidiMsg midiMsg buttonState
                 |> EditButton
+
+        EditFader faderState ->
+            updateEditFaderWithMidiMsg midiMsg faderState
+                |> EditFader
 
         EditSpace ->
             state
@@ -124,8 +181,8 @@ type alias EditButtonState =
     }
 
 
-defaultButton : EditButtonState
-defaultButton =
+defaultEditButtonState : EditButtonState
+defaultEditButtonState =
     { label = ""
     , channel = "1"
     , noteNumber = "60"
@@ -135,7 +192,7 @@ defaultButton =
 
 updateEditButtonWithMidiMsg : MidiMsg -> EditButtonState -> EditButtonState
 updateEditButtonWithMidiMsg midiMsg state =
-    case Debug.log "Msg" midiMsg of
+    case midiMsg of
         NoteOn noteOnParams ->
             { state
               -- Adding 1 to the channel so that they're labelled 1-16
@@ -164,6 +221,72 @@ editStateToButton { label, noteNumber, channel, velocity } =
                 -- TODO: These values should not exceed 127, handle with midi module
                 Controller.newButton label ch nn vel
                     |> Just
+
+            _ ->
+                Nothing
+
+
+type alias EditFaderState =
+    { label : String
+    , channel : String
+    , ccNumber : String
+    , valueMin : String
+    , valueMax : String
+    }
+
+
+defaultEditFaderState : EditFaderState
+defaultEditFaderState =
+    { label = ""
+    , channel = "1"
+    , ccNumber = "1"
+    , valueMin = "0"
+    , valueMax = "127"
+    }
+
+
+updateEditFaderWithMidiMsg : MidiMsg -> EditFaderState -> EditFaderState
+updateEditFaderWithMidiMsg midiMsg state =
+    case midiMsg of
+        ControllerChange { channel, controller } ->
+            { state
+              -- Adding 1 to the channel so that they're labelled 1-16
+                | channel = String.fromInt (channel + 1)
+                , ccNumber = String.fromInt controller
+            }
+
+        _ ->
+            state
+
+
+editFaderToFader : EditFaderState -> Maybe Controller
+editFaderToFader { label, channel, ccNumber, valueMin, valueMax } =
+    if String.isEmpty label then
+        Nothing
+
+    else
+        case Controller.stringToChannel channel of
+            Just ch ->
+                case
+                    ( String.toInt ccNumber
+                    , String.toInt valueMin
+                    , String.toInt valueMax
+                    )
+                of
+                    ( Just cc, Just vmin, Just vmax ) ->
+                        Controller.Fader
+                            { status = Controller.Set
+                            , label = label
+                            , channel = ch
+                            , ccNumber = cc
+                            , valuePercent = 50
+                            , valueMin = vmin
+                            , valueMax = vmax
+                            }
+                            |> Just
+
+                    _ ->
+                        Nothing
 
             _ ->
                 Nothing
@@ -230,7 +353,6 @@ makeIsomorphicRow noteRange offset rowLength rowNumber =
 type Msg
     = MidiDevicesChanged (List Midi.Device)
     | OpenMidiMenu
-    | SetMidiIO
     | ToggleNormalEdit
     | AddSpace String
     | RemoveItem String
@@ -240,6 +362,8 @@ type Msg
     | FinishedEdit Controller
     | ButtonDown String
     | ButtonUp String
+    | FaderChanging String Touch.Event
+    | FaderSet String
     | ClosePopUp
     | IncomingMidi (Array Int)
 
@@ -260,9 +384,6 @@ update msg model =
               }
             , Cmd.none
             )
-
-        SetMidiIO ->
-            ( model, Cmd.none )
 
         ToggleNormalEdit ->
             ( { model
@@ -327,6 +448,16 @@ update msg model =
             ( { model
                 | popup =
                     case controller of
+                        Just (Controller.Row subControls) ->
+                            EditRow subControls
+                                |> EditMenu id
+                                |> Just
+
+                        Just (Controller.Column subControls) ->
+                            EditColumn subControls
+                                |> EditMenu id
+                                |> Just
+
                         Just (Controller.Button { noteNumber, label, channel, velocity }) ->
                             EditButton
                                 { noteNumber = String.fromInt noteNumber
@@ -337,13 +468,14 @@ update msg model =
                                 |> EditMenu id
                                 |> Just
 
-                        Just (Controller.Row subControls) ->
-                            EditRow subControls
-                                |> EditMenu id
-                                |> Just
-
-                        Just (Controller.Column subControls) ->
-                            EditColumn subControls
+                        Just (Controller.Fader { label, channel, ccNumber, valueMin, valueMax }) ->
+                            EditFader
+                                { label = label
+                                , channel = Controller.channelToString channel
+                                , ccNumber = String.fromInt ccNumber
+                                , valueMin = String.fromInt valueMin
+                                , valueMax = String.fromInt valueMax
+                                }
                                 |> EditMenu id
                                 |> Just
 
@@ -485,6 +617,71 @@ update msg model =
 
                 _ ->
                     Cmd.none
+            )
+
+        FaderChanging id touchEvent ->
+            let
+                touchCoordinates =
+                    List.head touchEvent.changedTouches
+                        |> Maybe.map .clientPos
+                        |> Maybe.withDefault ( 0, 0 )
+
+                fader =
+                    Controller.getWithId "0" id page.controller
+                        |> Maybe.withDefault
+                            (Controller.Fader
+                                { status = Controller.Set
+                                , label = "ERROR"
+                                , channel = Controller.Ch1
+                                , ccNumber = 1
+                                , valuePercent = 50
+                                , valueMin = 0
+                                , valueMax = 127
+                                }
+                            )
+
+                ( newFader, midiMsg ) =
+                    Controller.faderChanging touchCoordinates fader
+
+                page =
+                    model.page
+
+                updatedPage =
+                    { page
+                        | controller =
+                            Controller.updateWithId
+                                "0"
+                                page.controller
+                                { id = id, updateFn = always newFader }
+                    }
+            in
+            ( { model | page = updatedPage }
+            , case midiMsg of
+                Just (Midi.ControllerChange data) ->
+                    Ports.sendCC data
+
+                _ ->
+                    Cmd.none
+            )
+
+        FaderSet id ->
+            let
+                page =
+                    model.page
+
+                -- fader =
+                --     Controller.getWithId "0" id page.controller
+                updatedPage =
+                    { page
+                        | controller =
+                            Controller.updateWithId
+                                "0"
+                                page.controller
+                                { id = id, updateFn = Controller.faderSet }
+                    }
+            in
+            ( { model | page = updatedPage }
+            , Cmd.none
             )
 
         ClosePopUp ->
@@ -707,9 +904,18 @@ editMenu menuType =
                                 menuType
 
                             _ ->
-                                EditButton defaultButton
+                                EditButton defaultEditButtonState
                         )
                         (text "Button")
+                    , Input.option
+                        (case menuType of
+                            EditFader _ ->
+                                menuType
+
+                            _ ->
+                                EditFader defaultEditFaderState
+                        )
+                        (text "Fader")
                     , Input.option EditSpace (text "Space")
                     ]
                 }
@@ -722,6 +928,9 @@ editMenu menuType =
 
             EditButton state ->
                 editButtonPane state
+
+            EditFader state ->
+                editFaderPane state
 
             _ ->
                 column
@@ -884,7 +1093,7 @@ editButtonPane state =
                         |> EditButton
                         |> UpdateControllerState
             , text = state.label
-            , placeholder = Just <| Input.placeholder [] (text "enter label")
+            , placeholder = Just <| Input.placeholder [] (text "label")
             , label = Input.labelAbove [] (text "Label")
             }
         , Input.text
@@ -898,7 +1107,7 @@ editButtonPane state =
                         |> EditButton
                         |> UpdateControllerState
             , text = state.channel
-            , placeholder = Just <| Input.placeholder [] (text "enter channel#")
+            , placeholder = Just <| Input.placeholder [] (text "channel#")
             , label = Input.labelAbove [] (text "Channel")
             }
         , Input.text
@@ -912,7 +1121,7 @@ editButtonPane state =
                         |> EditButton
                         |> UpdateControllerState
             , text = state.noteNumber
-            , placeholder = Just <| Input.placeholder [] (text "enter note#")
+            , placeholder = Just <| Input.placeholder [] (text "note#")
             , label = Input.labelAbove [] (text "Note Number")
             }
         , Input.text
@@ -926,11 +1135,123 @@ editButtonPane state =
                         |> EditButton
                         |> UpdateControllerState
             , text = state.velocity
-            , placeholder = Just <| Input.placeholder [] (text "enter velocity")
+            , placeholder = Just <| Input.placeholder [] (text "velocity")
             , label = Input.labelAbove [] (text "Velocity")
             }
         , row [ spacing 2 ]
             [ case editStateToButton state of
+                Just controller ->
+                    Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , Border.color colourScheme.black
+                        ]
+                        { onPress = Just <| FinishedEdit controller
+                        , label = text "Ok"
+                        }
+
+                Nothing ->
+                    Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , Border.color colourScheme.lightGrey
+                        , Font.color colourScheme.lightGrey
+                        ]
+                        { onPress = Nothing
+                        , label = text "Ok"
+                        }
+            , Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , Border.color colourScheme.black
+                ]
+                { onPress = Just ClosePopUp, label = text "Cancel" }
+            ]
+        ]
+
+
+editFaderPane : EditFaderState -> Element Msg
+editFaderPane state =
+    column
+        [ padding 10
+        , spacing 10
+        , Background.color colourScheme.white
+        ]
+        [ Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , Border.color colourScheme.black
+            ]
+            { onChange =
+                \newLabel ->
+                    { state | label = newLabel }
+                        |> EditFader
+                        |> UpdateControllerState
+            , text = state.label
+            , placeholder = Just <| Input.placeholder [] (text "label")
+            , label = Input.labelAbove [] (text "Label")
+            }
+        , Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , Border.color colourScheme.black
+            ]
+            { onChange =
+                \newChannel ->
+                    { state | channel = newChannel }
+                        |> EditFader
+                        |> UpdateControllerState
+            , text = state.channel
+            , placeholder = Just <| Input.placeholder [] (text "channel#")
+            , label = Input.labelAbove [] (text "Channel")
+            }
+        , Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , Border.color colourScheme.black
+            ]
+            { onChange =
+                \newCCNumber ->
+                    { state | ccNumber = newCCNumber }
+                        |> EditFader
+                        |> UpdateControllerState
+            , text = state.ccNumber
+            , placeholder = Just <| Input.placeholder [] (text "cc#")
+            , label = Input.labelAbove [] (text "CC Number")
+            }
+        , Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , Border.color colourScheme.black
+            ]
+            { onChange =
+                \newMinValue ->
+                    { state | valueMin = newMinValue }
+                        |> EditFader
+                        |> UpdateControllerState
+            , text = state.valueMin
+            , placeholder = Just <| Input.placeholder [] (text "min value")
+            , label = Input.labelAbove [] (text "Min Value")
+            }
+        , Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , Border.color colourScheme.black
+            ]
+            { onChange =
+                \newMaxValue ->
+                    { state | valueMax = newMaxValue }
+                        |> EditFader
+                        |> UpdateControllerState
+            , text = state.valueMax
+            , placeholder = Just <| Input.placeholder [] (text "max value")
+            , label = Input.labelAbove [] (text "Max Value")
+            }
+        , row [ spacing 2 ]
+            [ case editFaderToFader state of
                 Just controller ->
                     Input.button
                         [ padding 5
@@ -1126,6 +1447,16 @@ renderController mode config idParts controller id =
                     |> String.join "_"
                 )
 
+        Controller.Fader state ->
+            renderFader
+                config
+                mode
+                state
+                (updatedParts
+                    |> List.reverse
+                    |> String.join "_"
+                )
+
         Controller.Space ->
             case mode of
                 Normal ->
@@ -1229,6 +1560,108 @@ renderButton config mode state id =
 
                    else
                     Background.color colourScheme.lightGrey
+                 ]
+                    ++ fillSpace
+                )
+                { onPress = Just <| OpenEditController id
+                , label =
+                    state.label
+                        |> text
+                }
+
+
+renderFader : PageConfig -> Mode -> Controller.FaderState -> String -> Element Msg
+renderFader config mode state id =
+    case mode of
+        Normal ->
+            el
+                ([ padding 0
+                 , spacing 0
+                 , Border.width 4
+                 , case state.status of
+                    Controller.Set ->
+                        Background.color <| colourScheme.yellow
+
+                    Controller.Changing _ ->
+                        Border.dashed
+                 , htmlAttribute <|
+                    Touch.onStart
+                        (\event ->
+                            FaderChanging id event
+                        )
+
+                 -- , htmlAttribute <|
+                 --    Mouse.onDown
+                 --        (\_ ->
+                 --            FaderChanging id
+                 --        )
+                 , htmlAttribute <|
+                    Touch.onMove
+                        (\event ->
+                            FaderChanging id event
+                        )
+                 , htmlAttribute <|
+                    Touch.onEnd
+                        (\_ ->
+                            FaderSet id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onUp
+                        (\_ ->
+                            FaderSet id
+                        )
+                 ]
+                    ++ fillSpace
+                )
+                (column
+                    ([ Background.color colourScheme.white ] ++ fillSpace)
+                    [ column
+                        fillSpace
+                        [ el
+                            [ height <| fillPortion (100 - state.valuePercent)
+                            , width fill
+                            , Background.color colourScheme.lightGrey
+                            ]
+                            none
+                        , el
+                            [ height <| fillPortion state.valuePercent
+                            , width fill
+                            , Background.color colourScheme.yellow
+                            , Border.widthEach { bottom = 0, top = 4, left = 0, right = 0 }
+                            ]
+                            none
+                        ]
+                    , el [ centerX, padding 10 ] <| text state.label
+                    ]
+                )
+
+        -- ((if config.debug then
+        --     case state.status of
+        --         Controller.Set ->
+        --             "Set\n" ++ Controller.channelToString state.channel ++ "\n"
+        --         Controller.Changing ->
+        --             "Changing\n" ++ Controller.channelToString state.channel ++ "\n"
+        --   else
+        --     ""
+        --  )
+        --     ++ state.label
+        --     ++ "\n"
+        --     ++ String.fromInt state.valuePercent
+        --     |> text
+        --     |> el
+        --         [ centerX
+        --         , centerY
+        --         , Font.size 14
+        --         ]
+        -- )
+        Edit _ ->
+            Input.button
+                ([ padding config.gapSize
+                 , spacing config.gapSize
+                 , Border.width 2
+                 , Border.dashed
+                 , Font.size 14
+                 , Background.color colourScheme.yellow
                  ]
                     ++ fillSpace
                 )

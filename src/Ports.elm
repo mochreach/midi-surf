@@ -1,6 +1,7 @@
 port module Ports exposing
     ( incomingMidi
     , midiDevices
+    , sendCC
     , sendNoteOff
     , sendNoteOn
     )
@@ -19,3 +20,6 @@ port sendNoteOn : { noteNumber : Int, velocity : Int, channel : Int } -> Cmd msg
 
 
 port sendNoteOff : { noteNumber : Int, velocity : Int, channel : Int } -> Cmd msg
+
+
+port sendCC : { channel : Int, controller : Int, value : Int } -> Cmd msg

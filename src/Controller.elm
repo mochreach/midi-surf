@@ -4,12 +4,16 @@ module Controller exposing
     , Channel(..)
     , Controller(..)
     , EditOperation(..)
+    , FaderState
+    , FaderStatus(..)
     , addSpace
     , buttonOff
     , buttonOn
     , channelToMidiNumber
     , channelToString
     , controllerToString
+    , faderChanging
+    , faderSet
     , getWithId
     , midiNumberToChannel
     , newButton
@@ -18,12 +22,15 @@ module Controller exposing
     , updateWithId
     )
 
+import Midi exposing (MidiMsg(..))
+
 
 type Controller
     = Module String Controller
     | Row (List Controller)
     | Column (List Controller)
     | Button ButtonState
+    | Fader FaderState
     | Space
 
 
@@ -47,6 +54,12 @@ controllerToString controller =
                 ++ " "
                 ++ String.fromInt velocity
 
+        Fader { channel, ccNumber } ->
+            "Fader: "
+                ++ channelToString channel
+                ++ " "
+                ++ String.fromInt ccNumber
+
         Space ->
             "Space"
 
@@ -63,6 +76,70 @@ type alias ButtonState =
 type ButtonStatus
     = On
     | Off
+
+
+type alias FaderState =
+    { status : FaderStatus
+    , label : String
+    , channel : Channel
+    , ccNumber : Int
+    , valuePercent : Int
+    , valueMin : Int
+    , valueMax : Int
+    }
+
+
+type FaderStatus
+    = Set
+    | Changing ( Float, Float )
+
+
+faderChanging : ( Float, Float ) -> Controller -> ( Controller, Maybe Midi.MidiMsg )
+faderChanging ( newX, newY ) controller =
+    case controller of
+        Fader state ->
+            case state.status of
+                Changing ( _, oldY ) ->
+                    let
+                        valueChange =
+                            oldY - newY |> round
+
+                        newPercent =
+                            state.valuePercent
+                                + valueChange
+                                |> clamp 0 100
+
+                        value =
+                            (127 // 100) * newPercent
+                    in
+                    ( Fader
+                        { state
+                            | status = Changing ( newX, newY )
+                            , valuePercent = newPercent
+                        }
+                    , Midi.ControllerChange
+                        { channel = channelToMidiNumber state.channel
+                        , controller = state.ccNumber
+                        , value = value
+                        }
+                        |> Just
+                    )
+
+                Set ->
+                    ( Fader { state | status = Changing ( newX, newY ) }, Nothing )
+
+        _ ->
+            ( controller, Nothing )
+
+
+faderSet : Controller -> Controller
+faderSet controller =
+    case controller of
+        Fader state ->
+            Fader { state | status = Set }
+
+        _ ->
+            controller
 
 
 type Channel
@@ -347,6 +424,13 @@ getWithId currentId id controller =
             else
                 Nothing
 
+        Fader _ ->
+            if currentId == id then
+                Just controller
+
+            else
+                Nothing
+
         Space ->
             if currentId == id then
                 Just controller
@@ -400,6 +484,13 @@ updateWithId currentId toUpdate updateInfo =
 
             else
                 Button state
+
+        Fader state ->
+            if currentId == id then
+                updateFn toUpdate
+
+            else
+                Fader state
 
         Space ->
             if currentId == id then
