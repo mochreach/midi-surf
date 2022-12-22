@@ -1,11 +1,12 @@
 module Controller exposing
-    ( ButtonState
-    , ButtonStatus(..)
+    ( ButtonStatus(..)
+    , CCValueState
     , Channel(..)
     , Controller(..)
     , EditOperation(..)
     , FaderState
     , FaderStatus(..)
+    , NoteState
     , addSpace
     , buttonOff
     , buttonOn
@@ -16,7 +17,8 @@ module Controller exposing
     , faderSet
     , getWithId
     , midiNumberToChannel
-    , newButton
+    , newCCValue
+    , newNote
     , removeItem
     , stringToChannel
     , updateWithId
@@ -29,14 +31,15 @@ type Controller
     = Module String Controller
     | Row (List Controller)
     | Column (List Controller)
-    | Button ButtonState
+    | Note NoteState
+    | CCValue CCValueState
     | Fader FaderState
     | Space
 
 
 controllerToString : Controller -> String
-controllerToString controller =
-    case controller of
+controllerToString control =
+    case control of
         Module label _ ->
             "Module: " ++ label
 
@@ -46,13 +49,21 @@ controllerToString controller =
         Column subcontrols ->
             "Column: " ++ (String.fromInt <| List.length subcontrols) ++ " items"
 
-        Button { channel, noteNumber, velocity } ->
+        Note { channel, pitch, velocity } ->
             "Button: "
                 ++ channelToString channel
                 ++ " "
-                ++ String.fromInt noteNumber
+                ++ String.fromInt pitch
                 ++ " "
                 ++ String.fromInt velocity
+
+        CCValue { channel, controller, value } ->
+            "CC Value: "
+                ++ channelToString channel
+                ++ " "
+                ++ String.fromInt controller
+                ++ " "
+                ++ String.fromInt value
 
         Fader { channel, ccNumber } ->
             "Fader: "
@@ -64,11 +75,11 @@ controllerToString controller =
             "Space"
 
 
-type alias ButtonState =
+type alias NoteState =
     { status : ButtonStatus
     , label : String
     , channel : Channel
-    , noteNumber : Int
+    , pitch : Int
     , velocity : Int
     }
 
@@ -76,6 +87,15 @@ type alias ButtonState =
 type ButtonStatus
     = On
     | Off
+
+
+type alias CCValueState =
+    { status : ButtonStatus
+    , label : String
+    , channel : Channel
+    , controller : Int
+    , value : Int
+    }
 
 
 type alias FaderState =
@@ -386,18 +406,18 @@ type EditOperation
 
 
 getWithId : String -> String -> Controller -> Maybe Controller
-getWithId currentId id controller =
-    case controller of
+getWithId currentId id control =
+    case control of
         Module _ subController ->
             if currentId == id then
-                Just controller
+                Just control
 
             else
                 getWithId (currentId ++ "_0") id subController
 
         Row controllers ->
             if currentId == id then
-                Just controller
+                Just control
 
             else
                 List.indexedMap
@@ -410,7 +430,7 @@ getWithId currentId id controller =
 
         Column controllers ->
             if currentId == id then
-                Just controller
+                Just control
 
             else
                 List.indexedMap
@@ -421,23 +441,30 @@ getWithId currentId id controller =
                     |> List.filterMap identity
                     |> List.head
 
-        Button _ ->
+        Note _ ->
             if currentId == id then
-                Just controller
+                Just control
+
+            else
+                Nothing
+
+        CCValue _ ->
+            if currentId == id then
+                Just control
 
             else
                 Nothing
 
         Fader _ ->
             if currentId == id then
-                Just controller
+                Just control
 
             else
                 Nothing
 
         Space ->
             if currentId == id then
-                Just controller
+                Just control
 
             else
                 Nothing
@@ -482,12 +509,19 @@ updateWithId currentId toUpdate updateInfo =
                     controllers
                     |> Column
 
-        Button state ->
+        Note state ->
             if currentId == id then
                 updateFn toUpdate
 
             else
-                Button state
+                Note state
+
+        CCValue state ->
+            if currentId == id then
+                updateFn toUpdate
+
+            else
+                CCValue state
 
         Fader state ->
             if currentId == id then
@@ -542,32 +576,72 @@ removeItem controller =
             controller
 
 
-newButton : String -> Channel -> Int -> Int -> Controller
-newButton label channel noteNumber velocity =
-    Button
+newNote : String -> Channel -> Int -> Int -> Controller
+newNote label channel noteNumber velocity =
+    Note
         { status = Off
         , label = label
         , channel = channel
-        , noteNumber = noteNumber
+        , pitch = noteNumber
         , velocity = velocity
         }
 
 
-buttonOn : Controller -> Controller
+newCCValue : String -> Channel -> Int -> Int -> Controller
+newCCValue label channel controller value =
+    CCValue
+        { status = Off
+        , label = label
+        , channel = channel
+        , controller = controller
+        , value = value
+        }
+
+
+buttonOn : Controller -> ( Controller, Maybe Midi.MidiMsg )
 buttonOn controller =
     case controller of
-        Button state ->
-            Button { state | status = On }
+        Note state ->
+            ( Note { state | status = On }
+            , Midi.NoteOn
+                { channel = channelToMidiNumber state.channel
+                , pitch = state.pitch
+                , velocity = state.velocity
+                }
+                |> Just
+            )
+
+        CCValue state ->
+            ( CCValue { state | status = On }
+            , Midi.ControllerChange
+                { channel = channelToMidiNumber state.channel
+                , controller = state.controller
+                , value = state.value
+                }
+                |> Just
+            )
 
         _ ->
-            controller
+            ( controller, Nothing )
 
 
-buttonOff : Controller -> Controller
+buttonOff : Controller -> ( Controller, Maybe Midi.MidiMsg )
 buttonOff controller =
     case controller of
-        Button state ->
-            Button { state | status = Off }
+        Note state ->
+            ( Note { state | status = Off }
+            , Midi.NoteOff
+                { channel = channelToMidiNumber state.channel
+                , pitch = state.pitch
+                , velocity = 0
+                }
+                |> Just
+            )
+
+        CCValue state ->
+            ( CCValue { state | status = Off }
+            , Nothing
+            )
 
         _ ->
-            controller
+            ( controller, Nothing )
