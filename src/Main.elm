@@ -626,6 +626,11 @@ update msg model =
                         |> Maybe.map .clientPos
                         |> Maybe.withDefault ( 0, 0 )
 
+                identifier =
+                    List.head touchEvent.changedTouches
+                        |> Maybe.map .identifier
+                        |> Maybe.withDefault -1
+
                 fader =
                     Controller.getWithId "0" id page.controller
                         |> Maybe.withDefault
@@ -641,7 +646,7 @@ update msg model =
                             )
 
                 ( newFader, midiMsg ) =
-                    Controller.faderChanging touchCoordinates fader
+                    Controller.faderChanging identifier touchCoordinates fader
 
                 page =
                     model.page
@@ -1582,7 +1587,7 @@ renderFader config mode state id =
                     Controller.Set ->
                         Background.color <| colourScheme.yellow
 
-                    Controller.Changing _ ->
+                    Controller.Changing _ _ ->
                         Border.dashed
                  , htmlAttribute <|
                     Touch.onStart

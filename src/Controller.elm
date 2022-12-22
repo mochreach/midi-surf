@@ -91,42 +91,46 @@ type alias FaderState =
 
 type FaderStatus
     = Set
-    | Changing ( Float, Float )
+    | Changing Int ( Float, Float )
 
 
-faderChanging : ( Float, Float ) -> Controller -> ( Controller, Maybe Midi.MidiMsg )
-faderChanging ( newX, newY ) controller =
+faderChanging : Int -> ( Float, Float ) -> Controller -> ( Controller, Maybe Midi.MidiMsg )
+faderChanging identifier ( newX, newY ) controller =
     case controller of
         Fader state ->
             case state.status of
-                Changing ( _, oldY ) ->
-                    let
-                        valueChange =
-                            oldY - newY |> round
+                Changing oldIdentifier ( _, oldY ) ->
+                    if identifier == oldIdentifier then
+                        let
+                            valueChange =
+                                oldY - newY |> round
 
-                        newPercent =
-                            state.valuePercent
-                                + valueChange
-                                |> clamp 0 100
+                            newPercent =
+                                state.valuePercent
+                                    + valueChange
+                                    |> clamp 0 100
 
-                        value =
-                            (127 // 100) * newPercent
-                    in
-                    ( Fader
-                        { state
-                            | status = Changing ( newX, newY )
-                            , valuePercent = newPercent
-                        }
-                    , Midi.ControllerChange
-                        { channel = channelToMidiNumber state.channel
-                        , controller = state.ccNumber
-                        , value = value
-                        }
-                        |> Just
-                    )
+                            value =
+                                (127 // 100) * newPercent
+                        in
+                        ( Fader
+                            { state
+                                | status = Changing oldIdentifier ( newX, newY )
+                                , valuePercent = newPercent
+                            }
+                        , Midi.ControllerChange
+                            { channel = channelToMidiNumber state.channel
+                            , controller = state.ccNumber
+                            , value = value
+                            }
+                            |> Just
+                        )
+
+                    else
+                        ( Fader state, Nothing )
 
                 Set ->
-                    ( Fader { state | status = Changing ( newX, newY ) }, Nothing )
+                    ( Fader { state | status = Changing identifier ( newX, newY ) }, Nothing )
 
         _ ->
             ( controller, Nothing )
