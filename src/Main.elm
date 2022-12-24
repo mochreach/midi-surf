@@ -11,7 +11,7 @@ import Element.Font as Font
 import Element.Input as Input
 import Element.Lazy as Lazy
 import FeatherIcons as Icons
-import Html exposing (Html)
+import Html exposing (Html, p)
 import Html.Attributes exposing (name)
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
@@ -176,6 +176,35 @@ type alias PageConfig =
     { gapSize : Int
     , debug : Bool
     }
+
+
+getControllerFromActivePage : String -> Int -> Array Page -> Maybe Controller
+getControllerFromActivePage id activePage pages =
+    pages
+        |> Array.get activePage
+        |> Maybe.map .controller
+        |> Maybe.andThen (Controller.getWithId "0" id)
+
+
+updateControllerOnActivePage :
+    Int
+    -> Array Page
+    -> { id : String, updateFn : Controller -> Controller }
+    -> Array Page
+updateControllerOnActivePage activePage pages updateInfo =
+    pages
+        |> Array.indexedMap Tuple.pair
+        |> Array.map
+            (\( i, p ) ->
+                if i == activePage then
+                    { p
+                        | controller =
+                            Controller.updateWithId "0" p.controller updateInfo
+                    }
+
+                else
+                    p
+            )
 
 
 type alias EditNoteState =
