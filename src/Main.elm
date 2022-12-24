@@ -3,6 +3,7 @@ module Main exposing (..)
 import Array exposing (Array)
 import Browser
 import Controller exposing (Controller, FaderStatus(..))
+import EditableController as EController exposing (EditableController(..))
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -26,7 +27,8 @@ import Ports
 type alias Model =
     { midiStatus : Status
     , mode : Mode
-    , page : Page
+    , pages : Array Page
+    , activePage : Int
     , popup : Maybe PopUp
     }
 
@@ -38,131 +40,7 @@ type Mode
 
 type PopUp
     = MidiMenu
-    | EditMenu String EditMenuState
-
-
-type EditMenuState
-    = EditModule
-    | EditColumn (List Controller)
-    | EditRow (List Controller)
-    | EditNote EditNoteState
-    | EditCCValue EditCCValueState
-    | EditFader EditFaderState
-    | EditSpace
-
-
-updateWithMidiMsg : MidiMsg -> EditMenuState -> EditMenuState
-updateWithMidiMsg midiMsg state =
-    case state of
-        EditModule ->
-            state
-
-        EditColumn subControls ->
-            case midiMsg of
-                Midi.NoteOn { channel, pitch, velocity } ->
-                    let
-                        ch =
-                            Controller.midiNumberToChannel channel
-                                |> Maybe.withDefault Controller.Ch1
-
-                        label =
-                            "Ch"
-                                ++ Controller.channelToString ch
-                                ++ "#"
-                                ++ String.fromInt pitch
-                    in
-                    List.append subControls [ Controller.newNote label ch pitch velocity ]
-                        |> EditColumn
-
-                Midi.ControllerChange { channel, controller } ->
-                    let
-                        ch =
-                            Controller.midiNumberToChannel channel
-                                |> Maybe.withDefault Controller.Ch1
-
-                        label =
-                            "Ch"
-                                ++ Controller.channelToString ch
-                                ++ " CC "
-                                ++ String.fromInt controller
-                    in
-                    List.append
-                        subControls
-                        [ Controller.Fader
-                            { status = Controller.Set
-                            , label = label
-                            , channel = ch
-                            , ccNumber = controller
-                            , valuePercent = 50
-                            , valueMin = 0
-                            , valueMax = 127
-                            }
-                        ]
-                        |> EditColumn
-
-                _ ->
-                    state
-
-        EditRow subControls ->
-            case midiMsg of
-                Midi.NoteOn { channel, pitch, velocity } ->
-                    let
-                        ch =
-                            Controller.midiNumberToChannel channel
-                                |> Maybe.withDefault Controller.Ch1
-
-                        label =
-                            "Ch"
-                                ++ Controller.channelToString ch
-                                ++ "#"
-                                ++ String.fromInt pitch
-                    in
-                    List.append subControls [ Controller.newNote label ch pitch velocity ]
-                        |> EditRow
-
-                Midi.ControllerChange { channel, controller } ->
-                    let
-                        ch =
-                            Controller.midiNumberToChannel channel
-                                |> Maybe.withDefault Controller.Ch1
-
-                        label =
-                            "Ch"
-                                ++ Controller.channelToString ch
-                                ++ " CC "
-                                ++ String.fromInt controller
-                    in
-                    List.append
-                        subControls
-                        [ Controller.Fader
-                            { status = Controller.Set
-                            , label = label
-                            , channel = ch
-                            , ccNumber = controller
-                            , valuePercent = 50
-                            , valueMin = 0
-                            , valueMax = 127
-                            }
-                        ]
-                        |> EditRow
-
-                _ ->
-                    state
-
-        EditNote noteState ->
-            updateEditNoteWithMidiMsg midiMsg noteState
-                |> EditNote
-
-        EditCCValue ccState ->
-            updateEditCCValueWithMidiMsg midiMsg ccState
-                |> EditCCValue
-
-        EditFader faderState ->
-            updateEditFaderWithMidiMsg midiMsg faderState
-                |> EditFader
-
-        EditSpace ->
-            state
+    | EditMenu String EditableController
 
 
 type alias Page =
@@ -188,10 +66,10 @@ getControllerFromActivePage id activePage pages =
 
 updateControllerOnActivePage :
     Int
-    -> Array Page
     -> { id : String, updateFn : Controller -> Controller }
     -> Array Page
-updateControllerOnActivePage activePage pages updateInfo =
+    -> Array Page
+updateControllerOnActivePage activePage updateInfo pages =
     pages
         |> Array.indexedMap Tuple.pair
         |> Array.map
@@ -207,183 +85,12 @@ updateControllerOnActivePage activePage pages updateInfo =
             )
 
 
-type alias EditNoteState =
-    { label : String
-    , channel : String
-    , noteNumber : String
-    , velocity : String
-    }
-
-
-defaultEditNoteState : EditNoteState
-defaultEditNoteState =
-    { label = ""
-    , channel = "1"
-    , noteNumber = "60"
-    , velocity = "100"
-    }
-
-
-updateEditNoteWithMidiMsg : MidiMsg -> EditNoteState -> EditNoteState
-updateEditNoteWithMidiMsg midiMsg state =
-    case midiMsg of
-        NoteOn noteOnParams ->
-            { state
-              -- Adding 1 to the channel so that they're labelled 1-16
-                | channel = String.fromInt (noteOnParams.channel + 1)
-                , noteNumber = String.fromInt noteOnParams.pitch
-                , velocity = String.fromInt noteOnParams.velocity
-            }
-
-        _ ->
-            state
-
-
-editStateToNote : EditNoteState -> Maybe Controller
-editStateToNote { label, noteNumber, channel, velocity } =
-    if String.isEmpty label then
-        Nothing
-
-    else
-        case
-            ( Controller.stringToChannel channel
-            , String.toInt noteNumber
-            , String.toInt velocity
-            )
-        of
-            ( Just ch, Just nn, Just vel ) ->
-                -- TODO: These values should not exceed 127, handle with midi module
-                Controller.newNote label ch nn vel
-                    |> Just
-
-            _ ->
-                Nothing
-
-
-type alias EditCCValueState =
-    { label : String
-    , channel : String
-    , controller : String
-    , value : String
-    }
-
-
-defaultEditCCValueState : EditCCValueState
-defaultEditCCValueState =
-    { label = ""
-    , channel = "1"
-    , controller = "1"
-    , value = "63"
-    }
-
-
-updateEditCCValueWithMidiMsg : MidiMsg -> EditCCValueState -> EditCCValueState
-updateEditCCValueWithMidiMsg midiMsg state =
-    case midiMsg of
-        ControllerChange data ->
-            { state
-              -- Adding 1 to the channel so that they're labelled 1-16
-                | channel = String.fromInt (data.channel + 1)
-                , controller = String.fromInt data.controller
-                , value = String.fromInt data.value
-            }
-
-        _ ->
-            state
-
-
-editStateToCCValue : EditCCValueState -> Maybe Controller
-editStateToCCValue { label, channel, controller, value } =
-    if String.isEmpty label then
-        Nothing
-
-    else
-        case
-            ( Controller.stringToChannel channel
-            , String.toInt controller
-            , String.toInt value
-            )
-        of
-            ( Just ch, Just c, Just v ) ->
-                -- TODO: These values should not exceed 127, handle with midi module
-                Controller.newCCValue label ch c v
-                    |> Just
-
-            _ ->
-                Nothing
-
-
-type alias EditFaderState =
-    { label : String
-    , channel : String
-    , ccNumber : String
-    , valueMin : String
-    , valueMax : String
-    }
-
-
-defaultEditFaderState : EditFaderState
-defaultEditFaderState =
-    { label = ""
-    , channel = "1"
-    , ccNumber = "1"
-    , valueMin = "0"
-    , valueMax = "127"
-    }
-
-
-updateEditFaderWithMidiMsg : MidiMsg -> EditFaderState -> EditFaderState
-updateEditFaderWithMidiMsg midiMsg state =
-    case midiMsg of
-        ControllerChange { channel, controller } ->
-            { state
-              -- Adding 1 to the channel so that they're labelled 1-16
-                | channel = String.fromInt (channel + 1)
-                , ccNumber = String.fromInt controller
-            }
-
-        _ ->
-            state
-
-
-editFaderToFader : EditFaderState -> Maybe Controller
-editFaderToFader { label, channel, ccNumber, valueMin, valueMax } =
-    if String.isEmpty label then
-        Nothing
-
-    else
-        case Controller.stringToChannel channel of
-            Just ch ->
-                case
-                    ( String.toInt ccNumber
-                    , String.toInt valueMin
-                    , String.toInt valueMax
-                    )
-                of
-                    ( Just cc, Just vmin, Just vmax ) ->
-                        Controller.Fader
-                            { status = Controller.Set
-                            , label = label
-                            , channel = ch
-                            , ccNumber = cc
-                            , valuePercent = 50
-                            , valueMin = vmin
-                            , valueMax = vmax
-                            }
-                            |> Just
-
-                    _ ->
-                        Nothing
-
-            _ ->
-                Nothing
-
-
 init : ( Model, Cmd Msg )
 init =
     ( { midiStatus = Midi.Initialising
       , mode = Normal
-      , page = defaultPage
+      , pages = Array.fromList [ defaultPage, defaultPage ]
+      , activePage = 0
       , popup = Nothing
       }
     , Cmd.none
@@ -444,8 +151,8 @@ type Msg
     | AddSpace String
     | RemoveItem String
     | OpenEditController String
-    | SetEditType EditMenuState
-    | UpdateControllerState EditMenuState
+    | SetEditType EditableController
+    | UpdateControllerState EditableController
     | FinishedEdit Controller
     | ButtonDown String
     | ButtonUp String
@@ -489,48 +196,31 @@ update msg model =
             )
 
         AddSpace id ->
-            let
-                page =
-                    model.page
-
-                updatedPage =
-                    { page
-                        | controller =
-                            Controller.updateWithId
-                                "0"
-                                page.controller
-                                { id = id, updateFn = Controller.addSpace }
-                    }
-            in
-            ( { model | page = updatedPage }
+            ( { model
+                | pages =
+                    updateControllerOnActivePage
+                        model.activePage
+                        { id = id, updateFn = Controller.addSpace }
+                        model.pages
+              }
             , Cmd.none
             )
 
         RemoveItem id ->
-            let
-                page =
-                    model.page
-
-                updatedPage =
-                    { page
-                        | controller =
-                            Controller.updateWithId
-                                "0"
-                                page.controller
-                                { id = id, updateFn = Controller.removeItem }
-                    }
-            in
-            ( { model | page = updatedPage }
+            ( { model
+                | pages =
+                    updateControllerOnActivePage
+                        model.activePage
+                        { id = id, updateFn = Controller.removeItem }
+                        model.pages
+              }
             , Cmd.none
             )
 
         OpenEditController id ->
             let
-                page =
-                    model.page
-
                 control =
-                    Controller.getWithId "0" id page.controller
+                    getControllerFromActivePage id model.activePage model.pages
             in
             ( { model
                 | popup =
@@ -602,22 +292,13 @@ update msg model =
         FinishedEdit controller ->
             case model.popup of
                 Just (EditMenu id _) ->
-                    let
-                        page =
-                            model.page
-
-                        updatedPage =
-                            { page
-                                | controller =
-                                    Controller.updateWithId
-                                        "0"
-                                        page.controller
-                                        { id = id, updateFn = \_ -> controller }
-                            }
-                    in
                     ( { model
                         | popup = Nothing
-                        , page = updatedPage
+                        , pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = id, updateFn = \_ -> controller }
+                                model.pages
                         , mode =
                             case model.mode of
                                 Normal ->
@@ -657,11 +338,7 @@ update msg model =
                     )
 
         ButtonDown id ->
-            let
-                page =
-                    model.page
-            in
-            case Controller.getWithId "0" id page.controller of
+            case getControllerFromActivePage id model.activePage model.pages of
                 Just (Controller.Module _ _) ->
                     ( model, Cmd.none )
 
@@ -671,24 +348,18 @@ update msg model =
                 Just (Controller.Row _) ->
                     ( model, Cmd.none )
 
-                Just (Controller.Note state) ->
+                Just ((Controller.Note _) as note) ->
                     let
-                        note =
-                            Controller.Note state
-
                         ( updatedNote, midiMsg ) =
                             Controller.buttonOn note
-
-                        updatedPage =
-                            { page
-                                | controller =
-                                    Controller.updateWithId
-                                        "0"
-                                        page.controller
-                                        { id = id, updateFn = always updatedNote }
-                            }
                     in
-                    ( { model | page = updatedPage }
+                    ( { model
+                        | pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = id, updateFn = always updatedNote }
+                                model.pages
+                      }
                     , case midiMsg of
                         Just (Midi.NoteOn data) ->
                             Ports.sendNoteOn data
@@ -697,24 +368,18 @@ update msg model =
                             Cmd.none
                     )
 
-                Just (Controller.CCValue state) ->
+                Just ((Controller.CCValue _) as ccValue) ->
                     let
-                        ccValue =
-                            Controller.CCValue state
-
                         ( updatedCCValue, midiMsg ) =
                             Controller.buttonOn ccValue
-
-                        updatedPage =
-                            { page
-                                | controller =
-                                    Controller.updateWithId
-                                        "0"
-                                        page.controller
-                                        { id = id, updateFn = always updatedCCValue }
-                            }
                     in
-                    ( { model | page = updatedPage }
+                    ( { model
+                        | pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = id, updateFn = always updatedCCValue }
+                                model.pages
+                      }
                     , case midiMsg of
                         Just (Midi.ControllerChange data) ->
                             Ports.sendCC data
@@ -733,11 +398,7 @@ update msg model =
                     ( model, Cmd.none )
 
         ButtonUp id ->
-            let
-                page =
-                    model.page
-            in
-            case Controller.getWithId "0" id page.controller of
+            case getControllerFromActivePage id model.activePage model.pages of
                 Just (Controller.Module _ _) ->
                     ( model, Cmd.none )
 
@@ -747,24 +408,18 @@ update msg model =
                 Just (Controller.Row _) ->
                     ( model, Cmd.none )
 
-                Just (Controller.Note state) ->
+                Just ((Controller.Note _) as note) ->
                     let
-                        note =
-                            Controller.Note state
-
                         ( updatedNote, midiMsg ) =
                             Controller.buttonOff note
-
-                        updatedPage =
-                            { page
-                                | controller =
-                                    Controller.updateWithId
-                                        "0"
-                                        page.controller
-                                        { id = id, updateFn = always updatedNote }
-                            }
                     in
-                    ( { model | page = updatedPage }
+                    ( { model
+                        | pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = id, updateFn = always updatedNote }
+                                model.pages
+                      }
                     , case midiMsg of
                         Just (Midi.NoteOff data) ->
                             Ports.sendNoteOff data
@@ -773,24 +428,18 @@ update msg model =
                             Cmd.none
                     )
 
-                Just (Controller.CCValue state) ->
+                Just ((Controller.CCValue _) as ccValue) ->
                     let
-                        ccValue =
-                            Controller.CCValue state
-
                         ( updatedCCValue, _ ) =
                             Controller.buttonOff ccValue
-
-                        updatedPage =
-                            { page
-                                | controller =
-                                    Controller.updateWithId
-                                        "0"
-                                        page.controller
-                                        { id = id, updateFn = always updatedCCValue }
-                            }
                     in
-                    ( { model | page = updatedPage }
+                    ( { model
+                        | pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = id, updateFn = always updatedCCValue }
+                                model.pages
+                      }
                     , Cmd.none
                     )
 
@@ -816,7 +465,7 @@ update msg model =
                         |> Maybe.withDefault -1
 
                 fader =
-                    Controller.getWithId "0" id page.controller
+                    getControllerFromActivePage id model.activePage model.pages
                         |> Maybe.withDefault
                             (Controller.Fader
                                 { status = Controller.Set
@@ -831,20 +480,14 @@ update msg model =
 
                 ( newFader, midiMsg ) =
                     Controller.faderChanging identifier touchCoordinates fader
-
-                page =
-                    model.page
-
-                updatedPage =
-                    { page
-                        | controller =
-                            Controller.updateWithId
-                                "0"
-                                page.controller
-                                { id = id, updateFn = always newFader }
-                    }
             in
-            ( { model | page = updatedPage }
+            ( { model
+                | pages =
+                    updateControllerOnActivePage
+                        model.activePage
+                        { id = id, updateFn = always newFader }
+                        model.pages
+              }
             , case midiMsg of
                 Just (Midi.ControllerChange data) ->
                     Ports.sendCC data
@@ -854,22 +497,13 @@ update msg model =
             )
 
         FaderSet id ->
-            let
-                page =
-                    model.page
-
-                -- fader =
-                --     Controller.getWithId "0" id page.controller
-                updatedPage =
-                    { page
-                        | controller =
-                            Controller.updateWithId
-                                "0"
-                                page.controller
-                                { id = id, updateFn = Controller.faderSet }
-                    }
-            in
-            ( { model | page = updatedPage }
+            ( { model
+                | pages =
+                    updateControllerOnActivePage
+                        model.activePage
+                        { id = id, updateFn = Controller.faderSet }
+                        model.pages
+              }
             , Cmd.none
             )
 
@@ -883,7 +517,7 @@ update msg model =
                 | popup =
                     case model.popup of
                         Just (EditMenu id state) ->
-                            updateWithMidiMsg (Midi.intArrayToMidiMsg midiMsg) state
+                            EController.updateWithMidiMsg (Midi.intArrayToMidiMsg midiMsg) state
                                 |> EditMenu id
                                 |> Just
 
@@ -991,10 +625,16 @@ view model =
                             |> html
                     }
                 ]
-            , Lazy.lazy2
-                el
-                (padding 2 :: fillSpace)
-                (renderPage model.mode model.page)
+            , case Array.get model.activePage model.pages of
+                Just page ->
+                    Lazy.lazy2
+                        el
+                        (padding 2 :: fillSpace)
+                        (renderPage model.mode page)
+
+                Nothing ->
+                    el fillSpace <|
+                        el [ centerX, centerY ] (text "No page selected.")
             ]
 
 
@@ -1068,7 +708,7 @@ deviceTable devices =
         }
 
 
-editMenu : EditMenuState -> Element Msg
+editMenu : EditableController -> Element Msg
 editMenu menuType =
     wrappedRow [ centerX, padding 20, spacing 10 ]
         [ el
@@ -1093,7 +733,7 @@ editMenu menuType =
                                 menuType
 
                             _ ->
-                                EditNote defaultEditNoteState
+                                EditNote EController.defaultEditNoteState
                         )
                         (text "Note")
                     , Input.option
@@ -1102,7 +742,7 @@ editMenu menuType =
                                 menuType
 
                             _ ->
-                                EditCCValue defaultEditCCValueState
+                                EditCCValue EController.defaultEditCCValueState
                         )
                         (text "CC Value")
                     , Input.option
@@ -1111,7 +751,7 @@ editMenu menuType =
                                 menuType
 
                             _ ->
-                                EditFader defaultEditFaderState
+                                EditFader EController.defaultEditFaderState
                         )
                         (text "Fader")
                     , Input.option EditSpace (text "Space")
@@ -1276,7 +916,7 @@ editColumnPane subControls =
         )
 
 
-editNotePane : EditNoteState -> Element Msg
+editNotePane : EController.EditNoteState -> Element Msg
 editNotePane state =
     column
         [ padding 10
@@ -1340,7 +980,7 @@ editNotePane state =
             , label = Input.labelAbove [] (text "Velocity")
             }
         , row [ spacing 2 ]
-            [ case editStateToNote state of
+            [ case EController.editStateToNote state of
                 Just controller ->
                     Input.button
                         [ padding 5
@@ -1374,7 +1014,7 @@ editNotePane state =
         ]
 
 
-editCCValuePane : EditCCValueState -> Element Msg
+editCCValuePane : EController.EditCCValueState -> Element Msg
 editCCValuePane state =
     column
         [ padding 10
@@ -1438,7 +1078,7 @@ editCCValuePane state =
             , label = Input.labelAbove [] (text "Value")
             }
         , row [ spacing 2 ]
-            [ case editStateToCCValue state of
+            [ case EController.editStateToCCValue state of
                 Just controller ->
                     Input.button
                         [ padding 5
@@ -1472,7 +1112,7 @@ editCCValuePane state =
         ]
 
 
-editFaderPane : EditFaderState -> Element Msg
+editFaderPane : EController.EditFaderState -> Element Msg
 editFaderPane state =
     column
         [ padding 10
@@ -1550,7 +1190,7 @@ editFaderPane state =
             , label = Input.labelAbove [] (text "Max Value")
             }
         , row [ spacing 2 ]
-            [ case editFaderToFader state of
+            [ case EController.editFaderToFader state of
                 Just controller ->
                     Input.button
                         [ padding 5
