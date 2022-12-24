@@ -76,9 +76,9 @@ function onMIDIFailure(msg) {
 app.ports.sendNoteOn.subscribe(function (midiMsg) {
     midiDevices.forEach(((device) => {
         if (device.output != null) {
-            let {noteNumber, channel, velocity} = midiMsg;
-            device.output.send([0x90 + channel, noteNumber, velocity]);
-            console.log(device.output.name, "Note On", noteNumber);
+            let {channel, pitch, velocity} = midiMsg;
+            device.output.send([0x90 + channel, pitch, velocity]);
+            console.log(device.output.name, "Note On", pitch);
         } else {
             console.log("Midi output not available for device: " + device.output.name);
         }
@@ -88,9 +88,9 @@ app.ports.sendNoteOn.subscribe(function (midiMsg) {
 app.ports.sendNoteOff.subscribe(function (midiMsg) {
     midiDevices.forEach(((device, _) => {
         if (device.output != null) {
-            let {noteNumber, channel, velocity} = midiMsg;
-            device.output.send([0x80 + channel, noteNumber, velocity]);
-            console.log(device.output.name, "Note Off", noteNumber);
+            let {channel, pitch, velocity} = midiMsg;
+            device.output.send([0x80 + channel, pitch, velocity]);
+            console.log(device.output.name, "Note Off", pitch);
         } else {
             console.log("Midi output not available for device: " + device.output.name);
         }
