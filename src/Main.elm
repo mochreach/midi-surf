@@ -154,6 +154,7 @@ type Msg
     | SetEditType EditableController
     | UpdateControllerState EditableController
     | FinishedEdit Controller
+    | SelectActivePage Int
     | ButtonDown String
     | ButtonUp String
     | FaderChanging String Touch.Event
@@ -320,6 +321,11 @@ update msg model =
                       }
                     , Cmd.none
                     )
+
+        SelectActivePage activePage ->
+            ( { model | activePage = activePage }
+            , Cmd.none
+            )
 
         UpdateControllerState state ->
             case model.popup of
@@ -575,24 +581,22 @@ view model =
                ]
         )
     <|
-        row
+        column
             fillSpace
-            [ column
-                [ height fill
+            [ row
+                [ width fill
                 , padding 5
                 , spacing 5
-                , Border.widthEach { bottom = 0, top = 0, left = 0, right = 4 }
+                , Border.widthEach { bottom = 4, top = 0, left = 0, right = 0 }
                 ]
-                [ el
-                    [ centerX
-                    , width fill
-                    , paddingXY 0 12
+                ([ el
+                    [ paddingXY 8 12
                     , Background.color <| colourScheme.black
                     , Font.bold
                     , Font.color <| colourScheme.white
                     ]
                     (text "MIDI\nSurf")
-                , Input.button
+                 , Input.button
                     [ padding 10
                     , Border.width 4
                     ]
@@ -603,7 +607,7 @@ view model =
                             |> Icons.toHtml []
                             |> html
                     }
-                , Input.button
+                 , Input.button
                     [ padding 10
                     , Border.width 4
                     , Background.color <|
@@ -624,7 +628,11 @@ view model =
                             |> Icons.toHtml []
                             |> html
                     }
-                ]
+                 ]
+                    ++ (Array.indexedMap pageButton model.pages
+                            |> Array.toList
+                       )
+                )
             , case Array.get model.activePage model.pages of
                 Just page ->
                     Lazy.lazy2
@@ -636,6 +644,17 @@ view model =
                     el fillSpace <|
                         el [ centerX, centerY ] (text "No page selected.")
             ]
+
+
+pageButton : Int -> Page -> Element Msg
+pageButton pageNumber { label } =
+    Input.button
+        [ padding 10
+        , Border.width 4
+        ]
+        { onPress = Just (SelectActivePage pageNumber)
+        , label = text <| String.fromInt pageNumber ++ ": " ++ label
+        }
 
 
 midiMenu : List Midi.Device -> Element Msg
