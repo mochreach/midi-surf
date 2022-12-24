@@ -89,7 +89,7 @@ init : ( Model, Cmd Msg )
 init =
     ( { midiStatus = Midi.Initialising
       , mode = Normal
-      , pages = Array.fromList [ defaultPage, defaultPage ]
+      , pages = Array.fromList <| List.repeat 4 defaultPage
       , activePage = 0
       , popup = Nothing
       }
@@ -585,18 +585,18 @@ view model =
             fillSpace
             [ row
                 [ width fill
-                , padding 5
-                , spacing 5
+                , padding 4
+                , spacing 4
                 , Border.widthEach { bottom = 4, top = 0, left = 0, right = 0 }
                 ]
-                ([ el
+                [ el
                     [ paddingXY 8 12
                     , Background.color <| colourScheme.black
                     , Font.bold
                     , Font.color <| colourScheme.white
                     ]
                     (text "MIDI\nSurf")
-                 , Input.button
+                , Input.button
                     [ padding 10
                     , Border.width 4
                     ]
@@ -607,7 +607,7 @@ view model =
                             |> Icons.toHtml []
                             |> html
                     }
-                 , Input.button
+                , Input.button
                     [ padding 10
                     , Border.width 4
                     , Background.color <|
@@ -628,11 +628,17 @@ view model =
                             |> Icons.toHtml []
                             |> html
                     }
-                 ]
-                    ++ (Array.indexedMap pageButton model.pages
-                            |> Array.toList
-                       )
-                )
+                , row
+                    [ alignRight
+                    , width fill
+                    , height fill
+                    , scrollbarX
+                    , spacing 4
+                    ]
+                    (Array.indexedMap (pageButton model.activePage) model.pages
+                        |> Array.toList
+                    )
+                ]
             , case Array.get model.activePage model.pages of
                 Just page ->
                     Lazy.lazy2
@@ -646,12 +652,23 @@ view model =
             ]
 
 
-pageButton : Int -> Page -> Element Msg
-pageButton pageNumber { label } =
+pageButton : Int -> Int -> Page -> Element Msg
+pageButton activePage pageNumber { label } =
     Input.button
-        [ padding 10
-        , Border.width 4
-        ]
+        ([ padding 10
+         , height fill
+         ]
+            ++ (if pageNumber == activePage then
+                    [ Background.color colourScheme.lightGrey
+                    , Font.color colourScheme.black
+                    ]
+
+                else
+                    [ Background.color colourScheme.black
+                    , Font.color colourScheme.white
+                    ]
+               )
+        )
         { onPress = Just (SelectActivePage pageNumber)
         , label = text <| String.fromInt pageNumber ++ ": " ++ label
         }
