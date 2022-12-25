@@ -226,6 +226,11 @@ update msg model =
             ( { model
                 | popup =
                     case control of
+                        Just (Controller.Module label subController) ->
+                            EditModule label subController
+                                |> EditMenu id
+                                |> Just
+
                         Just (Controller.Row subControls) ->
                             EditRow subControls
                                 |> EditMenu id
@@ -746,7 +751,7 @@ deviceTable devices =
 
 editMenu : EditableController -> Element Msg
 editMenu menuType =
-    wrappedRow [ centerX, padding 20, spacing 10 ]
+    wrappedRow [ padding 20, spacing 10 ]
         [ el
             [ alignTop
             , padding 10
@@ -758,9 +763,9 @@ editMenu menuType =
                 [ spacing 10 ]
                 { onChange = SetEditType
                 , selected = Just menuType
-                , label = Input.labelAbove [ padding 10 ] (text "Type")
+                , label = Input.labelHidden "Type Selector"
                 , options =
-                    [ Input.option EditModule (text "Module")
+                    [ Input.option (EditModule "" Controller.Space) (text "Module")
                     , Input.option (EditColumn []) (text "Column")
                     , Input.option (EditRow []) (text "Row")
                     , Input.option
@@ -794,6 +799,9 @@ editMenu menuType =
                     ]
                 }
         , case menuType of
+            EditModule label subController ->
+                editModulePane label subController
+
             EditRow subControls ->
                 editRowPane subControls
 
@@ -809,13 +817,23 @@ editMenu menuType =
             EditFader state ->
                 editFaderPane state
 
-            _ ->
-                column
-                    [ padding 10
+            EditSpace ->
+                row
+                    [ alignTop
+                    , padding 10
                     , spacing 10
                     , Background.color colourScheme.white
                     ]
                     [ Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , Border.color colourScheme.black
+                        ]
+                        { onPress = Just <| FinishedEdit <| Controller.Space
+                        , label = text "Ok"
+                        }
+                    , Input.button
                         [ padding 5
                         , Border.width 2
                         , Border.solid
@@ -826,10 +844,66 @@ editMenu menuType =
         ]
 
 
+editModulePane : String -> Controller -> Element Msg
+editModulePane label subController =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , Background.color colourScheme.white
+        ]
+        [ Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , Border.color colourScheme.black
+            ]
+            { onChange =
+                \newLabel ->
+                    EditModule newLabel subController
+                        |> UpdateControllerState
+            , text = label
+            , placeholder = Just <| Input.placeholder [] (text "label")
+            , label = Input.labelAbove [] (text "Label")
+            }
+        , row [ spacing 2 ]
+            [ if not <| String.isEmpty label then
+                Input.button
+                    [ padding 5
+                    , Border.width 2
+                    , Border.solid
+                    , Border.color colourScheme.black
+                    ]
+                    { onPress = Just <| FinishedEdit <| Controller.Module label subController
+                    , label = text "Ok"
+                    }
+
+              else
+                Input.button
+                    [ padding 5
+                    , Border.width 2
+                    , Border.solid
+                    , Border.color colourScheme.lightGrey
+                    , Font.color colourScheme.lightGrey
+                    ]
+                    { onPress = Nothing
+                    , label = text "Ok"
+                    }
+            , Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , Border.color colourScheme.black
+                ]
+                { onPress = Just ClosePopUp, label = text "Cancel" }
+            ]
+        ]
+
+
 editRowPane : List Controller -> Element Msg
 editRowPane subControls =
     column
-        [ padding 10
+        [ alignTop
+        , padding 10
         , spacing 10
         , Background.color colourScheme.white
         ]
@@ -892,7 +966,8 @@ editRowPane subControls =
 editColumnPane : List Controller -> Element Msg
 editColumnPane subControls =
     column
-        [ padding 10
+        [ alignTop
+        , padding 10
         , spacing 10
         , Background.color colourScheme.white
         ]
@@ -955,7 +1030,8 @@ editColumnPane subControls =
 editNotePane : EController.EditNoteState -> Element Msg
 editNotePane state =
     column
-        [ padding 10
+        [ alignTop
+        , padding 10
         , spacing 10
         , Background.color colourScheme.white
         ]
@@ -1053,7 +1129,8 @@ editNotePane state =
 editCCValuePane : EController.EditCCValueState -> Element Msg
 editCCValuePane state =
     column
-        [ padding 10
+        [ alignTop
+        , padding 10
         , spacing 10
         , Background.color colourScheme.white
         ]
@@ -1151,7 +1228,8 @@ editCCValuePane state =
 editFaderPane : EController.EditFaderState -> Element Msg
 editFaderPane state =
     column
-        [ padding 10
+        [ alignTop
+        , padding 10
         , spacing 10
         , Background.color colourScheme.white
         ]
@@ -1288,73 +1366,72 @@ renderController mode config idParts controller id =
             String.fromInt id :: idParts
     in
     case controller of
-        Controller.Module _ subControls ->
+        Controller.Module label subControls ->
             Lazy.lazy2
-                el
+                column
                 ([ padding config.gapSize
                  , spacing config.gapSize
                  , Border.dotted
-                 , Border.width 2
+                 , Border.width 4
                  ]
+                    ++ (case mode of
+                            Normal ->
+                                []
+
+                            Edit _ ->
+                                [ inFront <|
+                                    el
+                                        [ alignRight
+                                        , padding 4
+                                        , Background.color colourScheme.white
+                                        ]
+                                    <|
+                                        renderEditButton config
+                                            Controller.EditContainer
+                                            (updatedParts
+                                                |> List.reverse
+                                                |> String.join "_"
+                                            )
+                                ]
+                       )
                     ++ fillSpace
                 )
-                (renderController mode config updatedParts subControls 0)
+                [ el [ padding 4 ] <| text label
+                , renderController mode config updatedParts subControls 0
+                ]
 
         Controller.Row subControls ->
-            case mode of
-                Normal ->
-                    Lazy.lazy2 row
-                        ([ paddingXY config.gapSize 0
-                         , spacingXY config.gapSize 0
-                         ]
-                            ++ fillSpace
-                        )
-                    <|
-                        List.map2
-                            (renderController mode config updatedParts)
-                            subControls
-                            (List.range 0 <| List.length subControls)
+            Lazy.lazy2 row
+                ([ paddingXY config.gapSize 0
+                 , spacingXY config.gapSize 0
+                 ]
+                    ++ (case mode of
+                            Normal ->
+                                []
 
-                Edit _ ->
-                    Lazy.lazy2 row
-                        ([ paddingXY 5 0
-                         , spacing 5
-                         , Border.width 2
-                         , Border.dashed
-                         ]
-                            ++ fillSpace
-                        )
-                        [ renderEditButton config
-                            Controller.EditContainer
-                            (updatedParts
-                                |> List.reverse
-                                |> String.join "_"
-                            )
-                        , renderEditButton config
-                            Controller.Remove
-                            (updatedParts
-                                |> List.reverse
-                                |> String.join "_"
-                            )
-                        , row
-                            ([ spacingXY config.gapSize 0
-                             , padding config.gapSize
-                             ]
-                                ++ fillSpace
-                            )
-                          <|
-                            List.map2
-                                (renderController mode config updatedParts)
-                                subControls
-                                (List.range 0 <| List.length subControls)
-                        , renderEditButton
-                            config
-                            Controller.Add
-                            (updatedParts
-                                |> List.reverse
-                                |> String.join "_"
-                            )
-                        ]
+                            Edit _ ->
+                                [ inFront <|
+                                    el
+                                        [ alignRight
+                                        , padding 4
+                                        , Background.color colourScheme.white
+                                        ]
+                                    <|
+                                        renderEditButton config
+                                            Controller.EditContainer
+                                            (updatedParts
+                                                |> List.reverse
+                                                |> String.join "_"
+                                            )
+                                ]
+                       )
+                    ++ fillSpace
+                )
+            <|
+                List.map2
+                    (renderController mode config updatedParts)
+                    subControls
+                    (List.range 0 <| List.length subControls)
 
         Controller.Column subControls ->
             case mode of
@@ -1726,7 +1803,7 @@ renderEditButton config editOperation parentId =
                 { onPress = Just <| OpenEditController parentId
                 , label =
                     Icons.edit2
-                        |> Icons.withSize 36
+                        |> Icons.withSize 20
                         |> Icons.toHtml []
                         |> html
                 }
@@ -1741,7 +1818,7 @@ renderEditButton config editOperation parentId =
                 { onPress = Just <| AddSpace parentId
                 , label =
                     Icons.plus
-                        |> Icons.withSize 36
+                        |> Icons.withSize 20
                         |> Icons.toHtml []
                         |> html
                 }
@@ -1756,7 +1833,7 @@ renderEditButton config editOperation parentId =
                 { onPress = Just <| RemoveItem parentId
                 , label =
                     Icons.minus
-                        |> Icons.withSize 36
+                        |> Icons.withSize 20
                         |> Icons.toHtml []
                         |> html
                 }

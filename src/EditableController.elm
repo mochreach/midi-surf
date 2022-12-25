@@ -5,7 +5,7 @@ import Midi exposing (MidiMsg(..))
 
 
 type EditableController
-    = EditModule
+    = EditModule String Controller
     | EditColumn (List Controller)
     | EditRow (List Controller)
     | EditNote EditNoteState
@@ -189,7 +189,7 @@ editFaderToFader { label, channel, ccNumber, valueMin, valueMax } =
 updateWithMidiMsg : MidiMsg -> EditableController -> EditableController
 updateWithMidiMsg midiMsg state =
     case state of
-        EditModule ->
+        EditModule _ _ ->
             state
 
         EditColumn subControls ->
