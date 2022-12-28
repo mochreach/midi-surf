@@ -596,9 +596,9 @@ view model =
                 ]
                 [ el
                     [ paddingXY 8 12
-                    , Background.color <| colourScheme.black
+                    , backgroundColour Black
                     , Font.bold
-                    , Font.color <| colourScheme.white
+                    , fontColour White
                     ]
                     (text "MIDI\nSurf")
                 , Input.button
@@ -615,16 +615,15 @@ view model =
                 , Input.button
                     [ padding 10
                     , Border.width 4
-                    , Background.color <|
-                        case model.mode of
-                            Normal ->
-                                colourScheme.white
+                    , case model.mode of
+                        Normal ->
+                            backgroundColour White
 
-                            Edit False ->
-                                colourScheme.lightGrey
+                        Edit False ->
+                            backgroundColour LightGrey
 
-                            Edit True ->
-                                colourScheme.darkGrey
+                        Edit True ->
+                            backgroundColour DarkGrey
                     ]
                     { onPress = Just ToggleNormalEdit
                     , label =
@@ -639,6 +638,7 @@ view model =
                     , height fill
                     , scrollbarX
                     , spacing 4
+                    , padding 4
                     ]
                     (Array.indexedMap (pageButton model.activePage) model.pages
                         |> Array.toList
@@ -664,13 +664,13 @@ pageButton activePage pageNumber { label } =
          , height fill
          ]
             ++ (if pageNumber == activePage then
-                    [ Background.color colourScheme.lightGrey
-                    , Font.color colourScheme.black
+                    [ backgroundColour LightGrey
+                    , fontColour Black
                     ]
 
                 else
-                    [ Background.color colourScheme.black
-                    , Font.color colourScheme.white
+                    [ backgroundColour Black
+                    , fontColour White
                     ]
                )
         )
@@ -685,7 +685,7 @@ midiMenu devices =
         column
             [ padding 10
             , spacing 10
-            , Background.color <| colourScheme.white
+            , backgroundColour White
             , Border.width 4
             ]
             (paragraph [ Font.bold ] [ text "MIDI Devices" ]
@@ -700,7 +700,7 @@ midiMenu devices =
                         [ padding 5
                         , Border.width 2
                         , Border.solid
-                        , Border.color colourScheme.black
+                        , borderColour Black
                         ]
                         { onPress = Just ClosePopUp, label = text "Cancel" }
                    ]
@@ -756,7 +756,7 @@ editMenu menuType =
             [ alignTop
             , padding 10
             , spacing 10
-            , Background.color colourScheme.white
+            , backgroundColour White
             ]
           <|
             Input.radio
@@ -822,13 +822,13 @@ editMenu menuType =
                     [ alignTop
                     , padding 10
                     , spacing 10
-                    , Background.color colourScheme.white
+                    , backgroundColour White
                     ]
                     [ Input.button
                         [ padding 5
                         , Border.width 2
                         , Border.solid
-                        , Border.color colourScheme.black
+                        , borderColour Black
                         ]
                         { onPress = Just <| FinishedEdit <| Controller.Space
                         , label = text "Ok"
@@ -837,7 +837,7 @@ editMenu menuType =
                         [ padding 5
                         , Border.width 2
                         , Border.solid
-                        , Border.color colourScheme.black
+                        , borderColour Black
                         ]
                         { onPress = Just ClosePopUp, label = text "Cancel" }
                     ]
@@ -850,12 +850,12 @@ editModulePane label subController =
         [ alignTop
         , padding 10
         , spacing 10
-        , Background.color colourScheme.white
+        , backgroundColour White
         ]
         [ Input.text
             [ Border.width 2
             , Border.rounded 0
-            , Border.color colourScheme.black
+            , borderColour Black
             ]
             { onChange =
                 \newLabel ->
@@ -871,7 +871,7 @@ editModulePane label subController =
                     [ padding 5
                     , Border.width 2
                     , Border.solid
-                    , Border.color colourScheme.black
+                    , borderColour Black
                     ]
                     { onPress = Just <| FinishedEdit <| Controller.Module label subController
                     , label = text "Ok"
@@ -882,8 +882,8 @@ editModulePane label subController =
                     [ padding 5
                     , Border.width 2
                     , Border.solid
-                    , Border.color colourScheme.lightGrey
-                    , Font.color colourScheme.lightGrey
+                    , borderColour LightGrey
+                    , fontColour LightGrey
                     ]
                     { onPress = Nothing
                     , label = text "Ok"
@@ -892,7 +892,7 @@ editModulePane label subController =
                 [ padding 5
                 , Border.width 2
                 , Border.solid
-                , Border.color colourScheme.black
+                , borderColour Black
                 ]
                 { onPress = Just ClosePopUp, label = text "Cancel" }
             ]
@@ -905,14 +905,14 @@ editRowPane subControls =
         [ alignTop
         , padding 10
         , spacing 10
-        , Background.color colourScheme.white
+        , backgroundColour White
         ]
         (row [ spacing 10 ]
             [ Input.button
                 [ padding 5
                 , Border.width 2
                 , Border.solid
-                , Border.color colourScheme.black
+                , borderColour Black
                 ]
                 { onPress =
                     List.append subControls [ Controller.Space ]
@@ -925,7 +925,7 @@ editRowPane subControls =
                 [ padding 5
                 , Border.width 2
                 , Border.solid
-                , Border.color colourScheme.black
+                , borderColour Black
                 ]
                 { onPress =
                     List.reverse subControls
@@ -946,7 +946,7 @@ editRowPane subControls =
                         [ padding 5
                         , Border.width 2
                         , Border.solid
-                        , Border.color colourScheme.black
+                        , borderColour Black
                         ]
                         { onPress = Just <| FinishedEdit <| Controller.Row subControls
                         , label = text "Ok"
@@ -955,7 +955,7 @@ editRowPane subControls =
                         [ padding 5
                         , Border.width 2
                         , Border.solid
-                        , Border.color colourScheme.black
+                        , borderColour Black
                         ]
                         { onPress = Just ClosePopUp, label = text "Cancel" }
                     ]
@@ -969,14 +969,14 @@ editColumnPane subControls =
         [ alignTop
         , padding 10
         , spacing 10
-        , Background.color colourScheme.white
+        , backgroundColour White
         ]
         (row [ spacing 10 ]
             [ Input.button
                 [ padding 5
                 , Border.width 2
                 , Border.solid
-                , Border.color colourScheme.black
+                , borderColour Black
                 ]
                 { onPress =
                     List.append subControls [ Controller.Space ]
@@ -989,7 +989,7 @@ editColumnPane subControls =
                 [ padding 5
                 , Border.width 2
                 , Border.solid
-                , Border.color colourScheme.black
+                , borderColour Black
                 ]
                 { onPress =
                     List.reverse subControls
@@ -1010,7 +1010,7 @@ editColumnPane subControls =
                         [ padding 5
                         , Border.width 2
                         , Border.solid
-                        , Border.color colourScheme.black
+                        , borderColour Black
                         ]
                         { onPress = Just <| FinishedEdit <| Controller.Column subControls
                         , label = text "Ok"
@@ -1019,7 +1019,7 @@ editColumnPane subControls =
                         [ padding 5
                         , Border.width 2
                         , Border.solid
-                        , Border.color colourScheme.black
+                        , borderColour Black
                         ]
                         { onPress = Just ClosePopUp, label = text "Cancel" }
                     ]
@@ -1033,12 +1033,12 @@ editNotePane state =
         [ alignTop
         , padding 10
         , spacing 10
-        , Background.color colourScheme.white
+        , backgroundColour White
         ]
         [ Input.text
             [ Border.width 2
             , Border.rounded 0
-            , Border.color colourScheme.black
+            , borderColour Black
             ]
             { onChange =
                 \newLabel ->
@@ -1052,7 +1052,7 @@ editNotePane state =
         , Input.text
             [ Border.width 2
             , Border.rounded 0
-            , Border.color colourScheme.black
+            , borderColour Black
             ]
             { onChange =
                 \newChannel ->
@@ -1066,7 +1066,7 @@ editNotePane state =
         , Input.text
             [ Border.width 2
             , Border.rounded 0
-            , Border.color colourScheme.black
+            , borderColour Black
             ]
             { onChange =
                 \newNoteNumber ->
@@ -1080,7 +1080,7 @@ editNotePane state =
         , Input.text
             [ Border.width 2
             , Border.rounded 0
-            , Border.color colourScheme.black
+            , borderColour Black
             ]
             { onChange =
                 \newVelocity ->
@@ -1098,7 +1098,7 @@ editNotePane state =
                         [ padding 5
                         , Border.width 2
                         , Border.solid
-                        , Border.color colourScheme.black
+                        , borderColour Black
                         ]
                         { onPress = Just <| FinishedEdit controller
                         , label = text "Ok"
@@ -1109,8 +1109,8 @@ editNotePane state =
                         [ padding 5
                         , Border.width 2
                         , Border.solid
-                        , Border.color colourScheme.lightGrey
-                        , Font.color colourScheme.lightGrey
+                        , borderColour LightGrey
+                        , fontColour LightGrey
                         ]
                         { onPress = Nothing
                         , label = text "Ok"
@@ -1119,7 +1119,7 @@ editNotePane state =
                 [ padding 5
                 , Border.width 2
                 , Border.solid
-                , Border.color colourScheme.black
+                , borderColour Black
                 ]
                 { onPress = Just ClosePopUp, label = text "Cancel" }
             ]
@@ -1132,12 +1132,12 @@ editCCValuePane state =
         [ alignTop
         , padding 10
         , spacing 10
-        , Background.color colourScheme.white
+        , backgroundColour White
         ]
         [ Input.text
             [ Border.width 2
             , Border.rounded 0
-            , Border.color colourScheme.black
+            , borderColour Black
             ]
             { onChange =
                 \newLabel ->
@@ -1151,7 +1151,7 @@ editCCValuePane state =
         , Input.text
             [ Border.width 2
             , Border.rounded 0
-            , Border.color colourScheme.black
+            , borderColour Black
             ]
             { onChange =
                 \newChannel ->
@@ -1165,7 +1165,7 @@ editCCValuePane state =
         , Input.text
             [ Border.width 2
             , Border.rounded 0
-            , Border.color colourScheme.black
+            , borderColour Black
             ]
             { onChange =
                 \newController ->
@@ -1179,7 +1179,7 @@ editCCValuePane state =
         , Input.text
             [ Border.width 2
             , Border.rounded 0
-            , Border.color colourScheme.black
+            , borderColour Black
             ]
             { onChange =
                 \newValue ->
@@ -1197,7 +1197,7 @@ editCCValuePane state =
                         [ padding 5
                         , Border.width 2
                         , Border.solid
-                        , Border.color colourScheme.black
+                        , borderColour Black
                         ]
                         { onPress = Just <| FinishedEdit controller
                         , label = text "Ok"
@@ -1208,8 +1208,8 @@ editCCValuePane state =
                         [ padding 5
                         , Border.width 2
                         , Border.solid
-                        , Border.color colourScheme.lightGrey
-                        , Font.color colourScheme.lightGrey
+                        , borderColour LightGrey
+                        , fontColour LightGrey
                         ]
                         { onPress = Nothing
                         , label = text "Ok"
@@ -1218,7 +1218,7 @@ editCCValuePane state =
                 [ padding 5
                 , Border.width 2
                 , Border.solid
-                , Border.color colourScheme.black
+                , borderColour Black
                 ]
                 { onPress = Just ClosePopUp, label = text "Cancel" }
             ]
@@ -1231,12 +1231,12 @@ editFaderPane state =
         [ alignTop
         , padding 10
         , spacing 10
-        , Background.color colourScheme.white
+        , backgroundColour White
         ]
         [ Input.text
             [ Border.width 2
             , Border.rounded 0
-            , Border.color colourScheme.black
+            , borderColour Black
             ]
             { onChange =
                 \newLabel ->
@@ -1250,7 +1250,7 @@ editFaderPane state =
         , Input.text
             [ Border.width 2
             , Border.rounded 0
-            , Border.color colourScheme.black
+            , borderColour Black
             ]
             { onChange =
                 \newChannel ->
@@ -1264,7 +1264,7 @@ editFaderPane state =
         , Input.text
             [ Border.width 2
             , Border.rounded 0
-            , Border.color colourScheme.black
+            , borderColour Black
             ]
             { onChange =
                 \newCCNumber ->
@@ -1278,7 +1278,7 @@ editFaderPane state =
         , Input.text
             [ Border.width 2
             , Border.rounded 0
-            , Border.color colourScheme.black
+            , borderColour Black
             ]
             { onChange =
                 \newMinValue ->
@@ -1292,7 +1292,7 @@ editFaderPane state =
         , Input.text
             [ Border.width 2
             , Border.rounded 0
-            , Border.color colourScheme.black
+            , borderColour Black
             ]
             { onChange =
                 \newMaxValue ->
@@ -1310,7 +1310,7 @@ editFaderPane state =
                         [ padding 5
                         , Border.width 2
                         , Border.solid
-                        , Border.color colourScheme.black
+                        , borderColour Black
                         ]
                         { onPress = Just <| FinishedEdit controller
                         , label = text "Ok"
@@ -1321,8 +1321,8 @@ editFaderPane state =
                         [ padding 5
                         , Border.width 2
                         , Border.solid
-                        , Border.color colourScheme.lightGrey
-                        , Font.color colourScheme.lightGrey
+                        , borderColour LightGrey
+                        , fontColour LightGrey
                         ]
                         { onPress = Nothing
                         , label = text "Ok"
@@ -1331,7 +1331,7 @@ editFaderPane state =
                 [ padding 5
                 , Border.width 2
                 , Border.solid
-                , Border.color colourScheme.black
+                , borderColour Black
                 ]
                 { onPress = Just ClosePopUp, label = text "Cancel" }
             ]
@@ -1383,7 +1383,7 @@ renderController mode config idParts controller id =
                                     el
                                         [ alignRight
                                         , padding 4
-                                        , Background.color colourScheme.white
+                                        , backgroundColour White
                                         ]
                                     <|
                                         renderEditButton config
@@ -1414,7 +1414,7 @@ renderController mode config idParts controller id =
                                     el
                                         [ alignRight
                                         , padding 4
-                                        , Background.color colourScheme.white
+                                        , backgroundColour White
                                         ]
                                     <|
                                         renderEditButton config
@@ -1523,14 +1523,14 @@ renderController mode config idParts controller id =
             case mode of
                 Normal ->
                     el
-                        (Background.color colourScheme.lightGrey
+                        (backgroundColour LightGrey
                             :: fillSpace
                         )
                         none
 
                 Edit _ ->
                     el
-                        ([ Background.color colourScheme.lightGrey
+                        ([ backgroundColour LightGrey
                          , Events.onClick <|
                             OpenEditController
                                 (updatedParts
@@ -1554,13 +1554,13 @@ renderNote config mode state id =
                  , case state.status of
                     Controller.Off ->
                         if modBy 12 state.pitch == 0 then
-                            Background.color <| colourScheme.blue
+                            backgroundColour Blue
 
                         else if List.member (modBy 12 state.pitch) [ 1, 3, 6, 8, 10 ] then
-                            Background.color <| colourScheme.darkGrey
+                            backgroundColour DarkGrey
 
                         else
-                            Background.color <| colourScheme.lightGrey
+                            backgroundColour LightGrey
 
                     Controller.On ->
                         Border.dashed
@@ -1615,13 +1615,13 @@ renderNote config mode state id =
                  , Border.dashed
                  , Font.size 14
                  , if modBy 12 state.pitch == 0 then
-                    Background.color colourScheme.blue
+                    backgroundColour Blue
 
                    else if List.member (modBy 12 state.pitch) [ 1, 3, 6, 8, 10 ] then
-                    Background.color colourScheme.darkGrey
+                    backgroundColour DarkGrey
 
                    else
-                    Background.color colourScheme.lightGrey
+                    backgroundColour LightGrey
                  ]
                     ++ fillSpace
                 )
@@ -1642,7 +1642,7 @@ renderCCValue config mode state id =
                  , Border.width 4
                  , case state.status of
                     Controller.Off ->
-                        Background.color <| colourScheme.green
+                        backgroundColour Green
 
                     Controller.On ->
                         Border.dashed
@@ -1696,7 +1696,7 @@ renderCCValue config mode state id =
                  , Border.width 2
                  , Border.dashed
                  , Font.size 14
-                 , Background.color colourScheme.green
+                 , backgroundColour Green
                  ]
                     ++ fillSpace
                 )
@@ -1717,7 +1717,7 @@ renderFader config mode state id =
                  , Border.width 4
                  , case state.status of
                     Controller.Set ->
-                        Background.color <| colourScheme.yellow
+                        backgroundColour Yellow
 
                     Controller.Changing _ _ ->
                         Border.dashed
@@ -1751,19 +1751,19 @@ renderFader config mode state id =
                     ++ fillSpace
                 )
                 (column
-                    (Background.color colourScheme.white :: fillSpace)
+                    (backgroundColour White :: fillSpace)
                     [ column
                         fillSpace
                         [ el
                             [ height <| fillPortion (100 - state.valuePercent)
                             , width fill
-                            , Background.color colourScheme.lightGrey
+                            , backgroundColour LightGrey
                             ]
                             none
                         , el
                             [ height <| fillPortion state.valuePercent
                             , width fill
-                            , Background.color colourScheme.yellow
+                            , backgroundColour Yellow
                             , Border.widthEach { bottom = 0, top = 4, left = 0, right = 0 }
                             ]
                             none
@@ -1779,7 +1779,7 @@ renderFader config mode state id =
                  , Border.width 2
                  , Border.dashed
                  , Font.size 14
-                 , Background.color colourScheme.yellow
+                 , backgroundColour Yellow
                  ]
                     ++ fillSpace
                 )
@@ -1844,26 +1844,61 @@ fillSpace =
     [ height fill, width fill ]
 
 
-colourScheme :
-    { black : Color
-    , darkGrey : Color
-    , lightGrey : Color
-    , white : Color
-    , green : Color
-    , blue : Color
-    , yellow : Color
-    , red : Color
-    }
-colourScheme =
-    { white = rgb255 255 255 255
-    , lightGrey = rgb255 200 200 200
-    , darkGrey = rgb255 86 90 94
-    , black = rgb255 0 0 0
-    , green = rgb255 0 133 86
-    , blue = rgb255 35 141 193
-    , yellow = rgb255 255 183 27
-    , red = rgb255 202 0 61
-    }
+type AppColour
+    = White
+    | LightGrey
+    | DarkGrey
+    | Black
+    | Green
+    | Blue
+    | Yellow
+    | Red
+
+
+appColourToRGB : AppColour -> Color
+appColourToRGB appColour =
+    case appColour of
+        White ->
+            rgb255 255 255 255
+
+        LightGrey ->
+            rgb255 200 200 200
+
+        DarkGrey ->
+            rgb255 86 90 94
+
+        Black ->
+            rgb255 0 0 0
+
+        Green ->
+            rgb255 0 133 86
+
+        Blue ->
+            rgb255 35 141 193
+
+        Yellow ->
+            rgb255 255 183 27
+
+        Red ->
+            rgb255 202 0 61
+
+
+backgroundColour : AppColour -> Element.Attribute msg
+backgroundColour appColour =
+    appColourToRGB appColour
+        |> Background.color
+
+
+borderColour : AppColour -> Element.Attribute msg
+borderColour appColour =
+    appColourToRGB appColour
+        |> Border.color
+
+
+fontColour : AppColour -> Element.Attribute msg
+fontColour appColour =
+    appColourToRGB appColour
+        |> Font.color
 
 
 
