@@ -1543,12 +1543,6 @@ renderController mode config idParts controller id =
                                 |> List.reverse
                                 |> String.join "_"
                             )
-                        , renderEditButton config
-                            Controller.Remove
-                            (updatedParts
-                                |> List.reverse
-                                |> String.join "_"
-                            )
                         , column
                             ([ spacingXY 0 config.gapSize
                              , padding config.gapSize
@@ -1560,13 +1554,6 @@ renderController mode config idParts controller id =
                                 (renderController mode config updatedParts)
                                 subControls
                                 (List.range 0 <| List.length subControls)
-                        , renderEditButton
-                            config
-                            Controller.Add
-                            (updatedParts
-                                |> List.reverse
-                                |> String.join "_"
-                            )
                         ]
 
         Controller.Note state ->
