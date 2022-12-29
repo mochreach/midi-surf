@@ -2,6 +2,7 @@ module Main exposing (..)
 
 import Array exposing (Array)
 import Browser
+import Codec exposing (Codec, Value)
 import Controller exposing (Controller, FaderStatus(..))
 import EditableController as EController exposing (EditableController(..))
 import Element exposing (..)
@@ -34,6 +35,17 @@ type alias Model =
     }
 
 
+modelCodec : Codec Model
+modelCodec =
+    Codec.object Model
+        |> Codec.field "midiStatus" .midiStatus (Codec.constant Midi.Initialising)
+        |> Codec.field "mode" .mode (Codec.constant Normal)
+        |> Codec.field "pages" .pages (Codec.array pageCodec)
+        |> Codec.field "activePage" .activePage (Codec.constant 0)
+        |> Codec.field "popup" .popup (Codec.constant Nothing)
+        |> Codec.buildObject
+
+
 type Mode
     = Normal
     | Edit Bool
@@ -41,6 +53,7 @@ type Mode
 
 type PopUp
     = MidiMenu
+    | SaveMenu
     | EditMenu String EditableController
 
 
@@ -51,10 +64,27 @@ type alias Page =
     }
 
 
+pageCodec : Codec Page
+pageCodec =
+    Codec.object Page
+        |> Codec.field "label" .label Codec.string
+        |> Codec.field "controller" .controller Controller.controllerCodec
+        |> Codec.field "config" .config pageConfigCodec
+        |> Codec.buildObject
+
+
 type alias PageConfig =
     { gapSize : Int
     , debug : Bool
     }
+
+
+pageConfigCodec : Codec PageConfig
+pageConfigCodec =
+    Codec.object PageConfig
+        |> Codec.field "gapSize" .gapSize Codec.int
+        |> Codec.field "debug" .debug Codec.bool
+        |> Codec.buildObject
 
 
 getControllerFromActivePage : String -> Int -> Array Page -> Maybe Controller
@@ -86,16 +116,25 @@ updateControllerOnActivePage activePage updateInfo pages =
             )
 
 
-init : ( Model, Cmd Msg )
-init =
-    ( { midiStatus = Midi.Initialising
-      , mode = Normal
-      , pages = Array.fromList <| List.repeat 4 defaultPage
-      , activePage = 0
-      , popup = Nothing
-      }
-    , Cmd.none
-    )
+type alias Flags =
+    { mInitialState : Value }
+
+
+init : Flags -> ( Model, Cmd Msg )
+init { mInitialState } =
+    case Codec.decodeValue (Codec.maybe modelCodec) mInitialState of
+        Ok (Just model) ->
+            ( model, Cmd.none )
+
+        _ ->
+            ( { midiStatus = Midi.Initialising
+              , mode = Normal
+              , pages = Array.fromList <| List.repeat 4 defaultPage
+              , activePage = 0
+              , popup = Nothing
+              }
+            , Cmd.none
+            )
 
 
 defaultPage : Page
@@ -151,6 +190,7 @@ makeIsomorphicRow noteRange offset rowLength rowNumber =
 type Msg
     = MidiDevicesChanged (List Midi.Device)
     | OpenMidiMenu
+    | OpenSaveLoadMenu
     | ToggleNormalEdit
     | AddSpace String
     | RemoveItem String
@@ -180,6 +220,15 @@ update msg model =
                 | popup =
                     Just <|
                         MidiMenu
+              }
+            , Cmd.none
+            )
+
+        OpenSaveLoadMenu ->
+            ( { model
+                | popup =
+                    Just <|
+                        SaveMenu
               }
             , Cmd.none
             )
@@ -305,25 +354,30 @@ update msg model =
         FinishedEdit controller ->
             case model.popup of
                 Just (EditMenu id _) ->
-                    ( { model
-                        | popup = Nothing
-                        , pages =
-                            updateControllerOnActivePage
-                                model.activePage
-                                { id = id, updateFn = \_ -> controller }
-                                model.pages
-                        , mode =
-                            case model.mode of
-                                Normal ->
-                                    Normal
+                    let
+                        newModel =
+                            { model
+                                | popup = Nothing
+                                , pages =
+                                    updateControllerOnActivePage
+                                        model.activePage
+                                        { id = id, updateFn = \_ -> controller }
+                                        model.pages
+                                , mode =
+                                    case model.mode of
+                                        Normal ->
+                                            Normal
 
-                                Edit False ->
-                                    Normal
+                                        Edit False ->
+                                            Normal
 
-                                Edit True ->
-                                    Edit True
-                      }
-                    , Cmd.none
+                                        Edit True ->
+                                            Edit True
+                            }
+                    in
+                    ( newModel
+                    , Ports.saveState <|
+                        Codec.encodeToValue modelCodec newModel
                     )
 
                 _ ->
@@ -558,26 +612,25 @@ view model =
         ((case model.popup of
             Just popup ->
                 (inFront <|
-                    case popup of
-                        MidiMenu ->
-                            el
-                                (Background.color (rgba 0.5 0.5 0.5 0.8)
-                                    :: fillSpace
-                                )
-                                (case model.midiStatus of
+                    el
+                        (Background.color (rgba 0.5 0.5 0.5 0.8)
+                            :: fillSpace
+                        )
+                        (case popup of
+                            MidiMenu ->
+                                case model.midiStatus of
                                     Midi.MidiAvailable devices ->
                                         midiMenu devices
 
                                     _ ->
                                         midiMenu []
-                                )
 
-                        EditMenu _ state ->
-                            el
-                                (Background.color (rgba 0.5 0.5 0.5 0.8)
-                                    :: fillSpace
-                                )
-                                (editMenu state)
+                            SaveMenu ->
+                                saveMenu
+
+                            EditMenu _ state ->
+                                editMenu state
+                        )
                 )
                     :: fillSpace
 
@@ -623,6 +676,17 @@ view model =
                 , Input.button
                     [ padding 10
                     , Border.width 4
+                    ]
+                    { onPress = Just OpenSaveLoadMenu
+                    , label =
+                        Icons.save
+                            |> Icons.withSize 36
+                            |> Icons.toHtml []
+                            |> html
+                    }
+                , Input.button
+                    [ padding 10
+                    , Border.width 4
                     , case model.mode of
                         Normal ->
                             backgroundColour White
@@ -646,7 +710,6 @@ view model =
                     , height fill
                     , scrollbarX
                     , spacing 4
-                    , padding 4
                     ]
                     (Array.indexedMap (pageButton model.activePage) model.pages
                         |> Array.toList
@@ -755,6 +818,26 @@ deviceTable devices =
               }
             ]
         }
+
+
+saveMenu : Element Msg
+saveMenu =
+    el [ centerX, centerY ] <|
+        column
+            [ padding 10
+            , spacing 10
+            , backgroundColour White
+            , Border.width 4
+            ]
+            [ paragraph [ Font.bold ] [ text "Save/Load" ]
+            , Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , borderColour Black
+                ]
+                { onPress = Just ClosePopUp, label = text "Cancel" }
+            ]
 
 
 editMenu : EditableController -> Element Msg
@@ -1902,11 +1985,11 @@ fillSpace =
 -- {{{ PROGRAM
 
 
-main : Program () Model Msg
+main : Program Flags Model Msg
 main =
     Browser.element
         { view = view
-        , init = \_ -> init
+        , init = init
         , update = update
         , subscriptions = subscriptions
         }

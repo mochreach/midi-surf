@@ -15,14 +15,14 @@
             "elm/time": "1.0.0",
             "feathericons/elm-feather": "1.5.0",
             "mdgriffith/elm-ui": "1.1.8",
+            "miniBill/elm-codec": "2.0.0",
             "mpizenberg/elm-pointer-events": "4.0.2"
         },
         "indirect": {
             "elm/file": "1.0.5",
             "elm/svg": "1.0.1",
             "elm/url": "1.0.0",
-            "elm/virtual-dom": "1.0.2",
-            "ianmackenzie/elm-units": "2.9.0"
+            "elm/virtual-dom": "1.0.2"
         }
     },
     "test-dependencies": {
@@ -30,7 +30,8 @@
             "elm-explorations/test": "1.0.0"
         },
         "indirect": {
-            "elm/random": "1.0.0"
+            "elm/random": "1.0.0",
+            "ianmackenzie/elm-units": "2.9.0"
         }
     }
 }

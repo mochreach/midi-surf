@@ -7,6 +7,7 @@ module Midi exposing
     )
 
 import Array exposing (Array)
+import Codec exposing (Codec, Value)
 import Element exposing (..)
 
 

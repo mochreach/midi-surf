@@ -1,5 +1,6 @@
 module Style exposing (..)
 
+import Codec exposing (Codec)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -15,6 +16,46 @@ type AppColour
     | Blue
     | Yellow
     | Red
+
+
+appColourCodec : Codec AppColour
+appColourCodec =
+    Codec.custom
+        (\wh lg dg bk gr bl ye re value ->
+            case value of
+                White ->
+                    wh
+
+                LightGrey ->
+                    lg
+
+                DarkGrey ->
+                    dg
+
+                Black ->
+                    bk
+
+                Green ->
+                    gr
+
+                Blue ->
+                    bl
+
+                Yellow ->
+                    ye
+
+                Red ->
+                    re
+        )
+        |> Codec.variant0 "White" White
+        |> Codec.variant0 "LightGrey" LightGrey
+        |> Codec.variant0 "DarkGrey" DarkGrey
+        |> Codec.variant0 "Black" Black
+        |> Codec.variant0 "Green" Green
+        |> Codec.variant0 "Blue" Blue
+        |> Codec.variant0 "Yellow" Yellow
+        |> Codec.variant0 "Red" Red
+        |> Codec.buildCustom
 
 
 appColourToRGB : AppColour -> Color

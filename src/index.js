@@ -2,8 +2,13 @@ import "./main.css";
 import {Elm} from "./Main.elm";
 import * as serviceWorker from "./serviceWorker";
 
+const appStorageKey = "appState";
+const storedState = localStorage.getItem(appStorageKey);
+const mInitialState = storedState ? JSON.parse(storedState) : null;
+
 const app = Elm.Main.init({
     node: document.getElementById("root"),
+    flags: {mInitialState: mInitialState},
 });
 
 let midiAccess = null;
@@ -107,6 +112,45 @@ app.ports.sendCC.subscribe(function (midiMsg) {
             console.log("Midi output not available for device: " + device.output.name);
         }
     }));
+});
+
+
+// Taken from MDN
+function storageAvailable(type) {
+    var storage;
+    try {
+        storage = window[type];
+        var x = "__storage_test__";
+        storage.setItem(x, x);
+        storage.removeItem(x);
+        return true;
+    } catch (e) {
+        return (
+            e instanceof DOMException &&
+            // everything except Firefox
+            (e.code === 22 ||
+                // Firefox
+                e.code === 1014 ||
+                // test name field too, because code might not be present
+                // everything except Firefox
+                e.name === "QuotaExceededError" ||
+                // Firefox
+                e.name === "NS_ERROR_DOM_QUOTA_REACHED") &&
+            // acknowledge QuotaExceededError only if there's something already stored
+            storage &&
+            storage.length !== 0
+        );
+    }
+}
+
+app.ports.saveState.subscribe(function (state) {
+    if (storageAvailable("localStorage")) {
+        localStorage.setItem(appStorageKey, JSON.stringify(state));
+    } else {
+        console.log(
+            "Storage is not available. Local storage must be enabled to save the application."
+        );
+    }
 });
 
 // If you want your app to work offline and load faster, you can change

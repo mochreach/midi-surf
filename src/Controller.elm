@@ -1,29 +1,6 @@
-module Controller exposing
-    ( ButtonStatus(..)
-    , CCValueState
-    , Channel(..)
-    , Controller(..)
-    , EditOperation(..)
-    , FaderState
-    , FaderStatus(..)
-    , NoteState
-    , addSpace
-    , buttonOff
-    , buttonOn
-    , channelToMidiNumber
-    , channelToString
-    , controllerToString
-    , faderChanging
-    , faderSet
-    , getWithId
-    , midiNumberToChannel
-    , newCCValue
-    , newNote
-    , removeItem
-    , stringToChannel
-    , updateWithId
-    )
+module Controller exposing (..)
 
+import Codec exposing (Codec)
 import Midi exposing (MidiMsg(..))
 import Style exposing (AppColour(..))
 
@@ -36,6 +13,45 @@ type Controller
     | CCValue CCValueState
     | Fader FaderState
     | Space
+
+
+controllerCodec : Codec Controller
+controllerCodec =
+    Codec.recursive
+        (\rmeta ->
+            Codec.custom
+                (\mod row col note ccv fad spa value ->
+                    case value of
+                        Module l c ->
+                            mod l c
+
+                        Row cs ->
+                            row cs
+
+                        Column cs ->
+                            col cs
+
+                        Note s ->
+                            note s
+
+                        CCValue s ->
+                            ccv s
+
+                        Fader s ->
+                            fad s
+
+                        Space ->
+                            spa
+                )
+                |> Codec.variant2 "Module" Module Codec.string rmeta
+                |> Codec.variant1 "Row" Row (Codec.list rmeta)
+                |> Codec.variant1 "Column" Column (Codec.list rmeta)
+                |> Codec.variant1 "Note" Note noteStateCodec
+                |> Codec.variant1 "CCValue" CCValue ccValueStateCodec
+                |> Codec.variant1 "Fader" Fader faderStateCodec
+                |> Codec.variant0 "Space" Space
+                |> Codec.buildCustom
+        )
 
 
 controllerToString : Controller -> String
@@ -86,6 +102,18 @@ type alias NoteState =
     }
 
 
+noteStateCodec : Codec NoteState
+noteStateCodec =
+    Codec.object NoteState
+        |> Codec.field "status" .status (Codec.constant Off)
+        |> Codec.field "label" .label Codec.string
+        |> Codec.field "colour" .colour Style.appColourCodec
+        |> Codec.field "channel" .channel channelCodec
+        |> Codec.field "pitch" .pitch Codec.int
+        |> Codec.field "velocity" .velocity Codec.int
+        |> Codec.buildObject
+
+
 type ButtonStatus
     = On
     | Off
@@ -93,12 +121,24 @@ type ButtonStatus
 
 type alias CCValueState =
     { status : ButtonStatus
-    , colour : AppColour
     , label : String
+    , colour : AppColour
     , channel : Channel
     , controller : Int
     , value : Int
     }
+
+
+ccValueStateCodec : Codec CCValueState
+ccValueStateCodec =
+    Codec.object CCValueState
+        |> Codec.field "status" .status (Codec.constant Off)
+        |> Codec.field "label" .label Codec.string
+        |> Codec.field "colour" .colour Style.appColourCodec
+        |> Codec.field "channel" .channel channelCodec
+        |> Codec.field "controller" .controller Codec.int
+        |> Codec.field "value" .value Codec.int
+        |> Codec.buildObject
 
 
 type alias FaderState =
@@ -111,6 +151,20 @@ type alias FaderState =
     , valueMin : Int
     , valueMax : Int
     }
+
+
+faderStateCodec : Codec FaderState
+faderStateCodec =
+    Codec.object FaderState
+        |> Codec.field "status" .status (Codec.constant Set)
+        |> Codec.field "label" .label Codec.string
+        |> Codec.field "colour" .colour Style.appColourCodec
+        |> Codec.field "channel" .channel channelCodec
+        |> Codec.field "ccNumber" .ccNumber Codec.int
+        |> Codec.field "valuePercent" .valuePercent Codec.int
+        |> Codec.field "valueMin" .valueMin Codec.int
+        |> Codec.field "valueMax" .valueMax Codec.int
+        |> Codec.buildObject
 
 
 type FaderStatus
@@ -187,6 +241,78 @@ type Channel
     | Ch14
     | Ch15
     | Ch16
+
+
+channelCodec : Codec Channel
+channelCodec =
+    Codec.custom
+        (\c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16 value ->
+            case value of
+                Ch1 ->
+                    c1
+
+                Ch2 ->
+                    c2
+
+                Ch3 ->
+                    c3
+
+                Ch4 ->
+                    c4
+
+                Ch5 ->
+                    c5
+
+                Ch6 ->
+                    c6
+
+                Ch7 ->
+                    c7
+
+                Ch8 ->
+                    c8
+
+                Ch9 ->
+                    c9
+
+                Ch10 ->
+                    c10
+
+                Ch11 ->
+                    c11
+
+                Ch12 ->
+                    c12
+
+                Ch13 ->
+                    c13
+
+                Ch14 ->
+                    c14
+
+                Ch15 ->
+                    c15
+
+                Ch16 ->
+                    c16
+        )
+        |> Codec.variant0 "Ch1" Ch1
+        |> Codec.variant0 "Ch2" Ch2
+        |> Codec.variant0 "Ch3" Ch3
+        |> Codec.variant0 "Ch4" Ch4
+        |> Codec.variant0 "Ch5" Ch5
+        |> Codec.variant0 "Ch6" Ch6
+        |> Codec.variant0 "Ch7" Ch7
+        |> Codec.variant0 "Ch8" Ch8
+        |> Codec.variant0 "Ch9" Ch9
+        |> Codec.variant0 "Ch10" Ch10
+        |> Codec.variant0 "Ch11" Ch11
+        |> Codec.variant0 "Ch12" Ch12
+        |> Codec.variant0 "Ch13" Ch13
+        |> Codec.variant0 "Ch14" Ch14
+        |> Codec.variant0 "Ch15" Ch15
+        |> Codec.variant0 "Ch16" Ch16
+        |> Codec.buildCustom
 
 
 stringToChannel : String -> Maybe Channel
