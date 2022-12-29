@@ -202,6 +202,7 @@ type Msg
     | ButtonDown String
     | ButtonUp String
     | FaderChanging String Touch.Event
+    | FaderChangingMouse String Mouse.Event
     | FaderSet String
     | ClosePopUp
     | IncomingMidi (Array Int)
@@ -553,6 +554,41 @@ update msg model =
 
                 ( newFader, midiMsg ) =
                     Controller.faderChanging identifier touchCoordinates fader
+            in
+            ( { model
+                | pages =
+                    updateControllerOnActivePage
+                        model.activePage
+                        { id = id, updateFn = always newFader }
+                        model.pages
+              }
+            , case midiMsg of
+                Just (Midi.ControllerChange data) ->
+                    Ports.sendCC data
+
+                _ ->
+                    Cmd.none
+            )
+
+        FaderChangingMouse id mouseEvent ->
+            let
+                fader =
+                    getControllerFromActivePage id model.activePage model.pages
+                        |> Maybe.withDefault
+                            (Controller.Fader
+                                { status = Controller.Set
+                                , label = "ERROR"
+                                , colour = LightGrey
+                                , channel = Controller.Ch1
+                                , ccNumber = 1
+                                , valuePercent = 50
+                                , valueMin = 0
+                                , valueMax = 127
+                                }
+                            )
+
+                ( newFader, midiMsg ) =
+                    Controller.faderChanging -1 mouseEvent.clientPos fader
             in
             ( { model
                 | pages =
@@ -1731,12 +1767,7 @@ renderNote config mode state id =
                     ++ fillSpace
                 )
                 ((if config.debug then
-                    case state.status of
-                        Controller.Off ->
-                            "Off\n" ++ Controller.channelToString state.channel ++ "\n"
-
-                        Controller.On ->
-                            "Off\n" ++ Controller.channelToString state.channel ++ "\n"
+                    Controller.channelToString state.channel ++ "\n"
 
                   else
                     ""
@@ -1862,12 +1893,11 @@ renderFader config mode state id =
                         (\event ->
                             FaderChanging id event
                         )
-
-                 -- , htmlAttribute <|
-                 --    Mouse.onDown
-                 --        (\_ ->
-                 --            FaderChanging id
-                 --        )
+                 , htmlAttribute <|
+                    Mouse.onDown
+                        (\event ->
+                            FaderChangingMouse id event
+                        )
                  , htmlAttribute <|
                     Touch.onMove
                         (\event ->
@@ -1884,6 +1914,18 @@ renderFader config mode state id =
                             FaderSet id
                         )
                  ]
+                    ++ (case state.status of
+                            Changing _ _ ->
+                                [ htmlAttribute <|
+                                    Mouse.onMove
+                                        (\event ->
+                                            FaderChangingMouse id event
+                                        )
+                                ]
+
+                            Set ->
+                                []
+                       )
                     ++ fillSpace
                 )
                 (column
