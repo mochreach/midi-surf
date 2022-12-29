@@ -18,6 +18,7 @@ import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
 import Midi exposing (MidiMsg(..), Status(..))
 import Ports
+import Style exposing (..)
 
 
 
@@ -135,7 +136,10 @@ makeIsomorphicRow noteRange offset rowLength rowNumber =
         |> List.indexedMap Tuple.pair
         |> List.filter (\( i, _ ) -> List.member i includedRange)
         |> List.map Tuple.second
-        |> List.map (\i -> Controller.newNote (String.fromInt i) Controller.Ch7 i 100)
+        |> List.map
+            (\i ->
+                Controller.newNote (String.fromInt i) (Style.pitchToAppColour i) Controller.Ch7 i 100
+            )
         |> Controller.Row
 
 
@@ -241,19 +245,21 @@ update msg model =
                                 |> EditMenu id
                                 |> Just
 
-                        Just (Controller.Note { pitch, label, channel, velocity }) ->
+                        Just (Controller.Note { label, colour, pitch, channel, velocity }) ->
                             EditNote
-                                { noteNumber = String.fromInt pitch
-                                , label = label
+                                { label = label
+                                , colour = colour
+                                , noteNumber = String.fromInt pitch
                                 , channel = Controller.channelToString channel
                                 , velocity = String.fromInt velocity
                                 }
                                 |> EditMenu id
                                 |> Just
 
-                        Just (Controller.CCValue { label, channel, controller, value }) ->
+                        Just (Controller.CCValue { label, colour, channel, controller, value }) ->
                             EditCCValue
                                 { label = label
+                                , colour = colour
                                 , channel = Controller.channelToString channel
                                 , controller = String.fromInt controller
                                 , value = String.fromInt value
@@ -261,13 +267,14 @@ update msg model =
                                 |> EditMenu id
                                 |> Just
 
-                        Just (Controller.Fader { label, channel, ccNumber, valueMin, valueMax }) ->
+                        Just (Controller.Fader state) ->
                             EditFader
-                                { label = label
-                                , channel = Controller.channelToString channel
-                                , ccNumber = String.fromInt ccNumber
-                                , valueMin = String.fromInt valueMin
-                                , valueMax = String.fromInt valueMax
+                                { label = state.label
+                                , colour = state.colour
+                                , channel = Controller.channelToString state.channel
+                                , ccNumber = String.fromInt state.ccNumber
+                                , valueMin = String.fromInt state.valueMin
+                                , valueMax = String.fromInt state.valueMax
                                 }
                                 |> EditMenu id
                                 |> Just
@@ -481,6 +488,7 @@ update msg model =
                             (Controller.Fader
                                 { status = Controller.Set
                                 , label = "ERROR"
+                                , colour = LightGrey
                                 , channel = Controller.Ch1
                                 , ccNumber = 1
                                 , valuePercent = 50
@@ -1049,6 +1057,30 @@ editNotePane state =
             , placeholder = Just <| Input.placeholder [] (text "label")
             , label = Input.labelAbove [] (text "Label")
             }
+        , Input.radio
+            [ spacing 10 ]
+            { onChange =
+                \newColour ->
+                    { state | colour = newColour }
+                        |> EditNote
+                        |> UpdateControllerState
+            , selected = Just state.colour
+            , label =
+                Input.labelAbove
+                    [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
+                    ]
+                    (text "Colour")
+            , options =
+                [ Input.option White (text "White")
+                , Input.option LightGrey (text "Light Grey")
+                , Input.option DarkGrey (text "Dark Grey")
+                , Input.option Black (text "Black")
+                , Input.option Green (text "Green")
+                , Input.option Blue (text "Blue")
+                , Input.option Yellow (text "Yellow")
+                , Input.option Red (text "Red")
+                ]
+            }
         , Input.text
             [ Border.width 2
             , Border.rounded 0
@@ -1148,6 +1180,30 @@ editCCValuePane state =
             , placeholder = Just <| Input.placeholder [] (text "label")
             , label = Input.labelAbove [] (text "Label")
             }
+        , Input.radio
+            [ spacing 10 ]
+            { onChange =
+                \newColour ->
+                    { state | colour = newColour }
+                        |> EditCCValue
+                        |> UpdateControllerState
+            , selected = Just state.colour
+            , label =
+                Input.labelAbove
+                    [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
+                    ]
+                    (text "Colour")
+            , options =
+                [ Input.option White (text "White")
+                , Input.option LightGrey (text "Light Grey")
+                , Input.option DarkGrey (text "Dark Grey")
+                , Input.option Black (text "Black")
+                , Input.option Green (text "Green")
+                , Input.option Blue (text "Blue")
+                , Input.option Yellow (text "Yellow")
+                , Input.option Red (text "Red")
+                ]
+            }
         , Input.text
             [ Border.width 2
             , Border.rounded 0
@@ -1246,6 +1302,30 @@ editFaderPane state =
             , text = state.label
             , placeholder = Just <| Input.placeholder [] (text "label")
             , label = Input.labelAbove [] (text "Label")
+            }
+        , Input.radio
+            [ spacing 10 ]
+            { onChange =
+                \newColour ->
+                    { state | colour = newColour }
+                        |> EditFader
+                        |> UpdateControllerState
+            , selected = Just state.colour
+            , label =
+                Input.labelAbove
+                    [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
+                    ]
+                    (text "Colour")
+            , options =
+                [ Input.option White (text "White")
+                , Input.option LightGrey (text "Light Grey")
+                , Input.option DarkGrey (text "Dark Grey")
+                , Input.option Black (text "Black")
+                , Input.option Green (text "Green")
+                , Input.option Blue (text "Blue")
+                , Input.option Yellow (text "Yellow")
+                , Input.option Red (text "Red")
+                ]
             }
         , Input.text
             [ Border.width 2
@@ -1553,14 +1633,7 @@ renderNote config mode state id =
                  , Border.width 4
                  , case state.status of
                     Controller.Off ->
-                        if modBy 12 state.pitch == 0 then
-                            backgroundColour Blue
-
-                        else if List.member (modBy 12 state.pitch) [ 1, 3, 6, 8, 10 ] then
-                            backgroundColour DarkGrey
-
-                        else
-                            backgroundColour LightGrey
+                        backgroundColour state.colour
 
                     Controller.On ->
                         Border.dashed
@@ -1614,14 +1687,7 @@ renderNote config mode state id =
                  , Border.width 2
                  , Border.dashed
                  , Font.size 14
-                 , if modBy 12 state.pitch == 0 then
-                    backgroundColour Blue
-
-                   else if List.member (modBy 12 state.pitch) [ 1, 3, 6, 8, 10 ] then
-                    backgroundColour DarkGrey
-
-                   else
-                    backgroundColour LightGrey
+                 , backgroundColour state.colour
                  ]
                     ++ fillSpace
                 )
@@ -1642,7 +1708,7 @@ renderCCValue config mode state id =
                  , Border.width 4
                  , case state.status of
                     Controller.Off ->
-                        backgroundColour Green
+                        backgroundColour state.colour
 
                     Controller.On ->
                         Border.dashed
@@ -1696,7 +1762,7 @@ renderCCValue config mode state id =
                  , Border.width 2
                  , Border.dashed
                  , Font.size 14
-                 , backgroundColour Green
+                 , backgroundColour state.colour
                  ]
                     ++ fillSpace
                 )
@@ -1717,7 +1783,7 @@ renderFader config mode state id =
                  , Border.width 4
                  , case state.status of
                     Controller.Set ->
-                        backgroundColour Yellow
+                        Border.solid
 
                     Controller.Changing _ _ ->
                         Border.dashed
@@ -1763,8 +1829,8 @@ renderFader config mode state id =
                         , el
                             [ height <| fillPortion state.valuePercent
                             , width fill
-                            , backgroundColour Yellow
-                            , Border.widthEach { bottom = 0, top = 4, left = 0, right = 0 }
+                            , backgroundColour state.colour
+                            , Border.widthEach { bottom = 0, top = 8, left = 0, right = 0 }
                             ]
                             none
                         ]
@@ -1779,7 +1845,7 @@ renderFader config mode state id =
                  , Border.width 2
                  , Border.dashed
                  , Font.size 14
-                 , backgroundColour Yellow
+                 , backgroundColour state.colour
                  ]
                     ++ fillSpace
                 )
@@ -1842,63 +1908,6 @@ renderEditButton config editOperation parentId =
 fillSpace : List (Attribute msg)
 fillSpace =
     [ height fill, width fill ]
-
-
-type AppColour
-    = White
-    | LightGrey
-    | DarkGrey
-    | Black
-    | Green
-    | Blue
-    | Yellow
-    | Red
-
-
-appColourToRGB : AppColour -> Color
-appColourToRGB appColour =
-    case appColour of
-        White ->
-            rgb255 255 255 255
-
-        LightGrey ->
-            rgb255 200 200 200
-
-        DarkGrey ->
-            rgb255 86 90 94
-
-        Black ->
-            rgb255 0 0 0
-
-        Green ->
-            rgb255 0 133 86
-
-        Blue ->
-            rgb255 35 141 193
-
-        Yellow ->
-            rgb255 255 183 27
-
-        Red ->
-            rgb255 202 0 61
-
-
-backgroundColour : AppColour -> Element.Attribute msg
-backgroundColour appColour =
-    appColourToRGB appColour
-        |> Background.color
-
-
-borderColour : AppColour -> Element.Attribute msg
-borderColour appColour =
-    appColourToRGB appColour
-        |> Border.color
-
-
-fontColour : AppColour -> Element.Attribute msg
-fontColour appColour =
-    appColourToRGB appColour
-        |> Font.color
 
 
 

@@ -2,6 +2,7 @@ module EditableController exposing (..)
 
 import Controller exposing (Controller)
 import Midi exposing (MidiMsg(..))
+import Style exposing (..)
 
 
 type EditableController
@@ -16,6 +17,7 @@ type EditableController
 
 type alias EditNoteState =
     { label : String
+    , colour : AppColour
     , channel : String
     , noteNumber : String
     , velocity : String
@@ -25,6 +27,7 @@ type alias EditNoteState =
 defaultEditNoteState : EditNoteState
 defaultEditNoteState =
     { label = ""
+    , colour = LightGrey
     , channel = "1"
     , noteNumber = "60"
     , velocity = "100"
@@ -47,7 +50,7 @@ updateEditNoteWithMidiMsg midiMsg state =
 
 
 editStateToNote : EditNoteState -> Maybe Controller
-editStateToNote { label, noteNumber, channel, velocity } =
+editStateToNote { label, colour, noteNumber, channel, velocity } =
     if String.isEmpty label then
         Nothing
 
@@ -60,7 +63,7 @@ editStateToNote { label, noteNumber, channel, velocity } =
         of
             ( Just ch, Just nn, Just vel ) ->
                 -- TODO: These values should not exceed 127, handle with midi module
-                Controller.newNote label ch nn vel
+                Controller.newNote label colour ch nn vel
                     |> Just
 
             _ ->
@@ -69,6 +72,7 @@ editStateToNote { label, noteNumber, channel, velocity } =
 
 type alias EditCCValueState =
     { label : String
+    , colour : AppColour
     , channel : String
     , controller : String
     , value : String
@@ -78,6 +82,7 @@ type alias EditCCValueState =
 defaultEditCCValueState : EditCCValueState
 defaultEditCCValueState =
     { label = ""
+    , colour = Green
     , channel = "1"
     , controller = "1"
     , value = "63"
@@ -100,7 +105,7 @@ updateEditCCValueWithMidiMsg midiMsg state =
 
 
 editStateToCCValue : EditCCValueState -> Maybe Controller
-editStateToCCValue { label, channel, controller, value } =
+editStateToCCValue { label, colour, channel, controller, value } =
     if String.isEmpty label then
         Nothing
 
@@ -113,7 +118,7 @@ editStateToCCValue { label, channel, controller, value } =
         of
             ( Just ch, Just c, Just v ) ->
                 -- TODO: These values should not exceed 127, handle with midi module
-                Controller.newCCValue label ch c v
+                Controller.newCCValue label colour ch c v
                     |> Just
 
             _ ->
@@ -122,6 +127,7 @@ editStateToCCValue { label, channel, controller, value } =
 
 type alias EditFaderState =
     { label : String
+    , colour : AppColour
     , channel : String
     , ccNumber : String
     , valueMin : String
@@ -132,6 +138,7 @@ type alias EditFaderState =
 defaultEditFaderState : EditFaderState
 defaultEditFaderState =
     { label = ""
+    , colour = Yellow
     , channel = "1"
     , ccNumber = "1"
     , valueMin = "0"
@@ -154,7 +161,7 @@ updateEditFaderWithMidiMsg midiMsg state =
 
 
 editFaderToFader : EditFaderState -> Maybe Controller
-editFaderToFader { label, channel, ccNumber, valueMin, valueMax } =
+editFaderToFader { label, colour, channel, ccNumber, valueMin, valueMax } =
     if String.isEmpty label then
         Nothing
 
@@ -171,6 +178,7 @@ editFaderToFader { label, channel, ccNumber, valueMin, valueMax } =
                         Controller.Fader
                             { status = Controller.Set
                             , label = label
+                            , colour = colour
                             , channel = ch
                             , ccNumber = cc
                             , valuePercent = 50
@@ -206,7 +214,13 @@ updateWithMidiMsg midiMsg state =
                                 ++ "#"
                                 ++ String.fromInt pitch
                     in
-                    List.append subControls [ Controller.newNote label ch pitch velocity ]
+                    List.append subControls
+                        [ Controller.newNote label
+                            (pitchToAppColour pitch)
+                            ch
+                            pitch
+                            velocity
+                        ]
                         |> EditColumn
 
                 Midi.ControllerChange { channel, controller } ->
@@ -226,6 +240,7 @@ updateWithMidiMsg midiMsg state =
                         [ Controller.Fader
                             { status = Controller.Set
                             , label = label
+                            , colour = Yellow
                             , channel = ch
                             , ccNumber = controller
                             , valuePercent = 50
@@ -252,7 +267,14 @@ updateWithMidiMsg midiMsg state =
                                 ++ "#"
                                 ++ String.fromInt pitch
                     in
-                    List.append subControls [ Controller.newNote label ch pitch velocity ]
+                    List.append subControls
+                        [ Controller.newNote
+                            label
+                            (pitchToAppColour pitch)
+                            ch
+                            pitch
+                            velocity
+                        ]
                         |> EditRow
 
                 Midi.ControllerChange { channel, controller } ->
@@ -272,6 +294,7 @@ updateWithMidiMsg midiMsg state =
                         [ Controller.Fader
                             { status = Controller.Set
                             , label = label
+                            , colour = Yellow
                             , channel = ch
                             , ccNumber = controller
                             , valuePercent = 50

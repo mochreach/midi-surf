@@ -25,6 +25,7 @@ module Controller exposing
     )
 
 import Midi exposing (MidiMsg(..))
+import Style exposing (AppColour(..))
 
 
 type Controller
@@ -78,6 +79,7 @@ controllerToString control =
 type alias NoteState =
     { status : ButtonStatus
     , label : String
+    , colour : AppColour
     , channel : Channel
     , pitch : Int
     , velocity : Int
@@ -91,6 +93,7 @@ type ButtonStatus
 
 type alias CCValueState =
     { status : ButtonStatus
+    , colour : AppColour
     , label : String
     , channel : Channel
     , controller : Int
@@ -101,6 +104,7 @@ type alias CCValueState =
 type alias FaderState =
     { status : FaderStatus
     , label : String
+    , colour : AppColour
     , channel : Channel
     , ccNumber : Int
     , valuePercent : Int
@@ -576,21 +580,23 @@ removeItem controller =
             controller
 
 
-newNote : String -> Channel -> Int -> Int -> Controller
-newNote label channel noteNumber velocity =
+newNote : String -> AppColour -> Channel -> Int -> Int -> Controller
+newNote label colour channel noteNumber velocity =
     Note
         { status = Off
         , label = label
+        , colour = colour
         , channel = channel
         , pitch = noteNumber
         , velocity = velocity
         }
 
 
-newCCValue : String -> Channel -> Int -> Int -> Controller
-newCCValue label channel controller value =
+newCCValue : String -> AppColour -> Channel -> Int -> Int -> Controller
+newCCValue label colour channel controller value =
     CCValue
         { status = Off
+        , colour = colour
         , label = label
         , channel = channel
         , controller = controller
