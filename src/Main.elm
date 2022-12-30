@@ -55,6 +55,13 @@ type PopUp
     = MidiMenu
     | SaveMenu
     | EditMenu String EditableController
+    | NewPageMenu PageMenuState
+    | EditPageMenu Int PageMenuState
+
+
+type alias PageMenuState =
+    { label : String
+    }
 
 
 type alias Page =
@@ -192,6 +199,12 @@ type Msg
     | OpenMidiMenu
     | OpenSaveLoadMenu
     | ToggleNormalEdit
+    | OpenEditPageMenu Int
+    | DeletePage Int
+    | OpenNewPageMenu
+    | UpdatePageMenuState PageMenuState
+    | AddPage PageMenuState
+    | UpdatePage Int PageMenuState
     | AddSpace String
     | RemoveItem String
     | OpenEditController String
@@ -248,6 +261,135 @@ update msg model =
                             Normal
               }
             , Cmd.none
+            )
+
+        OpenEditPageMenu index ->
+            let
+                mSelectedPage =
+                    Array.get index model.pages
+            in
+            case mSelectedPage of
+                Just page ->
+                    ( { model
+                        | popup =
+                            Just <|
+                                EditPageMenu index { label = page.label }
+                      }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        DeletePage index ->
+            let
+                newModel =
+                    { model
+                        | pages =
+                            model.pages
+                                |> Array.indexedMap Tuple.pair
+                                |> Array.filter (\( i, _ ) -> i /= index)
+                                |> Array.map Tuple.second
+                        , popup = Nothing
+                    }
+            in
+            ( newModel
+            , Ports.saveState <|
+                Codec.encodeToValue modelCodec newModel
+            )
+
+        OpenNewPageMenu ->
+            ( { model
+                | popup =
+                    Just <|
+                        NewPageMenu { label = "" }
+              }
+            , Cmd.none
+            )
+
+        UpdatePageMenuState state ->
+            case model.popup of
+                Just (NewPageMenu _) ->
+                    ( { model
+                        | popup =
+                            Just <|
+                                NewPageMenu state
+                      }
+                    , Cmd.none
+                    )
+
+                Just (EditPageMenu index _) ->
+                    ( { model
+                        | popup =
+                            Just <|
+                                EditPageMenu index state
+                      }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( { model
+                        | popup = Nothing
+                      }
+                    , Cmd.none
+                    )
+
+        UpdatePage index state ->
+            let
+                oldPage =
+                    model.pages
+                        |> Array.get index
+
+                newModel =
+                    case oldPage of
+                        Just page ->
+                            { model
+                                | pages =
+                                    Array.set
+                                        index
+                                        { page | label = state.label }
+                                        model.pages
+
+                                -- I don't need to subtract 1 for zero indexing
+                                -- as this is the old array length
+                                , activePage = index
+                                , popup = Nothing
+                            }
+
+                        Nothing ->
+                            { model
+                                | popup = Nothing
+                            }
+            in
+            ( newModel
+            , Ports.saveState <|
+                Codec.encodeToValue modelCodec newModel
+            )
+
+        AddPage state ->
+            let
+                newModel =
+                    { model
+                        | pages =
+                            Array.push
+                                { label = state.label
+                                , controller = Controller.Space
+                                , config =
+                                    { gapSize = 2
+                                    , debug = True
+                                    }
+                                }
+                                model.pages
+
+                        -- I don't need to subtract 1 for zero indexing
+                        -- as this is the old array length
+                        , activePage = Array.length model.pages
+                        , popup = Nothing
+                    }
+            in
+            ( newModel
+            , Ports.saveState <|
+                Codec.encodeToValue modelCodec newModel
             )
 
         AddSpace id ->
@@ -666,6 +808,12 @@ view model =
 
                             EditMenu _ state ->
                                 editMenu state
+
+                            NewPageMenu state ->
+                                newPageMenu state
+
+                            EditPageMenu index state ->
+                                editPageMenu index state
                         )
                 )
                     :: fillSpace
@@ -747,8 +895,16 @@ view model =
                     , scrollbarX
                     , spacing 4
                     ]
-                    (Array.indexedMap (pageButton model.activePage) model.pages
+                    ((Array.indexedMap (pageButton model.mode model.activePage) model.pages
                         |> Array.toList
+                     )
+                        ++ (case model.mode of
+                                Normal ->
+                                    []
+
+                                Edit _ ->
+                                    [ newPageButton ]
+                           )
                     )
                 ]
             , case Array.get model.activePage model.pages of
@@ -764,25 +920,57 @@ view model =
             ]
 
 
-pageButton : Int -> Int -> Page -> Element Msg
-pageButton activePage pageNumber { label } =
+pageButton : Mode -> Int -> Int -> Page -> Element Msg
+pageButton mode activePage pageNumber { label } =
     Input.button
         ([ padding 10
          , height fill
          ]
-            ++ (if pageNumber == activePage then
-                    [ backgroundColour LightGrey
-                    , fontColour Black
-                    ]
+            ++ (case mode of
+                    Normal ->
+                        []
 
-                else
+                    Edit _ ->
+                        [ Border.width 4
+                        , borderColour Black
+                        , Border.dashed
+                        ]
+               )
+            ++ (if pageNumber == activePage then
                     [ backgroundColour Black
                     , fontColour White
                     ]
+
+                else
+                    [ backgroundColour LightGrey
+                    , fontColour Black
+                    ]
                )
         )
-        { onPress = Just (SelectActivePage pageNumber)
-        , label = text <| String.fromInt pageNumber ++ ": " ++ label
+        { onPress =
+            case mode of
+                Normal ->
+                    Just (SelectActivePage pageNumber)
+
+                Edit _ ->
+                    Just (OpenEditPageMenu pageNumber)
+        , label = text label
+        }
+
+
+newPageButton : Element Msg
+newPageButton =
+    Input.button
+        [ padding 10
+        , height fill
+        , Border.width 4
+        ]
+        { onPress = Just OpenNewPageMenu
+        , label =
+            Icons.plus
+                |> Icons.withSize 36
+                |> Icons.toHtml []
+                |> html
         }
 
 
@@ -884,6 +1072,7 @@ editMenu menuType =
             , padding 10
             , spacing 10
             , backgroundColour White
+            , Border.width 4
             ]
           <|
             Input.radio
@@ -978,6 +1167,7 @@ editModulePane label subController =
         , padding 10
         , spacing 10
         , backgroundColour White
+        , Border.width 4
         ]
         [ Input.text
             [ Border.width 2
@@ -1033,6 +1223,7 @@ editRowPane subControls =
         , padding 10
         , spacing 10
         , backgroundColour White
+        , Border.width 4
         ]
         (row [ spacing 10 ]
             [ Input.button
@@ -1097,6 +1288,7 @@ editColumnPane subControls =
         , padding 10
         , spacing 10
         , backgroundColour White
+        , Border.width 4
         ]
         (row [ spacing 10 ]
             [ Input.button
@@ -1161,6 +1353,7 @@ editNotePane state =
         , padding 10
         , spacing 10
         , backgroundColour White
+        , Border.width 4
         ]
         [ Input.text
             [ Border.width 2
@@ -1284,6 +1477,7 @@ editCCValuePane state =
         , padding 10
         , spacing 10
         , backgroundColour White
+        , Border.width 4
         ]
         [ Input.text
             [ Border.width 2
@@ -1407,6 +1601,7 @@ editFaderPane state =
         , padding 10
         , spacing 10
         , backgroundColour White
+        , Border.width 4
         ]
         [ Input.text
             [ Border.width 2
@@ -1535,6 +1730,99 @@ editFaderPane state =
                 { onPress = Just ClosePopUp, label = text "Cancel" }
             ]
         ]
+
+
+newPageMenu : PageMenuState -> Element Msg
+newPageMenu state =
+    el [ centerX, centerY ] <|
+        column
+            [ padding 10
+            , spacing 10
+            , backgroundColour White
+            , Border.width 4
+            ]
+            [ paragraph [ Font.bold ] [ text "New Page" ]
+            , Input.text
+                [ Border.width 2
+                , Border.rounded 0
+                , borderColour Black
+                ]
+                { onChange =
+                    \newLabel ->
+                        { state | label = newLabel }
+                            |> UpdatePageMenuState
+                , text = state.label
+                , placeholder = Just <| Input.placeholder [] (text "page label")
+                , label = Input.labelAbove [] (text "Page Label")
+                }
+            , row [ spacing 2 ]
+                [ Input.button
+                    [ padding 5
+                    , Border.width 2
+                    , Border.solid
+                    , borderColour Black
+                    ]
+                    { onPress = Just (AddPage state), label = text "Add Page" }
+                , Input.button
+                    [ padding 5
+                    , Border.width 2
+                    , Border.solid
+                    , borderColour Black
+                    ]
+                    { onPress = Just ClosePopUp, label = text "Cancel" }
+                ]
+            ]
+
+
+editPageMenu : Int -> PageMenuState -> Element Msg
+editPageMenu index state =
+    el [ centerX, centerY ] <|
+        column
+            [ padding 10
+            , spacing 10
+            , backgroundColour White
+            , Border.width 4
+            ]
+            [ paragraph [ Font.bold ] [ text "Edit Page" ]
+            , Input.text
+                [ Border.width 2
+                , Border.rounded 0
+                , borderColour Black
+                ]
+                { onChange =
+                    \newLabel ->
+                        { state | label = newLabel }
+                            |> UpdatePageMenuState
+                , text = state.label
+                , placeholder = Just <| Input.placeholder [] (text "page label")
+                , label = Input.labelAbove [] (text "Page Label")
+                }
+            , row [ spacing 2 ]
+                [ Input.button
+                    [ padding 5
+                    , Border.width 2
+                    , Border.solid
+                    , borderColour Black
+                    ]
+                    { onPress = Just (UpdatePage index state), label = text "Update" }
+                , Input.button
+                    [ padding 5
+                    , Border.width 2
+                    , Border.solid
+                    , backgroundColour Red
+                    , fontColour White
+                    , borderColour Black
+                    ]
+                    { onPress = Just (DeletePage index), label = text "Delete" }
+                , Input.button
+                    [ padding 5
+                    , Border.width 2
+                    , Border.solid
+                    , borderColour Black
+                    ]
+                    { onPress = Just ClosePopUp, label = text "Cancel" }
+                ]
+            ]
 
 
 renderPage : Mode -> Page -> Element Msg
@@ -1709,7 +1997,7 @@ renderController mode config idParts controller id =
             case mode of
                 Normal ->
                     el
-                        (backgroundColour LightGrey
+                        (backgroundColour White
                             :: fillSpace
                         )
                         none
@@ -1726,7 +2014,13 @@ renderController mode config idParts controller id =
                          ]
                             ++ fillSpace
                         )
-                        none
+                        (el
+                            [ centerX
+                            , centerY
+                            ]
+                         <|
+                            text "SPACE"
+                        )
 
 
 renderNote : PageConfig -> Mode -> Controller.NoteState -> String -> Element Msg
@@ -1935,7 +2229,7 @@ renderFader config mode state id =
                         [ el
                             [ height <| fillPortion (100 - state.valuePercent)
                             , width fill
-                            , backgroundColour LightGrey
+                            , backgroundColour White
                             ]
                             none
                         , el
