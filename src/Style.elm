@@ -5,6 +5,7 @@ import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
+import Html.Attributes as Hatt
 
 
 type AppColour
@@ -114,3 +115,15 @@ fontColour : AppColour -> Element.Attribute msg
 fontColour appColour =
     appColourToRGB appColour
         |> Font.color
+
+
+noSelect : List (Element.Attribute msg)
+noSelect =
+    List.map htmlAttribute
+        [ Hatt.style "-webkit-touch-callout" "none"
+        , Hatt.style "-webkit-user-select" "none"
+        , Hatt.style "-khtml-user-select" "none"
+        , Hatt.style "-moz-user-select" "none"
+        , Hatt.style "-ms-user-select" "none"
+        , Hatt.style "user-select" "none"
+        ]

@@ -2058,6 +2058,7 @@ renderNote config mode state id =
                             ButtonUp id
                         )
                  ]
+                    ++ Style.noSelect
                     ++ fillSpace
                 )
                 ((if config.debug then
@@ -2084,6 +2085,7 @@ renderNote config mode state id =
                  , Font.size 14
                  , backgroundColour state.colour
                  ]
+                    ++ Style.noSelect
                     ++ fillSpace
                 )
                 { onPress = Just <| OpenEditController id
@@ -2128,6 +2130,7 @@ renderCCValue config mode state id =
                             ButtonUp id
                         )
                  ]
+                    ++ Style.noSelect
                     ++ fillSpace
                 )
                 ((if config.debug then
@@ -2159,6 +2162,7 @@ renderCCValue config mode state id =
                  , Font.size 14
                  , backgroundColour state.colour
                  ]
+                    ++ Style.noSelect
                     ++ fillSpace
                 )
                 { onPress = Just <| OpenEditController id
@@ -2220,6 +2224,7 @@ renderFader config mode state id =
                             Set ->
                                 []
                        )
+                    ++ Style.noSelect
                     ++ fillSpace
                 )
                 (column
@@ -2253,6 +2258,7 @@ renderFader config mode state id =
                  , Font.size 14
                  , backgroundColour state.colour
                  ]
+                    ++ Style.noSelect
                     ++ fillSpace
                 )
                 { onPress = Just <| OpenEditController id
