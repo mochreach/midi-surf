@@ -1986,10 +1986,20 @@ renderController mode midiLog config idParts controller id =
                 column
                 ([ padding config.gapSize
                  , spacing config.gapSize
-                 , Border.dotted
-                 , Border.width 4
                  ]
                     ++ fillSpace
+                    ++ (case mode of
+                            Normal ->
+                                [ Border.dotted
+                                , Border.width 4
+                                ]
+
+                            Edit _ ->
+                                [ padding 2
+                                , Border.width 2
+                                , Border.dashed
+                                ]
+                       )
                 )
                 [ row [ width fill ]
                     ((el [ padding 4 ] <| text label)
@@ -2020,6 +2030,16 @@ renderController mode midiLog config idParts controller id =
             Lazy.lazy2 row
                 (spacingXY config.gapSize 0
                     :: fillSpace
+                    ++ (case mode of
+                            Normal ->
+                                []
+
+                            Edit _ ->
+                                [ padding 2
+                                , Border.width 2
+                                , Border.dashed
+                                ]
+                       )
                 )
             <|
                 (List.map2
@@ -2053,6 +2073,16 @@ renderController mode midiLog config idParts controller id =
                     Lazy.lazy2 column
                         (spacingXY 0 config.gapSize
                             :: fillSpace
+                            ++ (case mode of
+                                    Normal ->
+                                        []
+
+                                    Edit _ ->
+                                        [ padding 2
+                                        , Border.width 2
+                                        , Border.dashed
+                                        ]
+                               )
                         )
                     <|
                         List.map2
