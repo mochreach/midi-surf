@@ -3,11 +3,11 @@ module Midi exposing
     , MidiMsg(..)
     , Status(..)
     , intArrayToMidiMsg
+    , midiMsgToString
     , statusView
     )
 
 import Array exposing (Array)
-import Codec exposing (Codec, Value)
 import Element exposing (..)
 
 
@@ -32,6 +32,110 @@ type MidiMsg
     | ActiveSensing
     | SystemReset
     | Unknown (Array Int)
+
+
+midiMsgToString : MidiMsg -> String
+midiMsgToString midiMsg =
+    case midiMsg of
+        NoteOn { channel, pitch, velocity } ->
+            "Note On: Channel "
+                ++ String.fromInt channel
+                ++ ", Pitch "
+                ++ String.fromInt pitch
+                ++ ", Velocity "
+                ++ String.fromInt velocity
+
+        NoteOff { channel, pitch, velocity } ->
+            "Note Off: Channel "
+                ++ String.fromInt channel
+                ++ ", Pitch "
+                ++ String.fromInt pitch
+                ++ ", Velocity "
+                ++ String.fromInt velocity
+
+        KeyPressure { channel, key, pressure } ->
+            "Key Pressure: Channel "
+                ++ String.fromInt channel
+                ++ ", Key "
+                ++ String.fromInt key
+                ++ ", Pressure "
+                ++ String.fromInt pressure
+
+        ControllerChange { channel, controller, value } ->
+            "Controller Change: Channel "
+                ++ String.fromInt channel
+                ++ ", Controller "
+                ++ String.fromInt controller
+                ++ ", Value "
+                ++ String.fromInt value
+
+        ProgramChange { channel, preset } ->
+            "Program Change: Channel "
+                ++ String.fromInt channel
+                ++ ", Preset "
+                ++ String.fromInt preset
+
+        ChannelPressure { channel, pressure } ->
+            "Channel Pressure: Channel "
+                ++ String.fromInt channel
+                ++ ", Pressure "
+                ++ String.fromInt pressure
+
+        PitchBend { channel, bendLSB, bendMSB } ->
+            "Pitch Bend: Channel "
+                ++ String.fromInt channel
+                ++ ", LSB "
+                ++ String.fromInt bendLSB
+                ++ ", MSB "
+                ++ String.fromInt bendMSB
+
+        SystemExclusive { vendorId, data } ->
+            "System Exclusive: Vendor ID "
+                ++ String.fromInt vendorId
+                ++ ", Data "
+                ++ (Array.map String.fromInt data |> Array.toList |> String.join " ")
+
+        SongPosition { positionLSB, positionMSB } ->
+            "Song Position:  LSB "
+                ++ String.fromInt positionLSB
+                ++ ", MSB "
+                ++ String.fromInt positionMSB
+
+        SongSelect songNumber ->
+            "Song Select:  Song Number "
+                ++ String.fromInt songNumber
+
+        UnofficialBusSelect busNumber ->
+            "Unofficial Bus Select: Bus Number "
+                ++ String.fromInt busNumber
+
+        TuneRequest ->
+            "Tune Request"
+
+        EndOfSysEx ->
+            "End Of Sys Ex"
+
+        TimingTick ->
+            "Timing Tick"
+
+        StartSong ->
+            "Start Song"
+
+        ContinueSong ->
+            "Continue Song"
+
+        StopSong ->
+            "Stop Song"
+
+        ActiveSensing ->
+            "Active Sensing"
+
+        SystemReset ->
+            "System Reset"
+
+        Unknown data ->
+            "Unknown MIDI Msg: "
+                ++ (Array.map String.fromInt data |> Array.toList |> String.join " ")
 
 
 intArrayToMidiMsg : Array Int -> MidiMsg

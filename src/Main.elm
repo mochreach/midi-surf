@@ -32,6 +32,7 @@ type alias Model =
     , pages : Array Page
     , activePage : Int
     , popup : Maybe PopUp
+    , midiLog : List String
     }
 
 
@@ -43,6 +44,7 @@ modelCodec =
         |> Codec.field "pages" .pages (Codec.array pageCodec)
         |> Codec.field "activePage" .activePage (Codec.constant 0)
         |> Codec.field "popup" .popup (Codec.constant Nothing)
+        |> Codec.field "midiLog" .midiLog (Codec.constant [])
         |> Codec.buildObject
 
 
@@ -139,6 +141,7 @@ init { mInitialState } =
               , pages = Array.fromList <| List.repeat 4 defaultPage
               , activePage = 0
               , popup = Nothing
+              , midiLog = []
               }
             , Cmd.none
             )
@@ -218,7 +221,7 @@ type Msg
     | FaderChangingMouse String Mouse.Event
     | FaderSet String
     | ClosePopUp
-    | IncomingMidi (Array Int)
+    | IncomingMidi { deviceName : String, midiData : Array Int }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -471,6 +474,11 @@ update msg model =
                                 |> EditMenu id
                                 |> Just
 
+                        Just Controller.MidiLog ->
+                            EditMidiLog
+                                |> EditMenu id
+                                |> Just
+
                         Just Controller.Space ->
                             EditSpace
                                 |> EditMenu id
@@ -606,6 +614,9 @@ update msg model =
                 Just (Controller.Fader _) ->
                     ( model, Cmd.none )
 
+                Just Controller.MidiLog ->
+                    ( model, Cmd.none )
+
                 Just Controller.Space ->
                     ( model, Cmd.none )
 
@@ -659,6 +670,9 @@ update msg model =
                     )
 
                 Just (Controller.Fader _) ->
+                    ( model, Cmd.none )
+
+                Just Controller.MidiLog ->
                     ( model, Cmd.none )
 
                 Just Controller.Space ->
@@ -763,17 +777,27 @@ update msg model =
             , Cmd.none
             )
 
-        IncomingMidi midiMsg ->
+        IncomingMidi { deviceName, midiData } ->
+            let
+                midiMsg =
+                    Midi.intArrayToMidiMsg midiData
+            in
             ( { model
                 | popup =
                     case model.popup of
                         Just (EditMenu id state) ->
-                            EController.updateWithMidiMsg (Midi.intArrayToMidiMsg midiMsg) state
+                            EController.updateWithMidiMsg midiMsg state
                                 |> EditMenu id
                                 |> Just
 
                         _ ->
                             model.popup
+                , midiLog =
+                    (deviceName
+                        ++ " "
+                        ++ Midi.midiMsgToString midiMsg
+                    )
+                        :: List.take 199 model.midiLog
               }
             , Cmd.none
             )
@@ -912,7 +936,7 @@ view model =
                     Lazy.lazy2
                         el
                         (padding 2 :: fillSpace)
-                        (renderPage model.mode page)
+                        (renderPage model.mode model.midiLog page)
 
                 Nothing ->
                     el fillSpace <|
@@ -1111,6 +1135,7 @@ editMenu menuType =
                                 EditFader EController.defaultEditFaderState
                         )
                         (text "Fader")
+                    , Input.option EditMidiLog (text "MIDI Log")
                     , Input.option EditSpace (text "Space")
                     ]
                 }
@@ -1132,6 +1157,31 @@ editMenu menuType =
 
             EditFader state ->
                 editFaderPane state
+
+            EditMidiLog ->
+                row
+                    [ alignTop
+                    , padding 10
+                    , spacing 10
+                    , backgroundColour White
+                    ]
+                    [ Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , borderColour Black
+                        ]
+                        { onPress = Just <| FinishedEdit <| Controller.MidiLog
+                        , label = text "Ok"
+                        }
+                    , Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , borderColour Black
+                        ]
+                        { onPress = Just ClosePopUp, label = text "Cancel" }
+                    ]
 
             EditSpace ->
                 row
@@ -1825,8 +1875,8 @@ editPageMenu index state =
             ]
 
 
-renderPage : Mode -> Page -> Element Msg
-renderPage mode page =
+renderPage : Mode -> List String -> Page -> Element Msg
+renderPage mode midiLog page =
     let
         { config, controller } =
             page
@@ -1843,11 +1893,18 @@ renderPage mode page =
                )
         )
     <|
-        renderController mode config [] controller 0
+        renderController mode midiLog config [] controller 0
 
 
-renderController : Mode -> PageConfig -> List String -> Controller -> Int -> Element Msg
-renderController mode config idParts controller id =
+renderController :
+    Mode
+    -> List String
+    -> PageConfig
+    -> List String
+    -> Controller
+    -> Int
+    -> Element Msg
+renderController mode midiLog config idParts controller id =
     let
         updatedParts =
             String.fromInt id :: idParts
@@ -1861,77 +1918,75 @@ renderController mode config idParts controller id =
                  , Border.dotted
                  , Border.width 4
                  ]
-                    ++ (case mode of
-                            Normal ->
-                                []
+                    ++ fillSpace
+                )
+                [ row [ width fill ]
+                    ((el [ padding 4 ] <| text label)
+                        :: (case mode of
+                                Normal ->
+                                    []
 
-                            Edit _ ->
-                                [ inFront <|
-                                    el
+                                Edit _ ->
+                                    [ el
                                         [ alignRight
                                         , padding 4
                                         , backgroundColour White
                                         ]
-                                    <|
+                                      <|
                                         renderEditButton config
                                             Controller.EditContainer
                                             (updatedParts
                                                 |> List.reverse
                                                 |> String.join "_"
                                             )
-                                ]
-                       )
-                    ++ fillSpace
-                )
-                [ el [ padding 4 ] <| text label
-                , renderController mode config updatedParts subControls 0
+                                    ]
+                           )
+                    )
+                , renderController mode midiLog config updatedParts subControls 0
                 ]
 
         Controller.Row subControls ->
             Lazy.lazy2 row
-                ([ paddingXY config.gapSize 0
-                 , spacingXY config.gapSize 0
+                ([ spacingXY config.gapSize 0
                  ]
+                    ++ fillSpace
+                )
+            <|
+                (List.map2
+                    (renderController mode midiLog config updatedParts)
+                    subControls
+                    (List.range 0 <| List.length subControls)
                     ++ (case mode of
                             Normal ->
                                 []
 
                             Edit _ ->
-                                [ inFront <|
-                                    el
-                                        [ alignRight
-                                        , padding 4
-                                        , backgroundColour White
-                                        ]
-                                    <|
-                                        renderEditButton config
-                                            Controller.EditContainer
-                                            (updatedParts
-                                                |> List.reverse
-                                                |> String.join "_"
-                                            )
+                                [ el
+                                    [ alignRight
+                                    , padding 4
+                                    , backgroundColour White
+                                    ]
+                                  <|
+                                    renderEditButton config
+                                        Controller.EditContainer
+                                        (updatedParts
+                                            |> List.reverse
+                                            |> String.join "_"
+                                        )
                                 ]
                        )
-                    ++ fillSpace
                 )
-            <|
-                List.map2
-                    (renderController mode config updatedParts)
-                    subControls
-                    (List.range 0 <| List.length subControls)
 
         Controller.Column subControls ->
             case mode of
                 Normal ->
                     Lazy.lazy2 column
-                        ([ paddingXY 0 config.gapSize
-                         , spacingXY 0 config.gapSize
-                         ]
-                            ++ fillSpace
+                        (spacingXY 0 config.gapSize
+                            :: fillSpace
                         )
                     <|
                         List.map2
-                            (renderController mode config updatedParts)
+                            (renderController mode midiLog config updatedParts)
                             subControls
                             (List.range 0 <| List.length subControls)
 
@@ -1958,7 +2013,7 @@ renderController mode config idParts controller id =
                             )
                           <|
                             List.map2
-                                (renderController mode config updatedParts)
+                                (renderController mode midiLog config updatedParts)
                                 subControls
                                 (List.range 0 <| List.length subControls)
                         ]
@@ -1993,12 +2048,69 @@ renderController mode config idParts controller id =
                     |> String.join "_"
                 )
 
+        Controller.MidiLog ->
+            case mode of
+                Normal ->
+                    column fillSpace
+                        [ column
+                            ([ padding 4
+                             , spacing 10
+                             , backgroundColour White
+                             , scrollbarY
+                             , clipX
+                             ]
+                                ++ fillSpace
+                            )
+                            (if List.isEmpty midiLog then
+                                [ el [ centerX, centerY ] <|
+                                    text "No MIDI events in log."
+                                ]
+
+                             else
+                                List.map
+                                    (\s ->
+                                        paragraph
+                                            [ Font.alignLeft
+                                            , Font.size 12
+                                            , padding 2
+                                            , Border.widthEach
+                                                { bottom = 1, top = 0, left = 0, right = 0 }
+                                            ]
+                                            [ text s ]
+                                    )
+                                    midiLog
+                            )
+                        ]
+
+                Edit _ ->
+                    el
+                        ([ backgroundColour LightGrey
+                         , Events.onClick <|
+                            OpenEditController
+                                (updatedParts
+                                    |> List.reverse
+                                    |> String.join "_"
+                                )
+                         ]
+                            ++ fillSpace
+                        )
+                        (el
+                            [ centerX
+                            , centerY
+                            ]
+                         <|
+                            text "MIDI Log"
+                        )
+
         Controller.Space ->
             case mode of
                 Normal ->
                     el
-                        (backgroundColour White
-                            :: fillSpace
+                        ([ backgroundColour White
+                         , borderColour LightGrey
+                         , Border.width 4
+                         ]
+                            ++ fillSpace
                         )
                         none
 

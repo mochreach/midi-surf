@@ -15,7 +15,7 @@ import Midi
 port midiDevices : (List Midi.Device -> msg) -> Sub msg
 
 
-port incomingMidi : (Array Int -> msg) -> Sub msg
+port incomingMidi : ({ deviceName : String, midiData : Array Int } -> msg) -> Sub msg
 
 
 port sendNoteOn : { pitch : Int, velocity : Int, channel : Int } -> Cmd msg

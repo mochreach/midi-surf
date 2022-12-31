@@ -34,9 +34,15 @@ function initialiseDevices(midiAccess) {
         midiDevices.set(input.name, {input: input, output: null});
 
         input.onmidimessage = (message) => {
+            const deviceName = input.name;
             // Ignore clock messages
             if (message.data[0] != 0xF8) {
-                app.ports.incomingMidi.send(Array.from(message.data));
+                app.ports.incomingMidi.send(
+                    {
+                        deviceName: deviceName,
+                        midiData: Array.from(message.data)
+                    }
+                );
             }
         }
     }));

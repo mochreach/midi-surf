@@ -12,6 +12,7 @@ type Controller
     | Note NoteState
     | CCValue CCValueState
     | Fader FaderState
+    | MidiLog
     | Space
 
 
@@ -20,7 +21,7 @@ controllerCodec =
     Codec.recursive
         (\rmeta ->
             Codec.custom
-                (\mod row col note ccv fad spa value ->
+                (\mod row col note ccv fad mid spa value ->
                     case value of
                         Module l c ->
                             mod l c
@@ -40,6 +41,9 @@ controllerCodec =
                         Fader s ->
                             fad s
 
+                        MidiLog ->
+                            mid
+
                         Space ->
                             spa
                 )
@@ -49,6 +53,7 @@ controllerCodec =
                 |> Codec.variant1 "Note" Note noteStateCodec
                 |> Codec.variant1 "CCValue" CCValue ccValueStateCodec
                 |> Codec.variant1 "Fader" Fader faderStateCodec
+                |> Codec.variant0 "MidiLog" MidiLog
                 |> Codec.variant0 "Space" Space
                 |> Codec.buildCustom
         )
@@ -87,6 +92,9 @@ controllerToString control =
                 ++ channelToString channel
                 ++ " "
                 ++ String.fromInt ccNumber
+
+        MidiLog ->
+            "MidiLog"
 
         Space ->
             "Space"
@@ -592,6 +600,13 @@ getWithId currentId id control =
             else
                 Nothing
 
+        MidiLog ->
+            if currentId == id then
+                Just control
+
+            else
+                Nothing
+
         Space ->
             if currentId == id then
                 Just control
@@ -659,6 +674,13 @@ updateWithId currentId toUpdate updateInfo =
 
             else
                 Fader state
+
+        MidiLog ->
+            if currentId == id then
+                updateFn toUpdate
+
+            else
+                MidiLog
 
         Space ->
             if currentId == id then

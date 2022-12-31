@@ -12,6 +12,7 @@ type EditableController
     | EditNote EditNoteState
     | EditCCValue EditCCValueState
     | EditFader EditFaderState
+    | EditMidiLog
     | EditSpace
 
 
@@ -318,6 +319,9 @@ updateWithMidiMsg midiMsg state =
         EditFader faderState ->
             updateEditFaderWithMidiMsg midiMsg faderState
                 |> EditFader
+
+        EditMidiLog ->
+            state
 
         EditSpace ->
             state
