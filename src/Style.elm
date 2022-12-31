@@ -127,3 +127,8 @@ noSelect =
         , Hatt.style "-ms-user-select" "none"
         , Hatt.style "user-select" "none"
         ]
+
+
+fillSpace : List (Attribute msg)
+fillSpace =
+    [ height fill, width fill ]

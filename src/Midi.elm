@@ -1,14 +1,12 @@
-module Midi exposing
-    ( Device
-    , MidiMsg(..)
-    , Status(..)
-    , intArrayToMidiMsg
-    , midiMsgToString
-    , statusView
-    )
+module Midi exposing (..)
 
 import Array exposing (Array)
+import Codec exposing (Codec)
 import Element exposing (..)
+
+
+
+-- {{{ MidiMsg
 
 
 type MidiMsg
@@ -226,6 +224,11 @@ intArrayToMidiMsg intArray =
             Unknown intArray
 
 
+
+-- }}}
+-- {{{ Status
+
+
 type Status
     = Initialising
     | FailedToEstablishMidi
@@ -250,3 +253,317 @@ type alias Device =
     , input : Maybe Bool
     , output : Maybe Bool
     }
+
+
+
+-- }}}
+-- {{{ Channel
+
+
+type Channel
+    = Ch1
+    | Ch2
+    | Ch3
+    | Ch4
+    | Ch5
+    | Ch6
+    | Ch7
+    | Ch8
+    | Ch9
+    | Ch10
+    | Ch11
+    | Ch12
+    | Ch13
+    | Ch14
+    | Ch15
+    | Ch16
+
+
+channelCodec : Codec Channel
+channelCodec =
+    Codec.custom
+        (\c1 c2 c3 c4 c5 c6 c7 c8 c9 c10 c11 c12 c13 c14 c15 c16 value ->
+            case value of
+                Ch1 ->
+                    c1
+
+                Ch2 ->
+                    c2
+
+                Ch3 ->
+                    c3
+
+                Ch4 ->
+                    c4
+
+                Ch5 ->
+                    c5
+
+                Ch6 ->
+                    c6
+
+                Ch7 ->
+                    c7
+
+                Ch8 ->
+                    c8
+
+                Ch9 ->
+                    c9
+
+                Ch10 ->
+                    c10
+
+                Ch11 ->
+                    c11
+
+                Ch12 ->
+                    c12
+
+                Ch13 ->
+                    c13
+
+                Ch14 ->
+                    c14
+
+                Ch15 ->
+                    c15
+
+                Ch16 ->
+                    c16
+        )
+        |> Codec.variant0 "Ch1" Ch1
+        |> Codec.variant0 "Ch2" Ch2
+        |> Codec.variant0 "Ch3" Ch3
+        |> Codec.variant0 "Ch4" Ch4
+        |> Codec.variant0 "Ch5" Ch5
+        |> Codec.variant0 "Ch6" Ch6
+        |> Codec.variant0 "Ch7" Ch7
+        |> Codec.variant0 "Ch8" Ch8
+        |> Codec.variant0 "Ch9" Ch9
+        |> Codec.variant0 "Ch10" Ch10
+        |> Codec.variant0 "Ch11" Ch11
+        |> Codec.variant0 "Ch12" Ch12
+        |> Codec.variant0 "Ch13" Ch13
+        |> Codec.variant0 "Ch14" Ch14
+        |> Codec.variant0 "Ch15" Ch15
+        |> Codec.variant0 "Ch16" Ch16
+        |> Codec.buildCustom
+
+
+stringToChannel : String -> Maybe Channel
+stringToChannel string =
+    case string of
+        "1" ->
+            Just Ch1
+
+        "2" ->
+            Just Ch2
+
+        "3" ->
+            Just Ch3
+
+        "4" ->
+            Just Ch4
+
+        "5" ->
+            Just Ch5
+
+        "6" ->
+            Just Ch6
+
+        "7" ->
+            Just Ch7
+
+        "8" ->
+            Just Ch8
+
+        "9" ->
+            Just Ch9
+
+        "10" ->
+            Just Ch10
+
+        "11" ->
+            Just Ch11
+
+        "12" ->
+            Just Ch12
+
+        "13" ->
+            Just Ch13
+
+        "14" ->
+            Just Ch14
+
+        "15" ->
+            Just Ch15
+
+        "16" ->
+            Just Ch16
+
+        _ ->
+            Nothing
+
+
+channelToString : Channel -> String
+channelToString ch =
+    case ch of
+        Ch1 ->
+            "1"
+
+        Ch2 ->
+            "2"
+
+        Ch3 ->
+            "3"
+
+        Ch4 ->
+            "4"
+
+        Ch5 ->
+            "5"
+
+        Ch6 ->
+            "6"
+
+        Ch7 ->
+            "7"
+
+        Ch8 ->
+            "8"
+
+        Ch9 ->
+            "9"
+
+        Ch10 ->
+            "10"
+
+        Ch11 ->
+            "11"
+
+        Ch12 ->
+            "12"
+
+        Ch13 ->
+            "13"
+
+        Ch14 ->
+            "14"
+
+        Ch15 ->
+            "15"
+
+        Ch16 ->
+            "16"
+
+
+channelToMidiNumber : Channel -> Int
+channelToMidiNumber ch =
+    case ch of
+        Ch1 ->
+            0
+
+        Ch2 ->
+            1
+
+        Ch3 ->
+            2
+
+        Ch4 ->
+            3
+
+        Ch5 ->
+            4
+
+        Ch6 ->
+            5
+
+        Ch7 ->
+            6
+
+        Ch8 ->
+            7
+
+        Ch9 ->
+            8
+
+        Ch10 ->
+            9
+
+        Ch11 ->
+            10
+
+        Ch12 ->
+            11
+
+        Ch13 ->
+            12
+
+        Ch14 ->
+            13
+
+        Ch15 ->
+            14
+
+        Ch16 ->
+            15
+
+
+midiNumberToChannel : Int -> Maybe Channel
+midiNumberToChannel n =
+    case n of
+        0 ->
+            Ch1 |> Just
+
+        1 ->
+            Ch2 |> Just
+
+        2 ->
+            Ch3 |> Just
+
+        3 ->
+            Ch4 |> Just
+
+        4 ->
+            Ch5 |> Just
+
+        5 ->
+            Ch6 |> Just
+
+        6 ->
+            Ch7 |> Just
+
+        7 ->
+            Ch8 |> Just
+
+        8 ->
+            Ch9 |> Just
+
+        9 ->
+            Ch10 |> Just
+
+        10 ->
+            Ch11 |> Just
+
+        11 ->
+            Ch12 |> Just
+
+        12 ->
+            Ch13 |> Just
+
+        13 ->
+            Ch14 |> Just
+
+        14 ->
+            Ch15 |> Just
+
+        15 ->
+            Ch16 |> Just
+
+        _ ->
+            Nothing
+
+
+
+-- }}}

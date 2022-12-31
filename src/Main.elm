@@ -190,7 +190,7 @@ makeIsomorphicRow noteRange offset rowLength rowNumber =
         |> List.map Tuple.second
         |> List.map
             (\i ->
-                Controller.newNote (String.fromInt i) (Style.pitchToAppColour i) Controller.Ch7 i 100
+                Controller.newNote (String.fromInt i) (Style.pitchToAppColour i) Midi.Ch7 i 100
             )
         |> Controller.Row
 
@@ -454,7 +454,7 @@ update msg model =
                                 { label = label
                                 , colour = colour
                                 , noteNumber = String.fromInt pitch
-                                , channel = Controller.channelToString channel
+                                , channel = Midi.channelToString channel
                                 , velocity = String.fromInt velocity
                                 }
                                 |> EditMenu id
@@ -464,7 +464,7 @@ update msg model =
                             EditCCValue
                                 { label = label
                                 , colour = colour
-                                , channel = Controller.channelToString channel
+                                , channel = Midi.channelToString channel
                                 , controller = String.fromInt controller
                                 , value = String.fromInt value
                                 }
@@ -475,7 +475,7 @@ update msg model =
                             EditFader
                                 { label = state.label
                                 , colour = state.colour
-                                , channel = Controller.channelToString state.channel
+                                , channel = Midi.channelToString state.channel
                                 , ccNumber = String.fromInt state.ccNumber
                                 , valueMin = String.fromInt state.valueMin
                                 , valueMax = String.fromInt state.valueMax
@@ -709,7 +709,7 @@ update msg model =
                                 { status = Controller.Set
                                 , label = "ERROR"
                                 , colour = LightGrey
-                                , channel = Controller.Ch1
+                                , channel = Midi.Ch1
                                 , ccNumber = 1
                                 , valuePercent = 50
                                 , valueMin = 0
@@ -744,7 +744,7 @@ update msg model =
                                 { status = Controller.Set
                                 , label = "ERROR"
                                 , colour = LightGrey
-                                , channel = Controller.Ch1
+                                , channel = Midi.Ch1
                                 , ccNumber = 1
                                 , valuePercent = 50
                                 , valueMin = 0
@@ -823,31 +823,7 @@ view model =
         ((case model.popup of
             Just popup ->
                 (inFront <|
-                    el
-                        (Background.color (rgba 0.5 0.5 0.5 0.8)
-                            :: fillSpace
-                        )
-                        (case popup of
-                            MidiMenu ->
-                                case model.midiStatus of
-                                    Midi.MidiAvailable devices ->
-                                        midiMenu devices
-
-                                    _ ->
-                                        midiMenu []
-
-                            SaveMenu ->
-                                saveMenu
-
-                            EditMenu _ state ->
-                                editMenu state
-
-                            NewPageMenu state ->
-                                newPageMenu state
-
-                            EditPageMenu index state ->
-                                editPageMenu index state
-                        )
+                    renderPopup model.midiStatus popup
                 )
                     :: fillSpace
 
@@ -863,49 +839,9 @@ view model =
                     ]
                ]
         )
-    <|
-        column
+        (column
             fillSpace
-            [ row
-                [ width fill
-                , padding 4
-                , spacing 4
-                , Border.widthEach { bottom = 4, top = 0, left = 0, right = 0 }
-                ]
-                (Input.button
-                    [ paddingXY 8 12
-                    , backgroundColour Black
-                    , Font.bold
-                    , fontColour White
-                    ]
-                    { onPress = Just ToggleMenu
-                    , label = text "MIDI\nSurf"
-                    }
-                    :: (if model.menuOpen then
-                            [ menuRow model.mode ]
-
-                        else
-                            []
-                       )
-                    ++ [ row
-                            [ alignRight
-                            , height fill
-                            , scrollbarX
-                            , spacing 4
-                            ]
-                            ((Array.indexedMap (pageButton model.mode model.activePage) model.pages
-                                |> Array.toList
-                             )
-                                ++ (case model.mode of
-                                        Normal ->
-                                            []
-
-                                        Edit _ ->
-                                            [ newPageButton ]
-                                   )
-                            )
-                       ]
-                )
+            [ titleBar model.mode model.menuOpen model.activePage model.pages
             , case Array.get model.activePage model.pages of
                 Just page ->
                     Lazy.lazy2
@@ -917,6 +853,55 @@ view model =
                     el fillSpace <|
                         el [ centerX, centerY ] (text "No page selected.")
             ]
+        )
+
+
+
+-- {{{ Title Bar
+
+
+titleBar : Mode -> Bool -> Int -> Array Page -> Element Msg
+titleBar mode menuOpen activePage pages =
+    row
+        [ width fill
+        , padding 4
+        , spacing 4
+        , Border.widthEach { bottom = 4, top = 0, left = 0, right = 0 }
+        ]
+        (Input.button
+            [ paddingXY 8 12
+            , backgroundColour Black
+            , Font.bold
+            , fontColour White
+            ]
+            { onPress = Just ToggleMenu
+            , label = text "MIDI\nSurf"
+            }
+            :: (if menuOpen then
+                    [ menuRow mode ]
+
+                else
+                    []
+               )
+            ++ [ row
+                    [ alignRight
+                    , height fill
+                    , scrollbarX
+                    , spacing 4
+                    ]
+                    ((Array.indexedMap (pageButton mode activePage) pages
+                        |> Array.toList
+                     )
+                        ++ (case mode of
+                                Normal ->
+                                    []
+
+                                Edit _ ->
+                                    [ newPageButton ]
+                           )
+                    )
+               ]
+        )
 
 
 menuRow : Mode -> Element Msg
@@ -1025,6 +1010,44 @@ newPageButton =
         }
 
 
+
+-- }}}
+-- {{{ Popups
+
+
+renderPopup : Midi.Status -> PopUp -> Element Msg
+renderPopup midiStatus popup =
+    el
+        (Background.color (rgba 0.5 0.5 0.5 0.8)
+            :: fillSpace
+        )
+        (case popup of
+            MidiMenu ->
+                case midiStatus of
+                    Midi.MidiAvailable devices ->
+                        midiMenu devices
+
+                    _ ->
+                        midiMenu []
+
+            SaveMenu ->
+                saveMenu
+
+            EditMenu _ state ->
+                editMenu state
+
+            NewPageMenu state ->
+                newPageMenu state
+
+            EditPageMenu index state ->
+                editPageMenu index state
+        )
+
+
+
+-- {{{ Midi Menu
+
+
 midiMenu : List Midi.Device -> Element Msg
 midiMenu devices =
     el [ centerX, centerY ] <|
@@ -1095,6 +1118,11 @@ deviceTable devices =
         }
 
 
+
+-- }}}
+-- {{{ Save Menu
+
+
 saveMenu : Element Msg
 saveMenu =
     el [ centerX, centerY ] <|
@@ -1113,6 +1141,11 @@ saveMenu =
                 ]
                 { onPress = Just ClosePopUp, label = text "Cancel" }
             ]
+
+
+
+-- }}}
+-- {{{ Edit Menu
 
 
 editMenu : EditableController -> Element Msg
@@ -1809,6 +1842,11 @@ editFaderPane state =
         ]
 
 
+
+-- }}}
+-- {{{ New/Edit Page Menu
+
+
 newPageMenu : PageMenuState -> Element Msg
 newPageMenu state =
     el [ centerX, centerY ] <|
@@ -1900,6 +1938,12 @@ editPageMenu index state =
                     { onPress = Just ClosePopUp, label = text "Cancel" }
                 ]
             ]
+
+
+
+-- }}}
+-- }}}
+-- {{{ Render Page
 
 
 renderPage : Mode -> List String -> Page -> Element Msg
@@ -2200,7 +2244,7 @@ renderNote config mode state id =
                     ++ fillSpace
                 )
                 ((if config.debug then
-                    Controller.channelToString state.channel ++ "\n"
+                    Midi.channelToString state.channel ++ "\n"
 
                   else
                     ""
@@ -2274,10 +2318,10 @@ renderCCValue config mode state id =
                 ((if config.debug then
                     case state.status of
                         Controller.Off ->
-                            "Off\n" ++ Controller.channelToString state.channel ++ "\n"
+                            "Off\n" ++ Midi.channelToString state.channel ++ "\n"
 
                         Controller.On ->
-                            "Off\n" ++ Controller.channelToString state.channel ++ "\n"
+                            "Off\n" ++ Midi.channelToString state.channel ++ "\n"
 
                   else
                     ""
@@ -2455,12 +2499,8 @@ renderEditButton config editOperation parentId =
                 }
 
 
-fillSpace : List (Attribute msg)
-fillSpace =
-    [ height fill, width fill ]
 
-
-
+-- }}}
 -- }}}
 -- {{{ PROGRAM
 

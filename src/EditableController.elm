@@ -57,7 +57,7 @@ editStateToNote { label, colour, noteNumber, channel, velocity } =
 
     else
         case
-            ( Controller.stringToChannel channel
+            ( Midi.stringToChannel channel
             , String.toInt noteNumber
             , String.toInt velocity
             )
@@ -112,7 +112,7 @@ editStateToCCValue { label, colour, channel, controller, value } =
 
     else
         case
-            ( Controller.stringToChannel channel
+            ( Midi.stringToChannel channel
             , String.toInt controller
             , String.toInt value
             )
@@ -167,7 +167,7 @@ editFaderToFader { label, colour, channel, ccNumber, valueMin, valueMax } =
         Nothing
 
     else
-        case Controller.stringToChannel channel of
+        case Midi.stringToChannel channel of
             Just ch ->
                 case
                     ( String.toInt ccNumber
@@ -206,12 +206,12 @@ updateWithMidiMsg midiMsg state =
                 Midi.NoteOn { channel, pitch, velocity } ->
                     let
                         ch =
-                            Controller.midiNumberToChannel channel
-                                |> Maybe.withDefault Controller.Ch1
+                            Midi.midiNumberToChannel channel
+                                |> Maybe.withDefault Midi.Ch1
 
                         label =
                             "Ch"
-                                ++ Controller.channelToString ch
+                                ++ Midi.channelToString ch
                                 ++ "#"
                                 ++ String.fromInt pitch
                     in
@@ -227,12 +227,12 @@ updateWithMidiMsg midiMsg state =
                 Midi.ControllerChange { channel, controller } ->
                     let
                         ch =
-                            Controller.midiNumberToChannel channel
-                                |> Maybe.withDefault Controller.Ch1
+                            Midi.midiNumberToChannel channel
+                                |> Maybe.withDefault Midi.Ch1
 
                         label =
                             "Ch"
-                                ++ Controller.channelToString ch
+                                ++ Midi.channelToString ch
                                 ++ " CC "
                                 ++ String.fromInt controller
                     in
@@ -259,12 +259,12 @@ updateWithMidiMsg midiMsg state =
                 Midi.NoteOn { channel, pitch, velocity } ->
                     let
                         ch =
-                            Controller.midiNumberToChannel channel
-                                |> Maybe.withDefault Controller.Ch1
+                            Midi.midiNumberToChannel channel
+                                |> Maybe.withDefault Midi.Ch1
 
                         label =
                             "Ch"
-                                ++ Controller.channelToString ch
+                                ++ Midi.channelToString ch
                                 ++ "#"
                                 ++ String.fromInt pitch
                     in
@@ -281,12 +281,12 @@ updateWithMidiMsg midiMsg state =
                 Midi.ControllerChange { channel, controller } ->
                     let
                         ch =
-                            Controller.midiNumberToChannel channel
-                                |> Maybe.withDefault Controller.Ch1
+                            Midi.midiNumberToChannel channel
+                                |> Maybe.withDefault Midi.Ch1
 
                         label =
                             "Ch"
-                                ++ Controller.channelToString ch
+                                ++ Midi.channelToString ch
                                 ++ " CC "
                                 ++ String.fromInt controller
                     in
