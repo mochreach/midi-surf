@@ -12,14 +12,19 @@ import Element.Events as Events
 import Element.Font as Font
 import Element.Input as Input
 import Element.Lazy as Lazy
+import Element.Region as Region
 import FeatherIcons as Icons
-import Html exposing (Html, p)
-import Html.Attributes exposing (name)
+import Html exposing (Html)
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
 import Midi exposing (MidiMsg(..), Status(..))
 import Ports
 import Style exposing (..)
+
+
+version : String
+version =
+    "0.1.0"
 
 
 
@@ -56,7 +61,8 @@ type Mode
 
 
 type PopUp
-    = MidiMenu
+    = InfoPanel
+    | MidiMenu
     | SaveMenu
     | EditMenu String EditableController
     | NewPageMenu PageMenuState
@@ -203,6 +209,7 @@ makeIsomorphicRow noteRange offset rowLength rowNumber =
 type Msg
     = MidiDevicesChanged (List Midi.Device)
     | ToggleMenu
+    | OpenInfoPanel
     | OpenMidiMenu
     | OpenSaveLoadMenu
     | ToggleNormalEdit
@@ -238,6 +245,15 @@ update msg model =
 
         ToggleMenu ->
             ( { model | menuOpen = not model.menuOpen }
+            , Cmd.none
+            )
+
+        OpenInfoPanel ->
+            ( { model
+                | popup =
+                    Just <|
+                        InfoPanel
+              }
             , Cmd.none
             )
 
@@ -846,7 +862,7 @@ view model =
                 Just page ->
                     Lazy.lazy2
                         el
-                        (padding 2 :: fillSpace)
+                        ([ padding 2, scrollbars ] ++ fillSpace)
                         (renderPage model.mode model.midiLog page)
 
                 Nothing ->
@@ -863,97 +879,139 @@ view model =
 titleBar : Mode -> Bool -> Int -> Array Page -> Element Msg
 titleBar mode menuOpen activePage pages =
     row
-        [ width fill
+        [ height <| px 76
+        , width fill
         , padding 4
         , spacing 4
+        , scrollbars
         , Border.widthEach { bottom = 4, top = 0, left = 0, right = 0 }
         ]
-        (Input.button
+        [ column
             [ paddingXY 8 12
             , backgroundColour Black
             , Font.bold
             , fontColour White
+            , Region.heading 1
+            ]
+            [ text "MIDI"
+            , text "Surf"
+            ]
+        , menuRow mode menuOpen
+        , row
+            [ alignRight
+            , height fill
+            , spacing 4
+            ]
+            ((Array.indexedMap (pageButton mode activePage) pages
+                |> Array.toList
+             )
+                ++ (case mode of
+                        Normal ->
+                            []
+
+                        Edit _ ->
+                            [ newPageButton ]
+                   )
+            )
+        ]
+
+
+menuRow : Mode -> Bool -> Element Msg
+menuRow mode menuOpen =
+    row
+        [ height fill ]
+        (Input.button
+            [ padding 10
+            , if menuOpen then
+                borderColour LightGrey
+
+              else
+                borderColour Black
+            , Border.width 4
+            , if menuOpen then
+                backgroundColour LightGrey
+
+              else
+                backgroundColour White
             ]
             { onPress = Just ToggleMenu
-            , label = text "MIDI\nSurf"
+            , label =
+                Icons.menu
+                    |> Icons.withSize 36
+                    |> Icons.toHtml []
+                    |> html
             }
             :: (if menuOpen then
-                    [ menuRow mode ]
+                    [ row
+                        [ alignLeft
+                        , height fill
+                        , spacing 4
+                        , paddingXY 4 0
+                        , backgroundColour LightGrey
+                        ]
+                        [ Input.button
+                            [ padding 10
+                            , Border.width 4
+                            , backgroundColour White
+                            ]
+                            { onPress = Just OpenInfoPanel
+                            , label =
+                                Icons.info
+                                    |> Icons.withSize 28
+                                    |> Icons.toHtml []
+                                    |> html
+                            }
+                        , Input.button
+                            [ padding 10
+                            , Border.width 4
+                            , backgroundColour White
+                            ]
+                            { onPress = Just OpenMidiMenu
+                            , label =
+                                Icons.gitPullRequest
+                                    |> Icons.withSize 28
+                                    |> Icons.toHtml []
+                                    |> html
+                            }
+                        , Input.button
+                            [ padding 10
+                            , Border.width 4
+                            , backgroundColour White
+                            ]
+                            { onPress = Just OpenSaveLoadMenu
+                            , label =
+                                Icons.save
+                                    |> Icons.withSize 28
+                                    |> Icons.toHtml []
+                                    |> html
+                            }
+                        , Input.button
+                            [ padding 10
+                            , Border.width 4
+                            , case mode of
+                                Normal ->
+                                    backgroundColour White
+
+                                Edit False ->
+                                    backgroundColour LightGrey
+
+                                Edit True ->
+                                    backgroundColour DarkGrey
+                            ]
+                            { onPress = Just ToggleNormalEdit
+                            , label =
+                                Icons.edit
+                                    |> Icons.withSize 28
+                                    |> Icons.toHtml []
+                                    |> html
+                            }
+                        ]
+                    ]
 
                 else
                     []
                )
-            ++ [ row
-                    [ alignRight
-                    , height fill
-                    , scrollbarX
-                    , spacing 4
-                    ]
-                    ((Array.indexedMap (pageButton mode activePage) pages
-                        |> Array.toList
-                     )
-                        ++ (case mode of
-                                Normal ->
-                                    []
-
-                                Edit _ ->
-                                    [ newPageButton ]
-                           )
-                    )
-               ]
         )
-
-
-menuRow : Mode -> Element Msg
-menuRow mode =
-    row
-        [ alignLeft
-        , height fill
-        , spacing 4
-        ]
-        [ Input.button
-            [ padding 10
-            , Border.width 4
-            ]
-            { onPress = Just OpenMidiMenu
-            , label =
-                Icons.gitPullRequest
-                    |> Icons.withSize 36
-                    |> Icons.toHtml []
-                    |> html
-            }
-        , Input.button
-            [ padding 10
-            , Border.width 4
-            ]
-            { onPress = Just OpenSaveLoadMenu
-            , label =
-                Icons.save
-                    |> Icons.withSize 36
-                    |> Icons.toHtml []
-                    |> html
-            }
-        , Input.button
-            [ padding 10
-            , Border.width 4
-            , case mode of
-                Normal ->
-                    backgroundColour White
-
-                Edit False ->
-                    backgroundColour LightGrey
-
-                Edit True ->
-                    backgroundColour DarkGrey
-            ]
-            { onPress = Just ToggleNormalEdit
-            , label =
-                Icons.edit
-                    |> Icons.withSize 36
-                    |> Icons.toHtml []
-                    |> html
-            }
-        ]
 
 
 pageButton : Mode -> Int -> Int -> Page -> Element Msg
@@ -1018,10 +1076,13 @@ newPageButton =
 renderPopup : Midi.Status -> PopUp -> Element Msg
 renderPopup midiStatus popup =
     el
-        (Background.color (rgba 0.5 0.5 0.5 0.8)
-            :: fillSpace
+        ([ padding 20, Background.color (rgba 0.5 0.5 0.5 0.8) ]
+            ++ fillSpace
         )
         (case popup of
+            InfoPanel ->
+                infoPanel
+
             MidiMenu ->
                 case midiStatus of
                     Midi.MidiAvailable devices ->
@@ -1045,6 +1106,71 @@ renderPopup midiStatus popup =
 
 
 
+-- {{{ Info Panel
+
+
+infoPanel : Element Msg
+infoPanel =
+    el [ centerX, centerY, height fill ] <|
+        column
+            [ centerX
+            , height fill
+            , padding 20
+            , spacing 20
+            , backgroundColour White
+            , Border.width 4
+            ]
+            [ column
+                [ spacing 20, height fill, scrollbarY ]
+                [ column
+                    [ centerX
+                    , paddingXY 8 18
+                    , backgroundColour Black
+                    , Font.bold
+                    , Font.size 48
+                    , fontColour White
+                    , Region.heading 2
+                    ]
+                    [ text "MIDI"
+                    , text "Surf"
+                    ]
+                , paragraph [] [ text "Version ", text version ]
+                , paragraph []
+                    [ """Thank you for using MIDI Surf! Full video tutorials
+                    are provided """
+                        |> text
+                    , link
+                        linkStyle
+                        { url = "https://www.youtube.com/@mochreach"
+                        , label = text "on YouTube"
+                        }
+                    , """. If you find it useful, please consider
+                          supporting the development on Patreon. 
+                          """
+                        |> text
+                    ]
+                , paragraph []
+                    [ text "Copyright: "
+                    , link
+                        linkStyle
+                        { url = "https://mochreach.dev"
+                        , label = text "Mo Chreach! Music Technology Ltd"
+                        }
+                    ]
+                ]
+            , Input.button
+                [ padding 5
+                , centerX
+                , Border.width 2
+                , Border.solid
+                , borderColour Black
+                ]
+                { onPress = Just ClosePopUp, label = text "Close" }
+            ]
+
+
+
+-- }}}
 -- {{{ Midi Menu
 
 
@@ -1150,7 +1276,7 @@ saveMenu =
 
 editMenu : EditableController -> Element Msg
 editMenu menuType =
-    wrappedRow [ padding 20, spacing 10 ]
+    row [ padding 20, spacing 10, width fill, height fill ]
         [ el
             [ alignTop
             , padding 10

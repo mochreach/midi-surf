@@ -117,6 +117,11 @@ fontColour appColour =
         |> Font.color
 
 
+linkStyle : List (Element.Attribute msg)
+linkStyle =
+    [ Font.underline, fontColour Blue ]
+
+
 noSelect : List (Element.Attribute msg)
 noSelect =
     List.map htmlAttribute
