@@ -31,6 +31,7 @@ type alias Model =
     , mode : Mode
     , pages : Array Page
     , activePage : Int
+    , menuOpen : Bool
     , popup : Maybe PopUp
     , midiLog : List String
     }
@@ -43,6 +44,7 @@ modelCodec =
         |> Codec.field "mode" .mode (Codec.constant Normal)
         |> Codec.field "pages" .pages (Codec.array pageCodec)
         |> Codec.field "activePage" .activePage (Codec.constant 0)
+        |> Codec.field "menuOpen" .menuOpen (Codec.constant True)
         |> Codec.field "popup" .popup (Codec.constant Nothing)
         |> Codec.field "midiLog" .midiLog (Codec.constant [])
         |> Codec.buildObject
@@ -140,6 +142,7 @@ init { mInitialState } =
               , mode = Normal
               , pages = Array.fromList <| List.repeat 4 defaultPage
               , activePage = 0
+              , menuOpen = True
               , popup = Nothing
               , midiLog = []
               }
@@ -199,6 +202,7 @@ makeIsomorphicRow noteRange offset rowLength rowNumber =
 
 type Msg
     = MidiDevicesChanged (List Midi.Device)
+    | ToggleMenu
     | OpenMidiMenu
     | OpenSaveLoadMenu
     | ToggleNormalEdit
@@ -229,6 +233,11 @@ update msg model =
     case msg of
         MidiDevicesChanged devices ->
             ( { model | midiStatus = Midi.MidiAvailable devices }
+            , Cmd.none
+            )
+
+        ToggleMenu ->
+            ( { model | menuOpen = not model.menuOpen }
             , Cmd.none
             )
 
@@ -863,74 +872,40 @@ view model =
                 , spacing 4
                 , Border.widthEach { bottom = 4, top = 0, left = 0, right = 0 }
                 ]
-                [ el
+                (Input.button
                     [ paddingXY 8 12
                     , backgroundColour Black
                     , Font.bold
                     , fontColour White
                     ]
-                    (text "MIDI\nSurf")
-                , Input.button
-                    [ padding 10
-                    , Border.width 4
-                    ]
-                    { onPress = Just OpenMidiMenu
-                    , label =
-                        Icons.gitPullRequest
-                            |> Icons.withSize 36
-                            |> Icons.toHtml []
-                            |> html
+                    { onPress = Just ToggleMenu
+                    , label = text "MIDI\nSurf"
                     }
-                , Input.button
-                    [ padding 10
-                    , Border.width 4
-                    ]
-                    { onPress = Just OpenSaveLoadMenu
-                    , label =
-                        Icons.save
-                            |> Icons.withSize 36
-                            |> Icons.toHtml []
-                            |> html
-                    }
-                , Input.button
-                    [ padding 10
-                    , Border.width 4
-                    , case model.mode of
-                        Normal ->
-                            backgroundColour White
+                    :: (if model.menuOpen then
+                            [ menuRow model.mode ]
 
-                        Edit False ->
-                            backgroundColour LightGrey
+                        else
+                            []
+                       )
+                    ++ [ row
+                            [ alignRight
+                            , height fill
+                            , scrollbarX
+                            , spacing 4
+                            ]
+                            ((Array.indexedMap (pageButton model.mode model.activePage) model.pages
+                                |> Array.toList
+                             )
+                                ++ (case model.mode of
+                                        Normal ->
+                                            []
 
-                        Edit True ->
-                            backgroundColour DarkGrey
-                    ]
-                    { onPress = Just ToggleNormalEdit
-                    , label =
-                        Icons.edit
-                            |> Icons.withSize 36
-                            |> Icons.toHtml []
-                            |> html
-                    }
-                , row
-                    [ alignRight
-                    , width fill
-                    , height fill
-                    , scrollbarX
-                    , spacing 4
-                    ]
-                    ((Array.indexedMap (pageButton model.mode model.activePage) model.pages
-                        |> Array.toList
-                     )
-                        ++ (case model.mode of
-                                Normal ->
-                                    []
-
-                                Edit _ ->
-                                    [ newPageButton ]
-                           )
-                    )
-                ]
+                                        Edit _ ->
+                                            [ newPageButton ]
+                                   )
+                            )
+                       ]
+                )
             , case Array.get model.activePage model.pages of
                 Just page ->
                     Lazy.lazy2
@@ -942,6 +917,58 @@ view model =
                     el fillSpace <|
                         el [ centerX, centerY ] (text "No page selected.")
             ]
+
+
+menuRow : Mode -> Element Msg
+menuRow mode =
+    row
+        [ alignLeft
+        , height fill
+        , spacing 4
+        ]
+        [ Input.button
+            [ padding 10
+            , Border.width 4
+            ]
+            { onPress = Just OpenMidiMenu
+            , label =
+                Icons.gitPullRequest
+                    |> Icons.withSize 36
+                    |> Icons.toHtml []
+                    |> html
+            }
+        , Input.button
+            [ padding 10
+            , Border.width 4
+            ]
+            { onPress = Just OpenSaveLoadMenu
+            , label =
+                Icons.save
+                    |> Icons.withSize 36
+                    |> Icons.toHtml []
+                    |> html
+            }
+        , Input.button
+            [ padding 10
+            , Border.width 4
+            , case mode of
+                Normal ->
+                    backgroundColour White
+
+                Edit False ->
+                    backgroundColour LightGrey
+
+                Edit True ->
+                    backgroundColour DarkGrey
+            ]
+            { onPress = Just ToggleNormalEdit
+            , label =
+                Icons.edit
+                    |> Icons.withSize 36
+                    |> Icons.toHtml []
+                    |> html
+            }
+        ]
 
 
 pageButton : Mode -> Int -> Int -> Page -> Element Msg
@@ -1947,9 +1974,8 @@ renderController mode midiLog config idParts controller id =
 
         Controller.Row subControls ->
             Lazy.lazy2 row
-                ([ spacingXY config.gapSize 0
-                 ]
-                    ++ fillSpace
+                (spacingXY config.gapSize 0
+                    :: fillSpace
                 )
             <|
                 (List.map2
