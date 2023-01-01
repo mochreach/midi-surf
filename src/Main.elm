@@ -159,7 +159,14 @@ init { mInitialState } =
 defaultPage : Page
 defaultPage =
     { label = "1"
-    , controller = isomorphicKeyboard
+    , controller =
+        isomorphicKeyboard
+            { channel = Midi.Ch6
+            , firstNote = 36
+            , numberOfRows = 12
+            , offset = 5
+            , rowLength = 18
+            }
     , config =
         { gapSize = 2
         , debug = True
@@ -167,22 +174,29 @@ defaultPage =
     }
 
 
-isomorphicKeyboard : Controller
-isomorphicKeyboard =
+isomorphicKeyboard :
+    { channel : Midi.Channel
+    , firstNote : Int
+    , numberOfRows : Int
+    , offset : Int
+    , rowLength : Int
+    }
+    -> Controller
+isomorphicKeyboard { channel, firstNote, numberOfRows, offset, rowLength } =
     let
         noteRange =
-            List.range 36 127
+            List.range firstNote 127
 
         rowNumbers =
-            List.range 0 10
+            List.range 0 (numberOfRows - 1)
     in
-    List.map (makeIsomorphicRow noteRange 5 18) rowNumbers
+    List.map (makeIsomorphicRow channel noteRange offset (rowLength - 1)) rowNumbers
         |> List.reverse
         |> Controller.Column
 
 
-makeIsomorphicRow : List Int -> Int -> Int -> Int -> Controller
-makeIsomorphicRow noteRange offset rowLength rowNumber =
+makeIsomorphicRow : Midi.Channel -> List Int -> Int -> Int -> Int -> Controller
+makeIsomorphicRow channel noteRange offset rowLength rowNumber =
     let
         start =
             offset * rowNumber
@@ -196,7 +210,7 @@ makeIsomorphicRow noteRange offset rowLength rowNumber =
         |> List.map Tuple.second
         |> List.map
             (\i ->
-                Controller.newNote (String.fromInt i) (Style.pitchToAppColour i) Midi.Ch7 i 100
+                Controller.newNote (String.fromInt i) (Style.pitchToAppColour i) channel i 100
             )
         |> Controller.Row
 
@@ -1292,6 +1306,9 @@ editMenu menuType =
                 , label = Input.labelHidden "Type Selector"
                 , options =
                     [ Input.option (EditModule "" Controller.Space) (text "Module")
+                    , Input.option
+                        (EditIsomorphic EController.defaultEditIsomorphicState)
+                        (text "Isomorphic")
                     , Input.option (EditColumn []) (text "Column")
                     , Input.option (EditRow []) (text "Row")
                     , Input.option
@@ -1328,6 +1345,9 @@ editMenu menuType =
         , case menuType of
             EditModule label subController ->
                 editModulePane label subController
+
+            EditIsomorphic state ->
+                editIsomorphicPane state
 
             EditRow subControls ->
                 editRowPane subControls
@@ -1441,6 +1461,124 @@ editModulePane label subController =
                     { onPress = Nothing
                     , label = text "Ok"
                     }
+            , Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , borderColour Black
+                ]
+                { onPress = Just ClosePopUp, label = text "Cancel" }
+            ]
+        ]
+
+
+editIsomorphicPane : EController.EditIsomorphicState -> Element Msg
+editIsomorphicPane state =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , backgroundColour White
+        , Border.width 4
+        ]
+        [ Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , borderColour Black
+            ]
+            { onChange =
+                \newChannel ->
+                    { state | channel = newChannel }
+                        |> EditIsomorphic
+                        |> UpdateControllerState
+            , text = state.channel
+            , placeholder = Just <| Input.placeholder [] (text "channel#")
+            , label = Input.labelAbove [] (text "Channel")
+            }
+        , Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , borderColour Black
+            ]
+            { onChange =
+                \newFirstNote ->
+                    { state | firstNote = newFirstNote }
+                        |> EditIsomorphic
+                        |> UpdateControllerState
+            , text = state.firstNote
+            , placeholder = Just <| Input.placeholder [] (text "first note#")
+            , label = Input.labelAbove [] (text "First Note")
+            }
+        , Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , borderColour Black
+            ]
+            { onChange =
+                \newNumRows ->
+                    { state | numberOfRows = newNumRows }
+                        |> EditIsomorphic
+                        |> UpdateControllerState
+            , text = state.numberOfRows
+            , placeholder = Just <| Input.placeholder [] (text "num rows")
+            , label = Input.labelAbove [] (text "Number of Rows")
+            }
+        , Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , borderColour Black
+            ]
+            { onChange =
+                \newOffset ->
+                    { state | offset = newOffset }
+                        |> EditIsomorphic
+                        |> UpdateControllerState
+            , text = state.offset
+            , placeholder = Just <| Input.placeholder [] (text "offset")
+            , label = Input.labelAbove [] (text "Note Offset")
+            }
+        , Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , borderColour Black
+            ]
+            { onChange =
+                \newRowLength ->
+                    { state | rowLength = newRowLength }
+                        |> EditIsomorphic
+                        |> UpdateControllerState
+            , text = state.rowLength
+            , placeholder = Just <| Input.placeholder [] (text "row length")
+            , label = Input.labelAbove [] (text "Row Length")
+            }
+        , row [ spacing 2 ]
+            [ case EController.toIsomorphicInput state of
+                Just input ->
+                    let
+                        controller =
+                            isomorphicKeyboard input
+                    in
+                    Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , borderColour Black
+                        ]
+                        { onPress = Just <| FinishedEdit controller
+                        , label = text "Ok"
+                        }
+
+                Nothing ->
+                    Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , borderColour LightGrey
+                        , fontColour LightGrey
+                        ]
+                        { onPress = Nothing
+                        , label = text "Ok"
+                        }
             , Input.button
                 [ padding 5
                 , Border.width 2

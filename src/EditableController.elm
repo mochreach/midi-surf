@@ -7,6 +7,7 @@ import Style exposing (..)
 
 type EditableController
     = EditModule String Controller
+    | EditIsomorphic EditIsomorphicState
     | EditColumn (List Controller)
     | EditRow (List Controller)
     | EditNote EditNoteState
@@ -14,6 +15,68 @@ type EditableController
     | EditFader EditFaderState
     | EditMidiLog
     | EditSpace
+
+
+type alias EditIsomorphicState =
+    { channel : String
+    , firstNote : String
+    , numberOfRows : String
+    , offset : String
+    , rowLength : String
+    }
+
+
+defaultEditIsomorphicState : EditIsomorphicState
+defaultEditIsomorphicState =
+    { channel = ""
+    , firstNote = ""
+    , numberOfRows = ""
+    , offset = ""
+    , rowLength = ""
+    }
+
+
+toIsomorphicInput :
+    EditIsomorphicState
+    ->
+        Maybe
+            { channel : Midi.Channel
+            , firstNote : Int
+            , numberOfRows : Int
+            , offset : Int
+            , rowLength : Int
+            }
+toIsomorphicInput state =
+    let
+        mChannel =
+            Midi.stringToChannel state.channel
+
+        mFirstNote =
+            String.toInt state.firstNote
+
+        mNumberOfRows =
+            String.toInt state.numberOfRows
+
+        mOffset =
+            String.toInt state.offset
+
+        mRowLength =
+            String.toInt state.rowLength
+    in
+    Maybe.map5
+        (\c f n o r ->
+            { channel = c
+            , firstNote = f
+            , numberOfRows = n
+            , offset = o
+            , rowLength = r
+            }
+        )
+        mChannel
+        mFirstNote
+        mNumberOfRows
+        mOffset
+        mRowLength
 
 
 type alias EditNoteState =
@@ -199,6 +262,9 @@ updateWithMidiMsg : MidiMsg -> EditableController -> EditableController
 updateWithMidiMsg midiMsg state =
     case state of
         EditModule _ _ ->
+            state
+
+        EditIsomorphic _ ->
             state
 
         EditColumn subControls ->
