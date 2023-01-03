@@ -485,9 +485,18 @@ update msg model =
                             EditNote
                                 { label = label
                                 , colour = colour
-                                , noteNumber = String.fromInt pitch
+                                , pitch = String.fromInt pitch
                                 , channel = Midi.channelToString channel
                                 , velocity = String.fromInt velocity
+                                }
+                                |> EditMenu id
+                                |> Just
+
+                        Just (Controller.Chord { label, colour, notes }) ->
+                            EditChord
+                                { label = label
+                                , colour = colour
+                                , notes = notes
                                 }
                                 |> EditMenu id
                                 |> Just
@@ -525,7 +534,7 @@ update msg model =
                                 |> EditMenu id
                                 |> Just
 
-                        _ ->
+                        Nothing ->
                             Nothing
               }
             , Cmd.none
@@ -614,7 +623,7 @@ update msg model =
 
                 Just ((Controller.Note _) as note) ->
                     let
-                        ( updatedNote, midiMsg ) =
+                        ( updatedNote, midiMsgs ) =
                             Controller.buttonOn note
                     in
                     ( { model
@@ -624,17 +633,29 @@ update msg model =
                                 { id = id, updateFn = always updatedNote }
                                 model.pages
                       }
-                    , case midiMsg of
-                        Just (Midi.NoteOn data) ->
-                            Ports.sendNoteOn data
+                    , List.map Ports.midiMsgToCmd midiMsgs
+                        |> Cmd.batch
+                    )
 
-                        _ ->
-                            Cmd.none
+                Just ((Controller.Chord _) as chord) ->
+                    let
+                        ( updatedChord, midiMsgs ) =
+                            Controller.buttonOn chord
+                    in
+                    ( { model
+                        | pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = id, updateFn = always updatedChord }
+                                model.pages
+                      }
+                    , List.map Ports.midiMsgToCmd midiMsgs
+                        |> Cmd.batch
                     )
 
                 Just ((Controller.CCValue _) as ccValue) ->
                     let
-                        ( updatedCCValue, midiMsg ) =
+                        ( updatedCCValue, midiMsgs ) =
                             Controller.buttonOn ccValue
                     in
                     ( { model
@@ -644,12 +665,8 @@ update msg model =
                                 { id = id, updateFn = always updatedCCValue }
                                 model.pages
                       }
-                    , case midiMsg of
-                        Just (Midi.ControllerChange data) ->
-                            Ports.sendCC data
-
-                        _ ->
-                            Cmd.none
+                    , List.map Ports.midiMsgToCmd midiMsgs
+                        |> Cmd.batch
                     )
 
                 Just (Controller.Fader _) ->
@@ -677,7 +694,7 @@ update msg model =
 
                 Just ((Controller.Note _) as note) ->
                     let
-                        ( updatedNote, midiMsg ) =
+                        ( updatedNote, midiMsgs ) =
                             Controller.buttonOff note
                     in
                     ( { model
@@ -687,12 +704,24 @@ update msg model =
                                 { id = id, updateFn = always updatedNote }
                                 model.pages
                       }
-                    , case midiMsg of
-                        Just (Midi.NoteOff data) ->
-                            Ports.sendNoteOff data
+                    , List.map Ports.midiMsgToCmd midiMsgs
+                        |> Cmd.batch
+                    )
 
-                        _ ->
-                            Cmd.none
+                Just ((Controller.Chord _) as chord) ->
+                    let
+                        ( updatedChord, midiMsgs ) =
+                            Controller.buttonOff chord
+                    in
+                    ( { model
+                        | pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = id, updateFn = always updatedChord }
+                                model.pages
+                      }
+                    , List.map Ports.midiMsgToCmd midiMsgs
+                        |> Cmd.batch
                     )
 
                 Just ((Controller.CCValue _) as ccValue) ->
@@ -1329,6 +1358,15 @@ editMenu menuType =
                         (text "Note")
                     , Input.option
                         (case menuType of
+                            EditChord _ ->
+                                menuType
+
+                            _ ->
+                                EditChord EController.defaultEditChordState
+                        )
+                        (text "Chord")
+                    , Input.option
+                        (case menuType of
                             EditCCValue _ ->
                                 menuType
 
@@ -1364,6 +1402,9 @@ editMenu menuType =
 
             EditNote state ->
                 editNotePane state
+
+            EditChord state ->
+                editChordPane state
 
             EditCCValue state ->
                 editCCValuePane state
@@ -1809,10 +1850,10 @@ editNotePane state =
             ]
             { onChange =
                 \newNoteNumber ->
-                    { state | noteNumber = newNoteNumber }
+                    { state | pitch = newNoteNumber }
                         |> EditNote
                         |> UpdateControllerState
-            , text = state.noteNumber
+            , text = state.pitch
             , placeholder = Just <| Input.placeholder [] (text "note#")
             , label = Input.labelAbove [] (text "Note Number")
             }
@@ -1832,6 +1873,88 @@ editNotePane state =
             }
         , row [ spacing 2 ]
             [ case EController.editStateToNote state of
+                Just controller ->
+                    Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , borderColour Black
+                        ]
+                        { onPress = Just <| FinishedEdit controller
+                        , label = text "Ok"
+                        }
+
+                Nothing ->
+                    Input.button
+                        [ padding 5
+                        , Border.width 2
+                        , Border.solid
+                        , borderColour LightGrey
+                        , fontColour LightGrey
+                        ]
+                        { onPress = Nothing
+                        , label = text "Ok"
+                        }
+            , Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , borderColour Black
+                ]
+                { onPress = Just ClosePopUp, label = text "Cancel" }
+            ]
+        ]
+
+
+editChordPane : EController.EditChordState -> Element Msg
+editChordPane state =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , backgroundColour White
+        , Border.width 4
+        ]
+        [ Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , borderColour Black
+            ]
+            { onChange =
+                \newLabel ->
+                    { state | label = newLabel }
+                        |> EditChord
+                        |> UpdateControllerState
+            , text = state.label
+            , placeholder = Just <| Input.placeholder [] (text "label")
+            , label = Input.labelAbove [] (text "Label")
+            }
+        , Input.radio
+            [ spacing 10 ]
+            { onChange =
+                \newColour ->
+                    { state | colour = newColour }
+                        |> EditChord
+                        |> UpdateControllerState
+            , selected = Just state.colour
+            , label =
+                Input.labelAbove
+                    [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
+                    ]
+                    (text "Colour")
+            , options =
+                [ Input.option White (text "White")
+                , Input.option LightGrey (text "Light Grey")
+                , Input.option DarkGrey (text "Dark Grey")
+                , Input.option Black (text "Black")
+                , Input.option Green (text "Green")
+                , Input.option Blue (text "Blue")
+                , Input.option Yellow (text "Yellow")
+                , Input.option Red (text "Red")
+                ]
+            }
+        , row [ spacing 2 ]
+            [ case EController.editStateToChord state of
                 Just controller ->
                     Input.button
                         [ padding 5
@@ -2413,6 +2536,16 @@ renderController mode midiLog config idParts controller id =
                     |> String.join "_"
                 )
 
+        Controller.Chord state ->
+            renderChord
+                config
+                mode
+                state
+                (updatedParts
+                    |> List.reverse
+                    |> String.join "_"
+                )
+
         Controller.CCValue state ->
             renderCCValue
                 config
@@ -2565,6 +2698,72 @@ renderNote config mode state id =
                     ""
                  )
                     ++ state.label
+                    |> text
+                    |> el
+                        [ centerX
+                        , centerY
+                        , Font.size 14
+                        ]
+                )
+
+        Edit _ ->
+            Input.button
+                ([ padding config.gapSize
+                 , spacing config.gapSize
+                 , Border.width 2
+                 , Border.dashed
+                 , Font.size 14
+                 , backgroundColour state.colour
+                 ]
+                    ++ Style.noSelect
+                    ++ fillSpace
+                )
+                { onPress = Just <| OpenEditController id
+                , label =
+                    state.label
+                        |> text
+                }
+
+
+renderChord : PageConfig -> Mode -> Controller.ChordState -> String -> Element Msg
+renderChord config mode state id =
+    case mode of
+        Normal ->
+            el
+                ([ padding 0
+                 , spacing 0
+                 , Border.width 4
+                 , case state.status of
+                    Controller.Off ->
+                        backgroundColour state.colour
+
+                    Controller.On ->
+                        Border.dashed
+                 , htmlAttribute <|
+                    Touch.onStart
+                        (\_ ->
+                            ButtonDown id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onDown
+                        (\_ ->
+                            ButtonDown id
+                        )
+                 , htmlAttribute <|
+                    Touch.onEnd
+                        (\_ ->
+                            ButtonUp id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onUp
+                        (\_ ->
+                            ButtonUp id
+                        )
+                 ]
+                    ++ Style.noSelect
+                    ++ fillSpace
+                )
+                (state.label
                     |> text
                     |> el
                         [ centerX

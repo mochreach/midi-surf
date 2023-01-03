@@ -510,8 +510,8 @@ channelToMidiNumber ch =
             15
 
 
-midiNumberToChannel : Int -> Maybe Channel
-midiNumberToChannel n =
+intToChannel : Int -> Maybe Channel
+intToChannel n =
     case n of
         0 ->
             Ch1 |> Just

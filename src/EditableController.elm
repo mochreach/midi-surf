@@ -12,6 +12,7 @@ type EditableController
     | EditColumn (List Controller)
     | EditRow (List Controller)
     | EditNote EditNoteState
+    | EditChord EditChordState
     | EditCCValue EditCCValueState
     | EditFader EditFaderState
     | EditMidiLog
@@ -92,7 +93,7 @@ type alias EditNoteState =
     { label : String
     , colour : AppColour
     , channel : String
-    , noteNumber : String
+    , pitch : String
     , velocity : String
     }
 
@@ -102,7 +103,7 @@ defaultEditNoteState =
     { label = ""
     , colour = LightGrey
     , channel = "1"
-    , noteNumber = "60"
+    , pitch = "60"
     , velocity = "100"
     }
 
@@ -114,7 +115,7 @@ updateEditNoteWithMidiMsg midiMsg state =
             { state
               -- Adding 1 to the channel so that they're labelled 1-16
                 | channel = String.fromInt (noteOnParams.channel + 1)
-                , noteNumber = String.fromInt noteOnParams.pitch
+                , pitch = String.fromInt noteOnParams.pitch
                 , velocity = String.fromInt noteOnParams.velocity
             }
 
@@ -123,14 +124,14 @@ updateEditNoteWithMidiMsg midiMsg state =
 
 
 editStateToNote : EditNoteState -> Maybe Controller
-editStateToNote { label, colour, noteNumber, channel, velocity } =
+editStateToNote { label, colour, pitch, channel, velocity } =
     if String.isEmpty label then
         Nothing
 
     else
         case
             ( Midi.stringToChannel channel
-            , String.toInt noteNumber
+            , String.toInt pitch
             , String.toInt velocity
             )
         of
@@ -141,6 +142,56 @@ editStateToNote { label, colour, noteNumber, channel, velocity } =
 
             _ ->
                 Nothing
+
+
+type alias EditChordState =
+    { label : String
+    , colour : AppColour
+    , notes :
+        List
+            { channel : Midi.Channel
+            , pitch : Int
+            , velocity : Int
+            }
+    }
+
+
+defaultEditChordState : EditChordState
+defaultEditChordState =
+    { label = ""
+    , colour = LightGrey
+    , notes = []
+    }
+
+
+updateEditChordWithMidiMsg : MidiMsg -> EditChordState -> EditChordState
+updateEditChordWithMidiMsg midiMsg state =
+    case midiMsg of
+        NoteOn noteOnParams ->
+            { state
+              -- Adding 1 to the channel so that they're labelled 1-16
+                | notes =
+                    { channel =
+                        Midi.intToChannel noteOnParams.channel
+                            |> Maybe.withDefault Midi.Ch1
+                    , pitch = noteOnParams.pitch
+                    , velocity = noteOnParams.velocity
+                    }
+                        :: state.notes
+            }
+
+        _ ->
+            state
+
+
+editStateToChord : EditChordState -> Maybe Controller
+editStateToChord { label, colour, notes } =
+    if String.isEmpty label then
+        Nothing
+
+    else
+        Controller.newChord label colour notes
+            |> Just
 
 
 type alias EditCCValueState =
@@ -281,7 +332,7 @@ updateWithMidiMsg midiMsg state =
                 Midi.NoteOn { channel, pitch, velocity } ->
                     let
                         ch =
-                            Midi.midiNumberToChannel channel
+                            Midi.intToChannel channel
                                 |> Maybe.withDefault Midi.Ch1
 
                         label =
@@ -302,7 +353,7 @@ updateWithMidiMsg midiMsg state =
                 Midi.ControllerChange { channel, controller } ->
                     let
                         ch =
-                            Midi.midiNumberToChannel channel
+                            Midi.intToChannel channel
                                 |> Maybe.withDefault Midi.Ch1
 
                         label =
@@ -334,7 +385,7 @@ updateWithMidiMsg midiMsg state =
                 Midi.NoteOn { channel, pitch, velocity } ->
                     let
                         ch =
-                            Midi.midiNumberToChannel channel
+                            Midi.intToChannel channel
                                 |> Maybe.withDefault Midi.Ch1
 
                         label =
@@ -356,7 +407,7 @@ updateWithMidiMsg midiMsg state =
                 Midi.ControllerChange { channel, controller } ->
                     let
                         ch =
-                            Midi.midiNumberToChannel channel
+                            Midi.intToChannel channel
                                 |> Maybe.withDefault Midi.Ch1
 
                         label =
@@ -386,6 +437,10 @@ updateWithMidiMsg midiMsg state =
         EditNote noteState ->
             updateEditNoteWithMidiMsg midiMsg noteState
                 |> EditNote
+
+        EditChord chordState ->
+            updateEditChordWithMidiMsg midiMsg chordState
+                |> EditChord
 
         EditCCValue ccState ->
             updateEditCCValueWithMidiMsg midiMsg ccState

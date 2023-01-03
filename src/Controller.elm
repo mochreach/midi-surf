@@ -10,6 +10,7 @@ type Controller
     | Row (List Controller)
     | Column (List Controller)
     | Note NoteState
+    | Chord ChordState
     | CCValue CCValueState
     | Fader FaderState
     | MidiLog
@@ -21,7 +22,7 @@ controllerCodec =
     Codec.recursive
         (\rmeta ->
             Codec.custom
-                (\mod row col note ccv fad mid spa value ->
+                (\mod row col note cho ccv fad mid spa value ->
                     case value of
                         Module l c ->
                             mod l c
@@ -34,6 +35,9 @@ controllerCodec =
 
                         Note s ->
                             note s
+
+                        Chord s ->
+                            cho s
 
                         CCValue s ->
                             ccv s
@@ -51,6 +55,7 @@ controllerCodec =
                 |> Codec.variant1 "Row" Row (Codec.list rmeta)
                 |> Codec.variant1 "Column" Column (Codec.list rmeta)
                 |> Codec.variant1 "Note" Note noteStateCodec
+                |> Codec.variant1 "Chord" Chord chordStateCodec
                 |> Codec.variant1 "CCValue" CCValue ccValueStateCodec
                 |> Codec.variant1 "Fader" Fader faderStateCodec
                 |> Codec.variant0 "MidiLog" MidiLog
@@ -78,6 +83,9 @@ controllerToString control =
                 ++ String.fromInt pitch
                 ++ " "
                 ++ String.fromInt velocity
+
+        Chord { notes } ->
+            "Chord: " ++ (List.length notes |> String.fromInt) ++ "note chord"
 
         CCValue { channel, controller, value } ->
             "CC Value: "
@@ -119,6 +127,37 @@ noteStateCodec =
         |> Codec.field "channel" .channel Midi.channelCodec
         |> Codec.field "pitch" .pitch Codec.int
         |> Codec.field "velocity" .velocity Codec.int
+        |> Codec.buildObject
+
+
+type alias ChordState =
+    { status : ButtonStatus
+    , label : String
+    , colour : AppColour
+    , notes :
+        List
+            { channel : Channel
+            , pitch : Int
+            , velocity : Int
+            }
+    }
+
+
+chordStateCodec : Codec ChordState
+chordStateCodec =
+    let
+        noteCodec =
+            Codec.object (\c p v -> { channel = c, pitch = p, velocity = v })
+                |> Codec.field "channel" .channel Midi.channelCodec
+                |> Codec.field "pitch" .pitch Codec.int
+                |> Codec.field "velocity" .velocity Codec.int
+                |> Codec.buildObject
+    in
+    Codec.object ChordState
+        |> Codec.field "status" .status (Codec.constant Off)
+        |> Codec.field "label" .label Codec.string
+        |> Codec.field "colour" .colour Style.appColourCodec
+        |> Codec.field "notes" .notes (Codec.list noteCodec)
         |> Codec.buildObject
 
 
@@ -281,6 +320,13 @@ getWithId currentId id control =
             else
                 Nothing
 
+        Chord _ ->
+            if currentId == id then
+                Just control
+
+            else
+                Nothing
+
         CCValue _ ->
             if currentId == id then
                 Just control
@@ -356,6 +402,13 @@ updateWithId currentId toUpdate updateInfo =
             else
                 Note state
 
+        Chord state ->
+            if currentId == id then
+                updateFn toUpdate
+
+            else
+                Chord state
+
         CCValue state ->
             if currentId == id then
                 updateFn toUpdate
@@ -424,14 +477,24 @@ removeItem controller =
 
 
 newNote : String -> AppColour -> Channel -> Int -> Int -> Controller
-newNote label colour channel noteNumber velocity =
+newNote label colour channel pitch velocity =
     Note
         { status = Off
         , label = label
         , colour = colour
         , channel = channel
-        , pitch = noteNumber
+        , pitch = pitch
         , velocity = velocity
+        }
+
+
+newChord : String -> AppColour -> List { channel : Channel, pitch : Int, velocity : Int } -> Controller
+newChord label colour notes =
+    Chord
+        { status = Off
+        , label = label
+        , colour = colour
+        , notes = notes
         }
 
 
@@ -447,17 +510,26 @@ newCCValue label colour channel controller value =
         }
 
 
-buttonOn : Controller -> ( Controller, Maybe Midi.MidiMsg )
+buttonOn : Controller -> ( Controller, List Midi.MidiMsg )
 buttonOn controller =
+    let
+        makeNoteOnMsg { channel, pitch, velocity } =
+            Midi.NoteOn
+                { channel = Midi.channelToMidiNumber channel
+                , pitch = pitch
+                , velocity = velocity
+                }
+    in
     case controller of
         Note state ->
             ( Note { state | status = On }
-            , Midi.NoteOn
-                { channel = Midi.channelToMidiNumber state.channel
-                , pitch = state.pitch
-                , velocity = state.velocity
-                }
-                |> Just
+            , makeNoteOnMsg state
+                |> List.singleton
+            )
+
+        Chord state ->
+            ( Chord { state | status = On }
+            , List.map makeNoteOnMsg state.notes
             )
 
         CCValue state ->
@@ -467,15 +539,23 @@ buttonOn controller =
                 , controller = state.controller
                 , value = state.value
                 }
-                |> Just
+                |> List.singleton
             )
 
         _ ->
-            ( controller, Nothing )
+            ( controller, [] )
 
 
-buttonOff : Controller -> ( Controller, Maybe Midi.MidiMsg )
+buttonOff : Controller -> ( Controller, List Midi.MidiMsg )
 buttonOff controller =
+    let
+        makeNoteOffMsg { channel, pitch, velocity } =
+            Midi.NoteOff
+                { channel = Midi.channelToMidiNumber channel
+                , pitch = pitch
+                , velocity = velocity
+                }
+    in
     case controller of
         Note state ->
             ( Note { state | status = Off }
@@ -484,13 +564,18 @@ buttonOff controller =
                 , pitch = state.pitch
                 , velocity = 0
                 }
-                |> Just
+                |> List.singleton
+            )
+
+        Chord state ->
+            ( Chord { state | status = Off }
+            , List.map makeNoteOffMsg state.notes
             )
 
         CCValue state ->
             ( CCValue { state | status = Off }
-            , Nothing
+            , []
             )
 
         _ ->
-            ( controller, Nothing )
+            ( controller, [] )
