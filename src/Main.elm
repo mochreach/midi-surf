@@ -1153,19 +1153,24 @@ infoPanel =
                     [ """Thank you for using MIDI Surf! Full video tutorials
                     are provided """
                         |> text
-                    , link
+                    , newTabLink
                         linkStyle
                         { url = "https://www.youtube.com/@mochreach"
                         , label = text "on YouTube"
                         }
                     , """. If you find it useful, please consider
-                          supporting the development on Patreon. 
-                          """
+                          supporting the development """
                         |> text
+                    , newTabLink
+                        linkStyle
+                        { url = "https://patreon.com/user?u=85350251"
+                        , label = text "on Patreon"
+                        }
+                    , text "."
                     ]
                 , paragraph []
                     [ text "Copyright: "
-                    , link
+                    , newTabLink
                         linkStyle
                         { url = "https://mochreach.dev"
                         , label = text "Mo Chreach! Music Technology Ltd"
