@@ -162,6 +162,7 @@ defaultPage =
     , controller =
         isomorphicKeyboard
             { channel = Midi.Ch6
+            , velocity = 100
             , firstNote = 36
             , numberOfRows = 12
             , offset = 5
@@ -176,13 +177,14 @@ defaultPage =
 
 isomorphicKeyboard :
     { channel : Midi.Channel
+    , velocity : Int
     , firstNote : Int
     , numberOfRows : Int
     , offset : Int
     , rowLength : Int
     }
     -> Controller
-isomorphicKeyboard { channel, firstNote, numberOfRows, offset, rowLength } =
+isomorphicKeyboard { channel, velocity, firstNote, numberOfRows, offset, rowLength } =
     let
         noteRange =
             List.range firstNote 127
@@ -190,13 +192,13 @@ isomorphicKeyboard { channel, firstNote, numberOfRows, offset, rowLength } =
         rowNumbers =
             List.range 0 (numberOfRows - 1)
     in
-    List.map (makeIsomorphicRow channel noteRange offset (rowLength - 1)) rowNumbers
+    List.map (makeIsomorphicRow channel velocity noteRange offset (rowLength - 1)) rowNumbers
         |> List.reverse
         |> Controller.Column
 
 
-makeIsomorphicRow : Midi.Channel -> List Int -> Int -> Int -> Int -> Controller
-makeIsomorphicRow channel noteRange offset rowLength rowNumber =
+makeIsomorphicRow : Midi.Channel -> Int -> List Int -> Int -> Int -> Int -> Controller
+makeIsomorphicRow channel velocity noteRange offset rowLength rowNumber =
     let
         start =
             offset * rowNumber
@@ -210,7 +212,7 @@ makeIsomorphicRow channel noteRange offset rowLength rowNumber =
         |> List.map Tuple.second
         |> List.map
             (\i ->
-                Controller.newNote (String.fromInt i) (Style.pitchToAppColour i) channel i 100
+                Controller.newNote (String.fromInt i) (Style.pitchToAppColour i) channel i velocity
             )
         |> Controller.Row
 
@@ -1506,6 +1508,20 @@ editIsomorphicPane state =
             , borderColour Black
             ]
             { onChange =
+                \newVelocity ->
+                    { state | velocity = newVelocity }
+                        |> EditIsomorphic
+                        |> UpdateControllerState
+            , text = state.velocity
+            , placeholder = Just <| Input.placeholder [] (text "velocity")
+            , label = Input.labelAbove [] (text "Velocity")
+            }
+        , Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , borderColour Black
+            ]
+            { onChange =
                 \newFirstNote ->
                     { state | firstNote = newFirstNote }
                         |> EditIsomorphic
@@ -2726,7 +2742,7 @@ renderFader config mode state id =
                             ]
                             none
                         ]
-                    , el [ centerX, padding 10 ] <| text state.label
+                    , el [ centerX, padding 10, Font.size 16 ] <| text state.label
                     ]
                 )
 

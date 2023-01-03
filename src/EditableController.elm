@@ -3,6 +3,7 @@ module EditableController exposing (..)
 import Controller exposing (Controller)
 import Midi exposing (MidiMsg(..))
 import Style exposing (..)
+import Utils
 
 
 type EditableController
@@ -19,6 +20,7 @@ type EditableController
 
 type alias EditIsomorphicState =
     { channel : String
+    , velocity : String
     , firstNote : String
     , numberOfRows : String
     , offset : String
@@ -29,6 +31,7 @@ type alias EditIsomorphicState =
 defaultEditIsomorphicState : EditIsomorphicState
 defaultEditIsomorphicState =
     { channel = ""
+    , velocity = ""
     , firstNote = ""
     , numberOfRows = ""
     , offset = ""
@@ -41,6 +44,7 @@ toIsomorphicInput :
     ->
         Maybe
             { channel : Midi.Channel
+            , velocity : Int
             , firstNote : Int
             , numberOfRows : Int
             , offset : Int
@@ -50,6 +54,9 @@ toIsomorphicInput state =
     let
         mChannel =
             Midi.stringToChannel state.channel
+
+        mVelocity =
+            String.toInt state.velocity
 
         mFirstNote =
             String.toInt state.firstNote
@@ -63,9 +70,10 @@ toIsomorphicInput state =
         mRowLength =
             String.toInt state.rowLength
     in
-    Maybe.map5
-        (\c f n o r ->
+    Utils.mmap6
+        (\c v f n o r ->
             { channel = c
+            , velocity = v
             , firstNote = f
             , numberOfRows = n
             , offset = o
@@ -73,6 +81,7 @@ toIsomorphicInput state =
             }
         )
         mChannel
+        mVelocity
         mFirstNote
         mNumberOfRows
         mOffset
