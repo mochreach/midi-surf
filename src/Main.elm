@@ -4,6 +4,7 @@ import Array exposing (Array)
 import Browser
 import Codec exposing (Codec, Value)
 import Controller exposing (Controller, FaderStatus(..))
+import Dict
 import EditableController as EController exposing (EditableController(..))
 import Element exposing (..)
 import Element.Background as Background
@@ -497,7 +498,17 @@ update msg model =
                                 { label = label
                                 , colour = colour
                                 , velocity = String.fromInt velocity
-                                , notes = notes
+                                , notes =
+                                    notes
+                                        |> List.map
+                                            (\({ channel, pitch } as note) ->
+                                                ( ( Midi.channelToMidiNumber channel
+                                                  , pitch
+                                                  )
+                                                , note
+                                                )
+                                            )
+                                        |> Dict.fromList
                                 }
                                 |> EditMenu id
                                 |> Just
@@ -1122,7 +1133,7 @@ newPageButton =
 renderPopup : Midi.Status -> PopUp -> Element Msg
 renderPopup midiStatus popup =
     el
-        ([ padding 20, Background.color (rgba 0.5 0.5 0.5 0.8) ]
+        ([ padding 5, Background.color (rgba 0.5 0.5 0.5 0.8) ]
             ++ fillSpace
         )
         (case popup of
@@ -1414,54 +1425,14 @@ editMenu menuType =
                 editFaderPane state
 
             EditMidiLog ->
-                row
-                    [ alignTop
-                    , padding 10
-                    , spacing 10
-                    , backgroundColour White
-                    ]
-                    [ Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour Black
-                        ]
-                        { onPress = Just <| FinishedEdit <| Controller.MidiLog
-                        , label = text "Ok"
-                        }
-                    , Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour Black
-                        ]
-                        { onPress = Just ClosePopUp, label = text "Cancel" }
-                    ]
+                acceptOrCloseButtons
+                    "Ok"
+                    (Just <| FinishedEdit <| Controller.MidiLog)
 
             EditSpace ->
-                row
-                    [ alignTop
-                    , padding 10
-                    , spacing 10
-                    , backgroundColour White
-                    ]
-                    [ Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour Black
-                        ]
-                        { onPress = Just <| FinishedEdit <| Controller.Space
-                        , label = text "Ok"
-                        }
-                    , Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour Black
-                        ]
-                        { onPress = Just ClosePopUp, label = text "Cancel" }
-                    ]
+                acceptOrCloseButtons
+                    "Ok"
+                    (Just <| FinishedEdit <| Controller.Space)
         ]
 
 
@@ -1474,50 +1445,18 @@ editModulePane label subController =
         , backgroundColour White
         , Border.width 4
         ]
-        [ Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newLabel ->
-                    EditModule newLabel subController
-                        |> UpdateControllerState
-            , text = label
-            , placeholder = Just <| Input.placeholder [] (text "label")
-            , label = Input.labelAbove [] (text "Label")
+        [ editTextBox
+            { placeholder = "label"
+            , label = "Label"
+            , current = label
             }
-        , row [ spacing 2 ]
-            [ if not <| String.isEmpty label then
-                Input.button
-                    [ padding 5
-                    , Border.width 2
-                    , Border.solid
-                    , borderColour Black
-                    ]
-                    { onPress = Just <| FinishedEdit <| Controller.Module label subController
-                    , label = text "Ok"
-                    }
-
-              else
-                Input.button
-                    [ padding 5
-                    , Border.width 2
-                    , Border.solid
-                    , borderColour LightGrey
-                    , fontColour LightGrey
-                    ]
-                    { onPress = Nothing
-                    , label = text "Ok"
-                    }
-            , Input.button
-                [ padding 5
-                , Border.width 2
-                , Border.solid
-                , borderColour Black
-                ]
-                { onPress = Just ClosePopUp, label = text "Cancel" }
-            ]
+            (\newLabel ->
+                EditModule newLabel subController
+                    |> UpdateControllerState
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            (Just <| FinishedEdit <| Controller.Module label subController)
         ]
 
 
@@ -1530,126 +1469,72 @@ editIsomorphicPane state =
         , backgroundColour White
         , Border.width 4
         ]
-        [ Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newChannel ->
-                    { state | channel = newChannel }
-                        |> EditIsomorphic
-                        |> UpdateControllerState
-            , text = state.channel
-            , placeholder = Just <| Input.placeholder [] (text "channel#")
-            , label = Input.labelAbove [] (text "Channel")
+        [ editTextBox
+            { placeholder = "channel#"
+            , label = "Channel"
+            , current = state.channel
             }
-        , Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newVelocity ->
-                    { state | velocity = newVelocity }
-                        |> EditIsomorphic
-                        |> UpdateControllerState
-            , text = state.velocity
-            , placeholder = Just <| Input.placeholder [] (text "velocity")
-            , label = Input.labelAbove [] (text "Velocity")
+            (\newChannel ->
+                { state | channel = newChannel }
+                    |> EditIsomorphic
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "velocity"
+            , label = "Velocity"
+            , current = state.velocity
             }
-        , Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newFirstNote ->
-                    { state | firstNote = newFirstNote }
-                        |> EditIsomorphic
-                        |> UpdateControllerState
-            , text = state.firstNote
-            , placeholder = Just <| Input.placeholder [] (text "first note#")
-            , label = Input.labelAbove [] (text "First Note")
+            (\newVelocity ->
+                { state | velocity = newVelocity }
+                    |> EditIsomorphic
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "first note#"
+            , label = "First Note"
+            , current = state.firstNote
             }
-        , Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newNumRows ->
-                    { state | numberOfRows = newNumRows }
-                        |> EditIsomorphic
-                        |> UpdateControllerState
-            , text = state.numberOfRows
-            , placeholder = Just <| Input.placeholder [] (text "num rows")
-            , label = Input.labelAbove [] (text "Number of Rows")
+            (\newFirstNote ->
+                { state | firstNote = newFirstNote }
+                    |> EditIsomorphic
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "num rows"
+            , label = "Number of Rows"
+            , current = state.numberOfRows
             }
-        , Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newOffset ->
-                    { state | offset = newOffset }
-                        |> EditIsomorphic
-                        |> UpdateControllerState
-            , text = state.offset
-            , placeholder = Just <| Input.placeholder [] (text "offset")
-            , label = Input.labelAbove [] (text "Note Offset")
+            (\newNumRows ->
+                { state | numberOfRows = newNumRows }
+                    |> EditIsomorphic
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "offset"
+            , label = "Note Offset"
+            , current = state.offset
             }
-        , Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newRowLength ->
-                    { state | rowLength = newRowLength }
-                        |> EditIsomorphic
-                        |> UpdateControllerState
-            , text = state.rowLength
-            , placeholder = Just <| Input.placeholder [] (text "row length")
-            , label = Input.labelAbove [] (text "Row Length")
+            (\newOffset ->
+                { state | offset = newOffset }
+                    |> EditIsomorphic
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "row length"
+            , label = "Row Length"
+            , current = state.rowLength
             }
-        , row [ spacing 2 ]
-            [ case EController.toIsomorphicInput state of
-                Just input ->
-                    let
-                        controller =
-                            isomorphicKeyboard input
-                    in
-                    Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour Black
-                        ]
-                        { onPress = Just <| FinishedEdit controller
-                        , label = text "Ok"
-                        }
-
-                Nothing ->
-                    Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour LightGrey
-                        , fontColour LightGrey
-                        ]
-                        { onPress = Nothing
-                        , label = text "Ok"
-                        }
-            , Input.button
-                [ padding 5
-                , Border.width 2
-                , Border.solid
-                , borderColour Black
-                ]
-                { onPress = Just ClosePopUp, label = text "Cancel" }
-            ]
+            (\newRowLength ->
+                { state | rowLength = newRowLength }
+                    |> EditIsomorphic
+                    |> UpdateControllerState
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            (Maybe.map
+                (\i -> FinishedEdit (isomorphicKeyboard i))
+                (EController.toIsomorphicInput state)
+            )
         ]
 
 
@@ -1662,7 +1547,7 @@ editRowPane subControls =
         , backgroundColour White
         , Border.width 4
         ]
-        (row [ spacing 10 ]
+        [ row [ spacing 10 ]
             [ Input.button
                 [ padding 5
                 , Border.width 2
@@ -1693,29 +1578,22 @@ editRowPane subControls =
                 , label = text "Remove"
                 }
             ]
-            :: (List.map Controller.controllerToString subControls
-                    |> List.map text
-               )
-            ++ [ row [ spacing 2 ]
-                    [ Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour Black
-                        ]
-                        { onPress = Just <| FinishedEdit <| Controller.Row subControls
-                        , label = text "Ok"
-                        }
-                    , Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour Black
-                        ]
-                        { onPress = Just ClosePopUp, label = text "Cancel" }
-                    ]
-               ]
-        )
+        , column
+            [ height (px 400)
+            , width fill
+            , padding 2
+            , spacing 4
+            , scrollbarY
+            , Border.width 2
+            , Border.dashed
+            ]
+            (List.map Controller.controllerToString subControls
+                |> List.map text
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            (Just <| FinishedEdit <| Controller.Row subControls)
+        ]
 
 
 editColumnPane : List Controller -> Element Msg
@@ -1727,7 +1605,7 @@ editColumnPane subControls =
         , backgroundColour White
         , Border.width 4
         ]
-        (row [ spacing 10 ]
+        [ row [ spacing 10 ]
             [ Input.button
                 [ padding 5
                 , Border.width 2
@@ -1758,29 +1636,22 @@ editColumnPane subControls =
                 , label = text "Remove"
                 }
             ]
-            :: (List.map Controller.controllerToString subControls
-                    |> List.map text
-               )
-            ++ [ row [ spacing 2 ]
-                    [ Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour Black
-                        ]
-                        { onPress = Just <| FinishedEdit <| Controller.Column subControls
-                        , label = text "Ok"
-                        }
-                    , Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour Black
-                        ]
-                        { onPress = Just ClosePopUp, label = text "Cancel" }
-                    ]
-               ]
-        )
+        , column
+            [ height (px 400)
+            , width fill
+            , padding 2
+            , spacing 4
+            , scrollbarY
+            , Border.width 2
+            , Border.dashed
+            ]
+            (List.map Controller.controllerToString subControls
+                |> List.map text
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            (Just <| FinishedEdit <| Controller.Column subControls)
+        ]
 
 
 editNotePane : EController.EditNoteState -> Element Msg
@@ -1792,118 +1663,59 @@ editNotePane state =
         , backgroundColour White
         , Border.width 4
         ]
-        [ Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newLabel ->
-                    { state | label = newLabel }
-                        |> EditNote
-                        |> UpdateControllerState
-            , text = state.label
-            , placeholder = Just <| Input.placeholder [] (text "label")
-            , label = Input.labelAbove [] (text "Label")
+        [ editTextBox
+            { placeholder = "label"
+            , label = "Label"
+            , current = state.label
             }
-        , Input.radio
-            [ spacing 10 ]
-            { onChange =
-                \newColour ->
-                    { state | colour = newColour }
-                        |> EditNote
-                        |> UpdateControllerState
-            , selected = Just state.colour
-            , label =
-                Input.labelAbove
-                    [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
-                    ]
-                    (text "Colour")
-            , options =
-                [ Input.option White (text "White")
-                , Input.option LightGrey (text "Light Grey")
-                , Input.option DarkGrey (text "Dark Grey")
-                , Input.option Black (text "Black")
-                , Input.option Green (text "Green")
-                , Input.option Blue (text "Blue")
-                , Input.option Yellow (text "Yellow")
-                , Input.option Red (text "Red")
-                ]
+            (\newLabel ->
+                { state | label = newLabel }
+                    |> EditNote
+                    |> UpdateControllerState
+            )
+        , colourRadio
+            state.colour
+            (\newColour ->
+                { state | colour = newColour }
+                    |> EditNote
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "channel#"
+            , label = "Channel"
+            , current = state.channel
             }
-        , Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newChannel ->
-                    { state | channel = newChannel }
-                        |> EditNote
-                        |> UpdateControllerState
-            , text = state.channel
-            , placeholder = Just <| Input.placeholder [] (text "channel#")
-            , label = Input.labelAbove [] (text "Channel")
+            (\newChannel ->
+                { state | channel = newChannel }
+                    |> EditNote
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "note#"
+            , label = "Note Number"
+            , current = state.pitch
             }
-        , Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newNoteNumber ->
-                    { state | pitch = newNoteNumber }
-                        |> EditNote
-                        |> UpdateControllerState
-            , text = state.pitch
-            , placeholder = Just <| Input.placeholder [] (text "note#")
-            , label = Input.labelAbove [] (text "Note Number")
+            (\newNoteNumber ->
+                { state | pitch = newNoteNumber }
+                    |> EditNote
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "velocity"
+            , label = "Velocity"
+            , current = state.velocity
             }
-        , Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newVelocity ->
-                    { state | velocity = newVelocity }
-                        |> EditNote
-                        |> UpdateControllerState
-            , text = state.velocity
-            , placeholder = Just <| Input.placeholder [] (text "velocity")
-            , label = Input.labelAbove [] (text "Velocity")
-            }
-        , row [ spacing 2 ]
-            [ case EController.editStateToNote state of
-                Just controller ->
-                    Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour Black
-                        ]
-                        { onPress = Just <| FinishedEdit controller
-                        , label = text "Ok"
-                        }
-
-                Nothing ->
-                    Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour LightGrey
-                        , fontColour LightGrey
-                        ]
-                        { onPress = Nothing
-                        , label = text "Ok"
-                        }
-            , Input.button
-                [ padding 5
-                , Border.width 2
-                , Border.solid
-                , borderColour Black
-                ]
-                { onPress = Just ClosePopUp, label = text "Cancel" }
-            ]
+            (\newVelocity ->
+                { state | velocity = newVelocity }
+                    |> EditNote
+                    |> UpdateControllerState
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            (Maybe.map
+                (\c -> FinishedEdit c)
+                (EController.editStateToNote state)
+            )
         ]
 
 
@@ -1916,90 +1728,79 @@ editChordPane state =
         , backgroundColour White
         , Border.width 4
         ]
-        [ Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newLabel ->
-                    { state | label = newLabel }
-                        |> EditChord
-                        |> UpdateControllerState
-            , text = state.label
-            , placeholder = Just <| Input.placeholder [] (text "label")
-            , label = Input.labelAbove [] (text "Label")
+        [ editTextBox
+            { placeholder = "label"
+            , label = "Label"
+            , current = state.label
             }
-        , Input.radio
-            [ spacing 10 ]
-            { onChange =
-                \newColour ->
-                    { state | colour = newColour }
-                        |> EditChord
-                        |> UpdateControllerState
-            , selected = Just state.colour
-            , label =
-                Input.labelAbove
-                    [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
+            (\newLabel ->
+                { state | label = newLabel }
+                    |> EditChord
+                    |> UpdateControllerState
+            )
+        , colourRadio
+            state.colour
+            (\newColour ->
+                { state | colour = newColour }
+                    |> EditChord
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "velocity"
+            , label = "Velocity"
+            , current = state.velocity
+            }
+            (\newVelocity ->
+                { state | velocity = newVelocity }
+                    |> EditChord
+                    |> UpdateControllerState
+            )
+        , column
+            [ padding 2
+            , spacing 4
+            , Border.width 2
+            , Border.dashed
+            ]
+            [ row [ spacing 4 ]
+                [ text "Notes"
+                , Input.button
+                    [ padding 5
+                    , spacing 2
+                    , Border.width 2
+                    , Border.solid
+                    , borderColour Black
                     ]
-                    (text "Colour")
-            , options =
-                [ Input.option White (text "White")
-                , Input.option LightGrey (text "Light Grey")
-                , Input.option DarkGrey (text "Dark Grey")
-                , Input.option Black (text "Black")
-                , Input.option Green (text "Green")
-                , Input.option Blue (text "Blue")
-                , Input.option Yellow (text "Yellow")
-                , Input.option Red (text "Red")
+                    { onPress =
+                        { state | notes = Dict.empty }
+                            |> EditChord
+                            |> UpdateControllerState
+                            |> Just
+                    , label = text "Clear"
+                    }
                 ]
-            }
-        , Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newVelocity ->
-                    { state | velocity = newVelocity }
-                        |> EditChord
-                        |> UpdateControllerState
-            , text = state.velocity
-            , placeholder = Just <| Input.placeholder [] (text "velocity")
-            , label = Input.labelAbove [] (text "Velocity")
-            }
-        , row [ spacing 2 ]
-            [ case EController.editStateToChord state of
-                Just controller ->
-                    Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour Black
-                        ]
-                        { onPress = Just <| FinishedEdit controller
-                        , label = text "Ok"
-                        }
-
-                Nothing ->
-                    Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour LightGrey
-                        , fontColour LightGrey
-                        ]
-                        { onPress = Nothing
-                        , label = text "Ok"
-                        }
-            , Input.button
-                [ padding 5
-                , Border.width 2
-                , Border.solid
-                , borderColour Black
+            , column
+                [ height (px 90)
+                , padding 2
+                , spacing 1
+                , scrollbarY
                 ]
-                { onPress = Just ClosePopUp, label = text "Cancel" }
+                (List.map
+                    (\{ channel, pitch } ->
+                        text <|
+                            "Ch: "
+                                ++ Midi.channelToString channel
+                                ++ ", pitch: "
+                                ++ String.fromInt pitch
+                    )
+                    (Dict.values state.notes)
+                )
             ]
+        , acceptOrCloseButtons
+            "Ok"
+            (Maybe.map
+                (\c -> FinishedEdit c)
+                (EController.editStateToChord state)
+            )
         ]
 
 
@@ -2012,118 +1813,59 @@ editCCValuePane state =
         , backgroundColour White
         , Border.width 4
         ]
-        [ Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newLabel ->
-                    { state | label = newLabel }
-                        |> EditCCValue
-                        |> UpdateControllerState
-            , text = state.label
-            , placeholder = Just <| Input.placeholder [] (text "label")
-            , label = Input.labelAbove [] (text "Label")
+        [ editTextBox
+            { placeholder = "label"
+            , label = "Label"
+            , current = state.label
             }
-        , Input.radio
-            [ spacing 10 ]
-            { onChange =
-                \newColour ->
-                    { state | colour = newColour }
-                        |> EditCCValue
-                        |> UpdateControllerState
-            , selected = Just state.colour
-            , label =
-                Input.labelAbove
-                    [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
-                    ]
-                    (text "Colour")
-            , options =
-                [ Input.option White (text "White")
-                , Input.option LightGrey (text "Light Grey")
-                , Input.option DarkGrey (text "Dark Grey")
-                , Input.option Black (text "Black")
-                , Input.option Green (text "Green")
-                , Input.option Blue (text "Blue")
-                , Input.option Yellow (text "Yellow")
-                , Input.option Red (text "Red")
-                ]
+            (\newLabel ->
+                { state | label = newLabel }
+                    |> EditCCValue
+                    |> UpdateControllerState
+            )
+        , colourRadio
+            state.colour
+            (\newColour ->
+                { state | colour = newColour }
+                    |> EditCCValue
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "channel#"
+            , label = "Channel"
+            , current = state.channel
             }
-        , Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newChannel ->
-                    { state | channel = newChannel }
-                        |> EditCCValue
-                        |> UpdateControllerState
-            , text = state.channel
-            , placeholder = Just <| Input.placeholder [] (text "channel#")
-            , label = Input.labelAbove [] (text "Channel")
+            (\newChannel ->
+                { state | channel = newChannel }
+                    |> EditCCValue
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "controller#"
+            , label = "Controller Number"
+            , current = state.controller
             }
-        , Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newController ->
-                    { state | controller = newController }
-                        |> EditCCValue
-                        |> UpdateControllerState
-            , text = state.controller
-            , placeholder = Just <| Input.placeholder [] (text "controller#")
-            , label = Input.labelAbove [] (text "Controller Number")
+            (\newController ->
+                { state | controller = newController }
+                    |> EditCCValue
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "value"
+            , label = "Value"
+            , current = state.value
             }
-        , Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newValue ->
-                    { state | value = newValue }
-                        |> EditCCValue
-                        |> UpdateControllerState
-            , text = state.value
-            , placeholder = Just <| Input.placeholder [] (text "value")
-            , label = Input.labelAbove [] (text "Value")
-            }
-        , row [ spacing 2 ]
-            [ case EController.editStateToCCValue state of
-                Just controller ->
-                    Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour Black
-                        ]
-                        { onPress = Just <| FinishedEdit controller
-                        , label = text "Ok"
-                        }
-
-                Nothing ->
-                    Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour LightGrey
-                        , fontColour LightGrey
-                        ]
-                        { onPress = Nothing
-                        , label = text "Ok"
-                        }
-            , Input.button
-                [ padding 5
-                , Border.width 2
-                , Border.solid
-                , borderColour Black
-                ]
-                { onPress = Just ClosePopUp, label = text "Cancel" }
-            ]
+            (\newValue ->
+                { state | value = newValue }
+                    |> EditCCValue
+                    |> UpdateControllerState
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            (Maybe.map
+                (\c -> FinishedEdit c)
+                (EController.editStateToCCValue state)
+            )
         ]
 
 
@@ -2136,132 +1878,147 @@ editFaderPane state =
         , backgroundColour White
         , Border.width 4
         ]
-        [ Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newLabel ->
-                    { state | label = newLabel }
-                        |> EditFader
-                        |> UpdateControllerState
-            , text = state.label
-            , placeholder = Just <| Input.placeholder [] (text "label")
-            , label = Input.labelAbove [] (text "Label")
+        [ editTextBox
+            { placeholder = "label"
+            , label = "Label"
+            , current = state.label
             }
-        , Input.radio
-            [ spacing 10 ]
-            { onChange =
-                \newColour ->
-                    { state | colour = newColour }
-                        |> EditFader
-                        |> UpdateControllerState
-            , selected = Just state.colour
-            , label =
-                Input.labelAbove
-                    [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
-                    ]
-                    (text "Colour")
-            , options =
-                [ Input.option White (text "White")
-                , Input.option LightGrey (text "Light Grey")
-                , Input.option DarkGrey (text "Dark Grey")
-                , Input.option Black (text "Black")
-                , Input.option Green (text "Green")
-                , Input.option Blue (text "Blue")
-                , Input.option Yellow (text "Yellow")
-                , Input.option Red (text "Red")
-                ]
+            (\newLabel ->
+                { state | label = newLabel }
+                    |> EditFader
+                    |> UpdateControllerState
+            )
+        , colourRadio
+            state.colour
+            (\newColour ->
+                { state | colour = newColour }
+                    |> EditFader
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "channel#"
+            , label = "Channel"
+            , current = state.channel
             }
-        , Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newChannel ->
-                    { state | channel = newChannel }
-                        |> EditFader
-                        |> UpdateControllerState
-            , text = state.channel
-            , placeholder = Just <| Input.placeholder [] (text "channel#")
-            , label = Input.labelAbove [] (text "Channel")
+            (\newChannel ->
+                { state | channel = newChannel }
+                    |> EditFader
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "cc#"
+            , label = "CC Number"
+            , current = state.ccNumber
             }
-        , Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newCCNumber ->
-                    { state | ccNumber = newCCNumber }
-                        |> EditFader
-                        |> UpdateControllerState
-            , text = state.ccNumber
-            , placeholder = Just <| Input.placeholder [] (text "cc#")
-            , label = Input.labelAbove [] (text "CC Number")
+            (\newCCNumber ->
+                { state | ccNumber = newCCNumber }
+                    |> EditFader
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "min value"
+            , label = "Min Value"
+            , current = state.valueMin
             }
-        , Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newMinValue ->
-                    { state | valueMin = newMinValue }
-                        |> EditFader
-                        |> UpdateControllerState
-            , text = state.valueMin
-            , placeholder = Just <| Input.placeholder [] (text "min value")
-            , label = Input.labelAbove [] (text "Min Value")
+            (\newMinValue ->
+                { state | valueMin = newMinValue }
+                    |> EditFader
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "max value"
+            , label = "Max Value"
+            , current = state.valueMax
             }
-        , Input.text
-            [ Border.width 2
-            , Border.rounded 0
-            , borderColour Black
-            ]
-            { onChange =
-                \newMaxValue ->
-                    { state | valueMax = newMaxValue }
-                        |> EditFader
-                        |> UpdateControllerState
-            , text = state.valueMax
-            , placeholder = Just <| Input.placeholder [] (text "max value")
-            , label = Input.labelAbove [] (text "Max Value")
-            }
-        , row [ spacing 2 ]
-            [ case EController.editFaderToFader state of
-                Just controller ->
-                    Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour Black
-                        ]
-                        { onPress = Just <| FinishedEdit controller
-                        , label = text "Ok"
-                        }
+            (\newMaxValue ->
+                { state | valueMax = newMaxValue }
+                    |> EditFader
+                    |> UpdateControllerState
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            (Maybe.map
+                (\c -> FinishedEdit c)
+                (EController.editStateToFader state)
+            )
+        ]
 
-                Nothing ->
-                    Input.button
-                        [ padding 5
-                        , Border.width 2
-                        , Border.solid
-                        , borderColour LightGrey
-                        , fontColour LightGrey
-                        ]
-                        { onPress = Nothing
-                        , label = text "Ok"
-                        }
-            , Input.button
-                [ padding 5
-                , Border.width 2
-                , Border.solid
-                , borderColour Black
+
+editTextBox :
+    { placeholder : String
+    , label : String
+    , current : String
+    }
+    -> (String -> Msg)
+    -> Element Msg
+editTextBox { placeholder, label, current } msg =
+    Input.text
+        [ width fill
+        , Border.width 2
+        , Border.rounded 0
+        , borderColour Black
+        ]
+        { onChange = msg
+        , text = current
+        , placeholder = Just <| Input.placeholder [] (text placeholder)
+        , label = Input.labelAbove [] (text label)
+        }
+
+
+colourRadio : AppColour -> (AppColour -> Msg) -> Element Msg
+colourRadio colour msg =
+    Input.radio
+        [ padding 2
+        , spacing 10
+        , height (px 100)
+        , width fill
+        , scrollbarY
+        , Border.width 2
+        , Border.dashed
+        ]
+        { onChange = msg
+        , selected = Just colour
+        , label =
+            Input.labelAbove
+                [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
                 ]
-                { onPress = Just ClosePopUp, label = text "Cancel" }
+                (text "Colour")
+        , options =
+            [ Input.option Green (text "Green")
+            , Input.option Blue (text "Blue")
+            , Input.option Yellow (text "Yellow")
+            , Input.option Red (text "Red")
+            , Input.option White (text "White")
+            , Input.option LightGrey (text "Light Grey")
+            , Input.option DarkGrey (text "Dark Grey")
+            , Input.option Black (text "Black")
             ]
+        }
+
+
+acceptOrCloseButtons : String -> Maybe Msg -> Element Msg
+acceptOrCloseButtons acceptString acceptMsg =
+    row
+        [ alignTop
+        , spacing 4
+        , backgroundColour White
+        ]
+        [ Input.button
+            [ padding 5
+            , Border.width 2
+            , Border.solid
+            , borderColour Black
+            ]
+            { onPress = acceptMsg
+            , label = text acceptString
+            }
+        , Input.button
+            [ padding 5
+            , Border.width 2
+            , Border.solid
+            , borderColour Black
+            ]
+            { onPress = Just ClosePopUp, label = text "Cancel" }
         ]
 
 
@@ -2322,6 +2079,15 @@ editPageMenu index state =
             , Border.width 4
             ]
             [ paragraph [ Font.bold ] [ text "Edit Page" ]
+            , Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , backgroundColour Red
+                , fontColour White
+                , borderColour Black
+                ]
+                { onPress = Just (DeletePage index), label = text "Delete" }
             , Input.text
                 [ Border.width 2
                 , Border.rounded 0
@@ -2343,15 +2109,6 @@ editPageMenu index state =
                     , borderColour Black
                     ]
                     { onPress = Just (UpdatePage index state), label = text "Update" }
-                , Input.button
-                    [ padding 5
-                    , Border.width 2
-                    , Border.solid
-                    , backgroundColour Red
-                    , fontColour White
-                    , borderColour Black
-                    ]
-                    { onPress = Just (DeletePage index), label = text "Delete" }
                 , Input.button
                     [ padding 5
                     , Border.width 2
@@ -2940,7 +2697,9 @@ renderFader config mode state id =
                 )
                 (column
                     (backgroundColour White :: fillSpace)
-                    [ column
+                    [ el [ centerX, padding 10, Font.size 16 ] <|
+                        text (String.fromInt state.valuePercent ++ "%")
+                    , column
                         fillSpace
                         [ el
                             [ height <| fillPortion (100 - state.valuePercent)

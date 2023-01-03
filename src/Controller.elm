@@ -85,7 +85,7 @@ controllerToString control =
                 ++ String.fromInt velocity
 
         Chord { notes } ->
-            "Chord: " ++ (List.length notes |> String.fromInt) ++ "note chord"
+            "Chord: " ++ (List.length notes |> String.fromInt) ++ " notes"
 
         CCValue { channel, controller, value } ->
             "CC Value: "

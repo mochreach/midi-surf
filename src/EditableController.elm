@@ -1,6 +1,7 @@
 module EditableController exposing (..)
 
 import Controller exposing (Controller)
+import Dict exposing (Dict)
 import Midi exposing (MidiMsg(..))
 import Style exposing (..)
 import Utils
@@ -149,7 +150,8 @@ type alias EditChordState =
     , colour : AppColour
     , velocity : String
     , notes :
-        List
+        Dict
+            ( Int, Int )
             { channel : Midi.Channel
             , pitch : Int
             }
@@ -161,7 +163,7 @@ defaultEditChordState =
     { label = ""
     , colour = LightGrey
     , velocity = "100"
-    , notes = []
+    , notes = Dict.empty
     }
 
 
@@ -172,12 +174,18 @@ updateEditChordWithMidiMsg midiMsg state =
             { state
               -- Adding 1 to the channel so that they're labelled 1-16
                 | notes =
-                    { channel =
-                        Midi.intToChannel noteOnParams.channel
+                    Dict.insert
+                        ( Midi.intToChannel noteOnParams.channel
                             |> Maybe.withDefault Midi.Ch1
-                    , pitch = noteOnParams.pitch
-                    }
-                        :: state.notes
+                            |> Midi.channelToMidiNumber
+                        , noteOnParams.pitch
+                        )
+                        { channel =
+                            Midi.intToChannel noteOnParams.channel
+                                |> Maybe.withDefault Midi.Ch1
+                        , pitch = noteOnParams.pitch
+                        }
+                        state.notes
             }
 
         _ ->
@@ -192,7 +200,7 @@ editStateToChord { label, colour, velocity, notes } =
     else
         String.toInt velocity
             |> Maybe.map
-                (\v -> Controller.newChord label colour v notes)
+                (\v -> Controller.newChord label colour v (Dict.values notes))
 
 
 type alias EditCCValueState =
@@ -285,8 +293,8 @@ updateEditFaderWithMidiMsg midiMsg state =
             state
 
 
-editFaderToFader : EditFaderState -> Maybe Controller
-editFaderToFader { label, colour, channel, ccNumber, valueMin, valueMax } =
+editStateToFader : EditFaderState -> Maybe Controller
+editStateToFader { label, colour, channel, ccNumber, valueMin, valueMax } =
     if String.isEmpty label then
         Nothing
 
