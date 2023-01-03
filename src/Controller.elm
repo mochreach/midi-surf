@@ -134,11 +134,11 @@ type alias ChordState =
     { status : ButtonStatus
     , label : String
     , colour : AppColour
+    , velocity : Int
     , notes :
         List
             { channel : Channel
             , pitch : Int
-            , velocity : Int
             }
     }
 
@@ -147,16 +147,16 @@ chordStateCodec : Codec ChordState
 chordStateCodec =
     let
         noteCodec =
-            Codec.object (\c p v -> { channel = c, pitch = p, velocity = v })
+            Codec.object (\c p -> { channel = c, pitch = p })
                 |> Codec.field "channel" .channel Midi.channelCodec
                 |> Codec.field "pitch" .pitch Codec.int
-                |> Codec.field "velocity" .velocity Codec.int
                 |> Codec.buildObject
     in
     Codec.object ChordState
         |> Codec.field "status" .status (Codec.constant Off)
         |> Codec.field "label" .label Codec.string
         |> Codec.field "colour" .colour Style.appColourCodec
+        |> Codec.field "velocity" .velocity Codec.int
         |> Codec.field "notes" .notes (Codec.list noteCodec)
         |> Codec.buildObject
 
@@ -488,12 +488,18 @@ newNote label colour channel pitch velocity =
         }
 
 
-newChord : String -> AppColour -> List { channel : Channel, pitch : Int, velocity : Int } -> Controller
-newChord label colour notes =
+newChord :
+    String
+    -> AppColour
+    -> Int
+    -> List { channel : Channel, pitch : Int }
+    -> Controller
+newChord label colour velocity notes =
     Chord
         { status = Off
         , label = label
         , colour = colour
+        , velocity = velocity
         , notes = notes
         }
 
@@ -529,7 +535,15 @@ buttonOn controller =
 
         Chord state ->
             ( Chord { state | status = On }
-            , List.map makeNoteOnMsg state.notes
+            , state.notes
+                |> List.map
+                    (\{ channel, pitch } ->
+                        { channel = channel
+                        , pitch = pitch
+                        , velocity = state.velocity
+                        }
+                    )
+                |> List.map makeNoteOnMsg
             )
 
         CCValue state ->
@@ -569,7 +583,15 @@ buttonOff controller =
 
         Chord state ->
             ( Chord { state | status = Off }
-            , List.map makeNoteOffMsg state.notes
+            , state.notes
+                |> List.map
+                    (\{ channel, pitch } ->
+                        { channel = channel
+                        , pitch = pitch
+                        , velocity = state.velocity
+                        }
+                    )
+                |> List.map makeNoteOffMsg
             )
 
         CCValue state ->

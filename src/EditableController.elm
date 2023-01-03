@@ -147,11 +147,11 @@ editStateToNote { label, colour, pitch, channel, velocity } =
 type alias EditChordState =
     { label : String
     , colour : AppColour
+    , velocity : String
     , notes :
         List
             { channel : Midi.Channel
             , pitch : Int
-            , velocity : Int
             }
     }
 
@@ -160,6 +160,7 @@ defaultEditChordState : EditChordState
 defaultEditChordState =
     { label = ""
     , colour = LightGrey
+    , velocity = "100"
     , notes = []
     }
 
@@ -175,7 +176,6 @@ updateEditChordWithMidiMsg midiMsg state =
                         Midi.intToChannel noteOnParams.channel
                             |> Maybe.withDefault Midi.Ch1
                     , pitch = noteOnParams.pitch
-                    , velocity = noteOnParams.velocity
                     }
                         :: state.notes
             }
@@ -185,13 +185,14 @@ updateEditChordWithMidiMsg midiMsg state =
 
 
 editStateToChord : EditChordState -> Maybe Controller
-editStateToChord { label, colour, notes } =
+editStateToChord { label, colour, velocity, notes } =
     if String.isEmpty label then
         Nothing
 
     else
-        Controller.newChord label colour notes
-            |> Just
+        String.toInt velocity
+            |> Maybe.map
+                (\v -> Controller.newChord label colour v notes)
 
 
 type alias EditCCValueState =

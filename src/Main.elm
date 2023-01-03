@@ -492,10 +492,11 @@ update msg model =
                                 |> EditMenu id
                                 |> Just
 
-                        Just (Controller.Chord { label, colour, notes }) ->
+                        Just (Controller.Chord { label, colour, velocity, notes }) ->
                             EditChord
                                 { label = label
                                 , colour = colour
+                                , velocity = String.fromInt velocity
                                 , notes = notes
                                 }
                                 |> EditMenu id
@@ -1952,6 +1953,20 @@ editChordPane state =
                 , Input.option Yellow (text "Yellow")
                 , Input.option Red (text "Red")
                 ]
+            }
+        , Input.text
+            [ Border.width 2
+            , Border.rounded 0
+            , borderColour Black
+            ]
+            { onChange =
+                \newVelocity ->
+                    { state | velocity = newVelocity }
+                        |> EditChord
+                        |> UpdateControllerState
+            , text = state.velocity
+            , placeholder = Just <| Input.placeholder [] (text "velocity")
+            , label = Input.labelAbove [] (text "Velocity")
             }
         , row [ spacing 2 ]
             [ case EController.editStateToChord state of
