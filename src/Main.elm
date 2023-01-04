@@ -3,8 +3,8 @@ module Main exposing (..)
 import Array exposing (Array)
 import Browser
 import Codec exposing (Codec, Value)
-import Controller exposing (Controller, FaderStatus(..))
-import Dict
+import Controller exposing (Controller, FaderStatus(..), controllerCodec)
+import Dict exposing (Dict)
 import EditableController as EController exposing (EditableController(..))
 import Element exposing (..)
 import Element.Background as Background
@@ -16,6 +16,7 @@ import Element.Lazy as Lazy
 import Element.Region as Region
 import FeatherIcons as Icons
 import Html exposing (Html)
+import Html.Attributes exposing (accept)
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
 import Midi exposing (MidiMsg(..), Status(..))
@@ -37,6 +38,8 @@ type alias Model =
     , mode : Mode
     , pages : Array Page
     , activePage : Int
+    , savedPages : Dict String Page
+    , savedModules : Dict String Controller
     , menuOpen : Bool
     , popup : Maybe PopUp
     , midiLog : List String
@@ -50,6 +53,8 @@ modelCodec =
         |> Codec.field "mode" .mode (Codec.constant Normal)
         |> Codec.field "pages" .pages (Codec.array pageCodec)
         |> Codec.field "activePage" .activePage (Codec.constant 0)
+        |> Codec.field "savedPages" .savedPages (Codec.dict pageCodec)
+        |> Codec.field "savedModules" .savedModules (Codec.dict controllerCodec)
         |> Codec.field "menuOpen" .menuOpen (Codec.constant True)
         |> Codec.field "popup" .popup (Codec.constant Nothing)
         |> Codec.field "midiLog" .midiLog (Codec.constant [])
@@ -64,7 +69,7 @@ type Mode
 type PopUp
     = InfoPanel
     | MidiMenu
-    | SaveMenu
+    | SaveMenu SaveMenuState
     | EditMenu String EditableController
     | NewPageMenu PageMenuState
     | EditPageMenu Int PageMenuState
@@ -73,6 +78,20 @@ type PopUp
 type alias PageMenuState =
     { label : String
     }
+
+
+type alias SaveMenuState =
+    { pages : Array Page
+    , mSelectedPage : Maybe Int
+    , modules : List Controller
+    , mSelectedModule : Maybe Int
+    , mode : SaveMode
+    }
+
+
+type SaveMode
+    = SavePage
+    | SaveModule
 
 
 type alias Page =
@@ -149,6 +168,8 @@ init { mInitialState } =
               , mode = Normal
               , pages = Array.fromList <| List.repeat 4 defaultPage
               , activePage = 0
+              , savedPages = Dict.empty
+              , savedModules = Dict.empty
               , menuOpen = True
               , popup = Just <| InfoPanel
               , midiLog = []
@@ -229,6 +250,9 @@ type Msg
     | OpenInfoPanel
     | OpenMidiMenu
     | OpenSaveLoadMenu
+    | UpdateSaveMenuState SaveMenuState
+    | SaveSelectedPage Page
+    | SaveSelectedModule Controller
     | ToggleNormalEdit
     | OpenEditPageMenu Int
     | DeletePage Int
@@ -288,9 +312,83 @@ update msg model =
                 | popup =
                     Just <|
                         SaveMenu
+                            { pages = model.pages
+                            , mSelectedPage = Nothing
+                            , modules =
+                                Array.map .controller model.pages
+                                    |> Array.toList
+                                    |> List.map (Controller.getModules [])
+                                    |> List.concat
+                            , mSelectedModule = Nothing
+                            , mode = SavePage
+                            }
               }
             , Cmd.none
             )
+
+        UpdateSaveMenuState state ->
+            case model.popup of
+                Just (SaveMenu _) ->
+                    ( { model
+                        | popup =
+                            Just <|
+                                SaveMenu state
+                      }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( { model
+                        | popup = Nothing
+                      }
+                    , Cmd.none
+                    )
+
+        SaveSelectedPage page ->
+            let
+                ( key, updatedPage ) =
+                    if Dict.member page.label model.savedPages then
+                        let
+                            newLabel =
+                                page.label ++ "_0"
+                        in
+                        ( newLabel, { page | label = newLabel } )
+
+                    else
+                        ( page.label, page )
+            in
+            ( { model
+                | savedPages = Dict.insert key updatedPage model.savedPages
+                , popup = Nothing
+              }
+            , Cmd.none
+            )
+
+        SaveSelectedModule controller ->
+            case controller of
+                (Controller.Module label subControl) as modu ->
+                    let
+                        ( key, updatedModule ) =
+                            if Dict.member label model.savedModules then
+                                let
+                                    newLabel =
+                                        label ++ "_0"
+                                in
+                                ( newLabel, Controller.Module newLabel subControl )
+
+                            else
+                                ( label, modu )
+                    in
+                    ( { model
+                        | savedModules =
+                            Dict.insert key updatedModule model.savedModules
+                        , popup = Nothing
+                      }
+                    , Cmd.none
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
 
         ToggleNormalEdit ->
             ( { model
@@ -466,88 +564,7 @@ update msg model =
             in
             ( { model
                 | popup =
-                    case control of
-                        Just (Controller.Module label subController) ->
-                            EditModule label subController
-                                |> EditMenu id
-                                |> Just
-
-                        Just (Controller.Row subControls) ->
-                            EditRow subControls
-                                |> EditMenu id
-                                |> Just
-
-                        Just (Controller.Column subControls) ->
-                            EditColumn subControls
-                                |> EditMenu id
-                                |> Just
-
-                        Just (Controller.Note { label, colour, pitch, channel, velocity }) ->
-                            EditNote
-                                { label = label
-                                , colour = colour
-                                , pitch = String.fromInt pitch
-                                , channel = Midi.channelToString channel
-                                , velocity = String.fromInt velocity
-                                }
-                                |> EditMenu id
-                                |> Just
-
-                        Just (Controller.Chord { label, colour, velocity, notes }) ->
-                            EditChord
-                                { label = label
-                                , colour = colour
-                                , velocity = String.fromInt velocity
-                                , notes =
-                                    notes
-                                        |> List.map
-                                            (\({ channel, pitch } as note) ->
-                                                ( ( Midi.channelToMidiNumber channel
-                                                  , pitch
-                                                  )
-                                                , note
-                                                )
-                                            )
-                                        |> Dict.fromList
-                                }
-                                |> EditMenu id
-                                |> Just
-
-                        Just (Controller.CCValue { label, colour, channel, controller, value }) ->
-                            EditCCValue
-                                { label = label
-                                , colour = colour
-                                , channel = Midi.channelToString channel
-                                , controller = String.fromInt controller
-                                , value = String.fromInt value
-                                }
-                                |> EditMenu id
-                                |> Just
-
-                        Just (Controller.Fader state) ->
-                            EditFader
-                                { label = state.label
-                                , colour = state.colour
-                                , channel = Midi.channelToString state.channel
-                                , ccNumber = String.fromInt state.ccNumber
-                                , valueMin = String.fromInt state.valueMin
-                                , valueMax = String.fromInt state.valueMax
-                                }
-                                |> EditMenu id
-                                |> Just
-
-                        Just Controller.MidiLog ->
-                            EditMidiLog
-                                |> EditMenu id
-                                |> Just
-
-                        Just Controller.Space ->
-                            EditSpace
-                                |> EditMenu id
-                                |> Just
-
-                        Nothing ->
-                            Nothing
+                    Maybe.map (EditMenu id << convertToEditable) control
               }
             , Cmd.none
             )
@@ -885,6 +902,71 @@ update msg model =
             )
 
 
+convertToEditable : Controller -> EditableController
+convertToEditable control =
+    case control of
+        Controller.Module label subController ->
+            EditModule label subController
+
+        Controller.Row subControls ->
+            EditRow subControls
+
+        Controller.Column subControls ->
+            EditColumn subControls
+
+        Controller.Note { label, colour, pitch, channel, velocity } ->
+            EditNote
+                { label = label
+                , colour = colour
+                , pitch = String.fromInt pitch
+                , channel = Midi.channelToString channel
+                , velocity = String.fromInt velocity
+                }
+
+        Controller.Chord { label, colour, velocity, notes } ->
+            EditChord
+                { label = label
+                , colour = colour
+                , velocity = String.fromInt velocity
+                , notes =
+                    notes
+                        |> List.map
+                            (\({ channel, pitch } as note) ->
+                                ( ( Midi.channelToMidiNumber channel
+                                  , pitch
+                                  )
+                                , note
+                                )
+                            )
+                        |> Dict.fromList
+                }
+
+        Controller.CCValue { label, colour, channel, controller, value } ->
+            EditCCValue
+                { label = label
+                , colour = colour
+                , channel = Midi.channelToString channel
+                , controller = String.fromInt controller
+                , value = String.fromInt value
+                }
+
+        Controller.Fader state ->
+            EditFader
+                { label = state.label
+                , colour = state.colour
+                , channel = Midi.channelToString state.channel
+                , ccNumber = String.fromInt state.ccNumber
+                , valueMin = String.fromInt state.valueMin
+                , valueMax = String.fromInt state.valueMax
+                }
+
+        Controller.MidiLog ->
+            EditMidiLog
+
+        Controller.Space ->
+            EditSpace
+
+
 
 -- }}}
 -- {{{ VIEW
@@ -1148,8 +1230,8 @@ renderPopup midiStatus popup =
                     _ ->
                         midiMenu []
 
-            SaveMenu ->
-                saveMenu
+            SaveMenu state ->
+                saveMenu state
 
             EditMenu _ state ->
                 editMenu state
@@ -1313,8 +1395,8 @@ deviceTable devices =
 -- {{{ Save Menu
 
 
-saveMenu : Element Msg
-saveMenu =
+saveMenu : SaveMenuState -> Element Msg
+saveMenu ({ pages, mSelectedPage, modules, mSelectedModule, mode } as state) =
     el [ centerX, centerY ] <|
         column
             [ padding 10
@@ -1322,15 +1404,86 @@ saveMenu =
             , backgroundColour White
             , Border.width 4
             ]
-            [ paragraph [ Font.bold ] [ text "Save/Load" ]
-            , Input.button
-                [ padding 5
+            [ paragraph [ Font.bold ] [ text "Save" ]
+            , Input.radioRow
+                [ spacing 10 ]
+                { onChange =
+                    \newMode ->
+                        { state | mode = newMode }
+                            |> UpdateSaveMenuState
+                , selected = Just mode
+                , label = Input.labelHidden "Save Mode"
+                , options =
+                    [ Input.option SavePage (text "Page")
+                    , Input.option SaveModule (text "Module")
+                    ]
+                }
+            , column
+                [ height (px 200)
+                , width fill
+                , scrollbarY
                 , Border.width 2
-                , Border.solid
-                , borderColour Black
+                , Border.dashed
                 ]
-                { onPress = Just ClosePopUp, label = text "Cancel" }
+                (case mode of
+                    SavePage ->
+                        Array.map .label pages
+                            |> Array.toList
+                            |> List.indexedMap
+                                (\i l -> String.fromInt i ++ ": " ++ l)
+                            |> List.indexedMap
+                                (saveOption
+                                    (\newSelected ->
+                                        { state | mSelectedPage = Just newSelected }
+                                            |> UpdateSaveMenuState
+                                    )
+                                    mSelectedPage
+                                )
+
+                    SaveModule ->
+                        List.map Controller.controllerToString modules
+                            |> List.indexedMap
+                                (saveOption
+                                    (\newSelected ->
+                                        { state | mSelectedModule = Just newSelected }
+                                            |> UpdateSaveMenuState
+                                    )
+                                    mSelectedModule
+                                )
+                )
+            , acceptOrCloseButtons
+                "Save"
+                (case ( mode, mSelectedPage, mSelectedModule ) of
+                    ( SavePage, Just index, _ ) ->
+                        Array.get index pages
+                            |> Maybe.map (\p -> SaveSelectedPage p)
+
+                    ( SaveModule, _, Just index ) ->
+                        Array.fromList modules
+                            |> Array.get index
+                            |> Maybe.map (\p -> SaveSelectedModule p)
+
+                    _ ->
+                        Nothing
+                )
             ]
+
+
+saveOption : (Int -> Msg) -> Maybe Int -> Int -> String -> Element Msg
+saveOption msg mSelected index label =
+    el
+        [ padding 10
+        , width fill
+        , Font.alignLeft
+        , case Maybe.map (\s -> s == index) mSelected of
+            Just True ->
+                backgroundColour Blue
+
+            _ ->
+                backgroundColour White
+        , Events.onClick <| msg index
+        ]
+        (text label)
 
 
 
@@ -1427,14 +1580,28 @@ editMenu menuType =
                 editFaderPane state
 
             EditMidiLog ->
-                acceptOrCloseButtons
-                    "Ok"
-                    (Just <| FinishedEdit <| Controller.MidiLog)
+                el
+                    [ alignTop
+                    , padding 10
+                    , backgroundColour White
+                    , Border.width 4
+                    ]
+                <|
+                    acceptOrCloseButtons
+                        "Ok"
+                        (Just <| FinishedEdit <| Controller.MidiLog)
 
             EditSpace ->
-                acceptOrCloseButtons
-                    "Ok"
-                    (Just <| FinishedEdit <| Controller.Space)
+                el
+                    [ alignTop
+                    , padding 10
+                    , backgroundColour White
+                    , Border.width 4
+                    ]
+                <|
+                    acceptOrCloseButtons
+                        "Ok"
+                        (Just <| FinishedEdit <| Controller.Space)
         ]
 
 
@@ -2006,11 +2173,23 @@ acceptOrCloseButtons acceptString acceptMsg =
         , backgroundColour White
         ]
         [ Input.button
-            [ padding 5
-            , Border.width 2
-            , Border.solid
-            , borderColour Black
-            ]
+            ([ padding 5
+             , Border.width 2
+             , Border.solid
+             , borderColour Black
+             ]
+                ++ (case acceptMsg of
+                        Just _ ->
+                            [ fontColour Black
+                            , borderColour Black
+                            ]
+
+                        _ ->
+                            [ fontColour LightGrey
+                            , borderColour LightGrey
+                            ]
+                   )
+            )
             { onPress = acceptMsg
             , label = text acceptString
             }

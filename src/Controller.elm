@@ -438,6 +438,27 @@ updateWithId currentId toUpdate updateInfo =
                 Space
 
 
+getModules : List Controller -> Controller -> List Controller
+getModules currentModules controller =
+    case controller of
+        (Module _ subController) as modu ->
+            (modu :: getModules [] subController)
+                |> List.append currentModules
+
+        Row subControls ->
+            List.map (getModules []) subControls
+                |> List.concat
+                |> List.append currentModules
+
+        Column subControls ->
+            List.map (getModules []) subControls
+                |> List.concat
+                |> List.append currentModules
+
+        _ ->
+            []
+
+
 addSpace : Controller -> Controller
 addSpace controller =
     case controller of
