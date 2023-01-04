@@ -150,7 +150,7 @@ init { mInitialState } =
               , pages = Array.fromList <| List.repeat 4 defaultPage
               , activePage = 0
               , menuOpen = True
-              , popup = Nothing
+              , popup = Just <| InfoPanel
               , midiLog = []
               }
             , Cmd.none
@@ -1193,23 +1193,25 @@ infoPanel =
                     ]
                 , paragraph [] [ text "Version ", text version ]
                 , paragraph []
-                    [ """Thank you for using MIDI Surf! Full video tutorials
-                    are provided """
-                        |> text
-                    , newTabLink
-                        linkStyle
-                        { url = "https://www.youtube.com/@mochreach"
-                        , label = text "on YouTube"
-                        }
-                    , """. If you find it useful, please consider
-                          supporting the development """
+                    [ """Thank you for using MIDI Surf! If you find it useful,
+                      please consider supporting the development """
                         |> text
                     , newTabLink
                         linkStyle
                         { url = "https://patreon.com/user?u=85350251"
                         , label = text "on Patreon"
                         }
-                    , text "."
+                    , """, where you can request new features.
+                      Check out our channel
+                      """ |> text
+                    , newTabLink
+                        linkStyle
+                        { url = "https://www.youtube.com/@mochreach"
+                        , label = text "on YouTube"
+                        }
+                    , """ for more videos about MIDI Surf and other music
+                      technology topics.
+                      """ |> text
                     ]
                 , paragraph []
                     [ text "Copyright: "
