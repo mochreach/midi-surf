@@ -67,6 +67,19 @@ type Mode
     | Edit Bool
 
 
+resetMode : Mode -> Mode
+resetMode mode =
+    case mode of
+        Normal ->
+            Normal
+
+        Edit False ->
+            Normal
+
+        Edit True ->
+            Edit True
+
+
 type PopUp
     = InfoPanel
     | MidiMenu
@@ -78,7 +91,15 @@ type PopUp
 
 type alias PageMenuState =
     { label : String
+    , mode : PageMenuMode
+    , savedPages : Dict String Page
+    , mSelectedPage : Maybe Int
     }
+
+
+type PageMenuMode
+    = NewPage
+    | LoadPage
 
 
 type alias SaveMenuState =
@@ -260,6 +281,7 @@ type Msg
     | OpenNewPageMenu
     | UpdatePageMenuState PageMenuState
     | AddPage PageMenuState
+    | LoadSelectedPage Page
     | UpdatePage Int PageMenuState
     | AddSpace String
     | RemoveItem String
@@ -426,7 +448,12 @@ update msg model =
                     ( { model
                         | popup =
                             Just <|
-                                EditPageMenu index { label = page.label }
+                                EditPageMenu index
+                                    { label = page.label
+                                    , mode = NewPage
+                                    , savedPages = model.savedPages
+                                    , mSelectedPage = Nothing
+                                    }
                       }
                     , Cmd.none
                     )
@@ -443,6 +470,7 @@ update msg model =
                                 |> Array.indexedMap Tuple.pair
                                 |> Array.filter (\( i, _ ) -> i /= index)
                                 |> Array.map Tuple.second
+                        , mode = resetMode model.mode
                         , popup = Nothing
                     }
             in
@@ -455,7 +483,12 @@ update msg model =
             ( { model
                 | popup =
                     Just <|
-                        NewPageMenu { label = "" }
+                        NewPageMenu
+                            { label = ""
+                            , mode = NewPage
+                            , savedPages = model.savedPages
+                            , mSelectedPage = Nothing
+                            }
               }
             , Cmd.none
             )
@@ -506,6 +539,7 @@ update msg model =
                                 -- I don't need to subtract 1 for zero indexing
                                 -- as this is the old array length
                                 , activePage = index
+                                , mode = resetMode model.mode
                                 , popup = Nothing
                             }
 
@@ -537,7 +571,27 @@ update msg model =
                         -- I don't need to subtract 1 for zero indexing
                         -- as this is the old array length
                         , activePage = Array.length model.pages
+                        , mode = resetMode model.mode
                         , popup = Nothing
+                    }
+            in
+            ( newModel
+            , Ports.saveState <|
+                Codec.encodeToValue modelCodec newModel
+            )
+
+        LoadSelectedPage page ->
+            let
+                newModel =
+                    { model
+                        | pages =
+                            Array.push page model.pages
+
+                        -- I don't need to subtract 1 for zero indexing
+                        -- as this is the old array length
+                        , activePage = Array.length model.pages
+                        , popup = Nothing
+                        , mode = resetMode model.mode
                     }
             in
             ( newModel
@@ -603,16 +657,7 @@ update msg model =
                                         model.activePage
                                         { id = id, updateFn = \_ -> controller }
                                         model.pages
-                                , mode =
-                                    case model.mode of
-                                        Normal ->
-                                            Normal
-
-                                        Edit False ->
-                                            Normal
-
-                                        Edit True ->
-                                            Edit True
+                                , mode = resetMode model.mode
                             }
                     in
                     ( newModel
@@ -2302,36 +2347,75 @@ newPageMenu state =
             , backgroundColour White
             , Border.width 4
             ]
-            [ paragraph [ Font.bold ] [ text "New Page" ]
-            , Input.text
-                [ Border.width 2
-                , Border.rounded 0
-                , borderColour Black
-                ]
-                { onChange =
-                    \newLabel ->
-                        { state | label = newLabel }
-                            |> UpdatePageMenuState
-                , text = state.label
-                , placeholder = Just <| Input.placeholder [] (text "page label")
-                , label = Input.labelAbove [] (text "Page Label")
-                }
-            , row [ spacing 2 ]
-                [ Input.button
-                    [ padding 5
-                    , Border.width 2
-                    , Border.solid
-                    , borderColour Black
-                    ]
-                    { onPress = Just (AddPage state), label = text "Add Page" }
-                , Input.button
-                    [ padding 5
-                    , Border.width 2
-                    , Border.solid
-                    , borderColour Black
-                    ]
-                    { onPress = Just ClosePopUp, label = text "Cancel" }
-                ]
+            [ paragraph [ Font.bold ] [ text "Pages" ]
+            , el [ centerX ] <|
+                Input.radioRow
+                    [ spacing 10 ]
+                    { onChange =
+                        \newMode ->
+                            { state | mode = newMode }
+                                |> UpdatePageMenuState
+                    , selected = Just state.mode
+                    , label = Input.labelHidden "Mode"
+                    , options =
+                        [ Input.option NewPage (text "New")
+                        , Input.option LoadPage (text "Load")
+                        ]
+                    }
+            , case state.mode of
+                NewPage ->
+                    Input.text
+                        [ Border.width 2
+                        , Border.rounded 0
+                        , borderColour Black
+                        ]
+                        { onChange =
+                            \newLabel ->
+                                { state | label = newLabel }
+                                    |> UpdatePageMenuState
+                        , text = state.label
+                        , placeholder = Just <| Input.placeholder [] (text "page label")
+                        , label = Input.labelAbove [] (text "Page Label")
+                        }
+
+                LoadPage ->
+                    column
+                        [ height (px 200)
+                        , width fill
+                        , scrollbarY
+                        , Border.width 2
+                        , Border.dashed
+                        ]
+                        (Dict.keys state.savedPages
+                            |> List.indexedMap
+                                (selectableOption
+                                    (\newSelected ->
+                                        { state | mSelectedPage = Just newSelected }
+                                            |> UpdatePageMenuState
+                                    )
+                                    state.mSelectedPage
+                                )
+                        )
+            , acceptOrCloseButtons
+                "Add Page"
+                (case state.mode of
+                    NewPage ->
+                        if String.isEmpty state.label then
+                            Nothing
+
+                        else
+                            Just <| AddPage state
+
+                    LoadPage ->
+                        state.mSelectedPage
+                            |> Maybe.andThen
+                                (\i ->
+                                    Dict.values state.savedPages
+                                        |> Array.fromList
+                                        |> Array.get i
+                                        |> Maybe.map (\p -> LoadSelectedPage p)
+                                )
+                )
             ]
 
 
