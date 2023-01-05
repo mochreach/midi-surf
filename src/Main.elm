@@ -3,7 +3,7 @@ module Main exposing (..)
 import Array exposing (Array)
 import Browser
 import Codec exposing (Codec, Value)
-import Controller exposing (Controller, FaderStatus(..), controllerCodec)
+import Controller exposing (Controller, FaderStatus(..), controllerCodec, setChannel)
 import Dict exposing (Dict)
 import EditableController as EController exposing (EditableController(..))
 import Element exposing (..)
@@ -92,8 +92,8 @@ type PopUp
 type alias PageMenuState =
     { label : String
     , mode : PageMenuMode
-    , savedPages : Dict String Page
     , mSelectedPage : Maybe Int
+    , bulkEditChannel : Maybe String
     }
 
 
@@ -280,14 +280,15 @@ type Msg
     | DeletePage Int
     | OpenNewPageMenu
     | UpdatePageMenuState PageMenuState
-    | AddPage PageMenuState
-    | LoadSelectedPage Page
+    | DeleteSavedPage String
+    | AddPage Page
     | UpdatePage Int PageMenuState
     | AddSpace String
     | RemoveItem String
     | OpenEditController String
     | SetEditType EditableController
     | UpdateControllerState EditableController
+    | DeleteSavedModule String
     | FinishedEdit Controller
     | SelectActivePage Int
     | ButtonDown String
@@ -451,8 +452,8 @@ update msg model =
                                 EditPageMenu index
                                     { label = page.label
                                     , mode = NewPage
-                                    , savedPages = model.savedPages
                                     , mSelectedPage = Nothing
+                                    , bulkEditChannel = Nothing
                                     }
                       }
                     , Cmd.none
@@ -486,8 +487,8 @@ update msg model =
                         NewPageMenu
                             { label = ""
                             , mode = NewPage
-                            , savedPages = model.savedPages
                             , mSelectedPage = Nothing
+                            , bulkEditChannel = Nothing
                             }
               }
             , Cmd.none
@@ -553,34 +554,12 @@ update msg model =
                 Codec.encodeToValue modelCodec newModel
             )
 
-        AddPage state ->
-            let
-                newModel =
-                    { model
-                        | pages =
-                            Array.push
-                                { label = state.label
-                                , controller = Controller.Space
-                                , config =
-                                    { gapSize = 2
-                                    , debug = False
-                                    }
-                                }
-                                model.pages
-
-                        -- I don't need to subtract 1 for zero indexing
-                        -- as this is the old array length
-                        , activePage = Array.length model.pages
-                        , mode = resetMode model.mode
-                        , popup = Nothing
-                    }
-            in
-            ( newModel
-            , Ports.saveState <|
-                Codec.encodeToValue modelCodec newModel
+        DeleteSavedPage key ->
+            ( { model | savedPages = Dict.remove key model.savedPages }
+            , Cmd.none
             )
 
-        LoadSelectedPage page ->
+        AddPage page ->
             let
                 newModel =
                     { model
@@ -628,7 +607,7 @@ update msg model =
             in
             ( { model
                 | popup =
-                    Maybe.map (EditMenu id << convertToEditable model.savedModules) control
+                    Maybe.map (EditMenu id << convertToEditable) control
               }
             , Cmd.none
             )
@@ -693,6 +672,14 @@ update msg model =
                     ( { model | popup = Nothing }
                     , Cmd.none
                     )
+
+        DeleteSavedModule key ->
+            ( { model
+                | savedModules =
+                    Dict.remove key model.savedModules
+              }
+            , Cmd.none
+            )
 
         ButtonDown id ->
             case getControllerFromActivePage id model.activePage model.pages of
@@ -960,15 +947,14 @@ update msg model =
             ( model, Cmd.none )
 
 
-convertToEditable : Dict String Controller -> Controller -> EditableController
-convertToEditable savedModules control =
+convertToEditable : Controller -> EditableController
+convertToEditable control =
     case control of
         Controller.Module label subController ->
             EditModule
                 { label = label
                 , controller = subController
                 , createMode = EController.New
-                , savedModules = savedModules
                 , selectedModule = Nothing
                 }
 
@@ -1042,7 +1028,7 @@ view model =
         ((case model.popup of
             Just popup ->
                 (inFront <|
-                    renderPopup model.midiStatus model.savedModules popup
+                    renderPopup model.midiStatus model.savedPages model.savedModules popup
                 )
                     :: fillSpace
 
@@ -1276,8 +1262,13 @@ newPageButton =
 -- {{{ Popups
 
 
-renderPopup : Midi.Status -> Dict String Controller -> PopUp -> Element Msg
-renderPopup midiStatus savedModules popup =
+renderPopup :
+    Midi.Status
+    -> Dict String Page
+    -> Dict String Controller
+    -> PopUp
+    -> Element Msg
+renderPopup midiStatus savedPages savedModules popup =
     el
         ([ padding 5, Background.color (rgba 0.5 0.5 0.5 0.8) ]
             ++ fillSpace
@@ -1301,7 +1292,7 @@ renderPopup midiStatus savedModules popup =
                 editMenu savedModules state
 
             NewPageMenu state ->
-                newPageMenu state
+                newPageMenu savedPages state
 
             EditPageMenu index state ->
                 editPageMenu index state
@@ -1560,7 +1551,6 @@ editMenu savedModules menuType =
                             { label = ""
                             , controller = Controller.Space
                             , createMode = EController.New
-                            , savedModules = savedModules
                             , selectedModule = Nothing
                             }
                         )
@@ -1612,7 +1602,7 @@ editMenu savedModules menuType =
                 }
         , case menuType of
             EditModule state ->
-                editModulePane state
+                editModulePane savedModules state
 
             EditIsomorphic state ->
                 editIsomorphicPane state
@@ -1661,8 +1651,8 @@ editMenu savedModules menuType =
         ]
 
 
-editModulePane : EController.EditModuleState -> Element Msg
-editModulePane state =
+editModulePane : Dict String Controller -> EController.EditModuleState -> Element Msg
+editModulePane savedModules state =
     column
         [ alignTop
         , padding 10
@@ -1699,24 +1689,46 @@ editModulePane state =
                     )
 
             EController.Load ->
-                column
-                    [ height (px 200)
-                    , width fill
-                    , scrollbarY
-                    , Border.width 2
-                    , Border.dashed
-                    ]
-                    (Dict.keys state.savedModules
-                        |> List.indexedMap
-                            (selectableOption
-                                (\newSelected ->
-                                    { state | selectedModule = Just newSelected }
-                                        |> EditModule
-                                        |> UpdateControllerState
+                column [ spacing 10 ]
+                    [ case state.selectedModule of
+                        Just index ->
+                            Input.button
+                                [ padding 5
+                                , Border.width 2
+                                , Border.solid
+                                , backgroundColour Red
+                                , fontColour White
+                                , borderColour Black
+                                ]
+                                { onPress =
+                                    Dict.toList savedModules
+                                        |> Array.fromList
+                                        |> Array.get index
+                                        |> Maybe.map (\( key, _ ) -> DeleteSavedModule key)
+                                , label = text "Delete"
+                                }
+
+                        Nothing ->
+                            none
+                    , column
+                        [ height (px 200)
+                        , width fill
+                        , scrollbarY
+                        , Border.width 2
+                        , Border.dashed
+                        ]
+                        (Dict.keys savedModules
+                            |> List.indexedMap
+                                (selectableOption
+                                    (\newSelected ->
+                                        { state | selectedModule = Just newSelected }
+                                            |> EditModule
+                                            |> UpdateControllerState
+                                    )
+                                    state.selectedModule
                                 )
-                                state.selectedModule
-                            )
-                    )
+                        )
+                    ]
         , acceptOrCloseButtons
             "Ok"
             (case state.createMode of
@@ -1727,7 +1739,7 @@ editModulePane state =
                     state.selectedModule
                         |> Maybe.andThen
                             (\i ->
-                                Dict.values state.savedModules
+                                Dict.values savedModules
                                     |> Array.fromList
                                     |> Array.get i
                                     |> Maybe.map (\m -> FinishedEdit m)
@@ -2338,8 +2350,8 @@ acceptOrCloseButtons acceptString acceptMsg =
 -- {{{ New/Edit Page Menu
 
 
-newPageMenu : PageMenuState -> Element Msg
-newPageMenu state =
+newPageMenu : Dict String Page -> PageMenuState -> Element Msg
+newPageMenu savedPages state =
     el [ centerX, centerY ] <|
         column
             [ padding 10
@@ -2379,23 +2391,72 @@ newPageMenu state =
                         }
 
                 LoadPage ->
-                    column
-                        [ height (px 200)
-                        , width fill
-                        , scrollbarY
-                        , Border.width 2
-                        , Border.dashed
-                        ]
-                        (Dict.keys state.savedPages
-                            |> List.indexedMap
-                                (selectableOption
-                                    (\newSelected ->
-                                        { state | mSelectedPage = Just newSelected }
-                                            |> UpdatePageMenuState
+                    column [ spacing 10 ]
+                        [ case state.mSelectedPage of
+                            Just index ->
+                                Input.button
+                                    [ padding 5
+                                    , Border.width 2
+                                    , Border.solid
+                                    , backgroundColour Red
+                                    , fontColour White
+                                    , borderColour Black
+                                    ]
+                                    { onPress =
+                                        Dict.toList savedPages
+                                            |> Array.fromList
+                                            |> Array.get index
+                                            |> Maybe.map (\( key, _ ) -> DeleteSavedPage key)
+                                    , label = text "Delete"
+                                    }
+
+                            Nothing ->
+                                none
+                        , column
+                            [ height (px 200)
+                            , width fill
+                            , scrollbarY
+                            , Border.width 2
+                            , Border.dashed
+                            ]
+                            (Dict.keys savedPages
+                                |> List.indexedMap
+                                    (selectableOption
+                                        (\newSelected ->
+                                            { state | mSelectedPage = Just newSelected }
+                                                |> UpdatePageMenuState
+                                        )
+                                        state.mSelectedPage
                                     )
-                                    state.mSelectedPage
-                                )
-                        )
+                            )
+                        , el [ centerX ] <|
+                            Input.text
+                                [ Border.width 2
+                                , Border.rounded 0
+                                , borderColour Black
+                                , htmlAttribute <| HAtt.type_ "number"
+                                ]
+                                { onChange =
+                                    \newChannel ->
+                                        { state
+                                            | bulkEditChannel =
+                                                if String.isEmpty newChannel then
+                                                    Nothing
+
+                                                else
+                                                    Just newChannel
+                                        }
+                                            |> UpdatePageMenuState
+                                , text =
+                                    state.bulkEditChannel
+                                        |> Maybe.withDefault ""
+                                , placeholder =
+                                    Just <|
+                                        Input.placeholder []
+                                            (text "set channel")
+                                , label = Input.labelAbove [] (text "Set Channel (Optional)")
+                                }
+                        ]
             , acceptOrCloseButtons
                 "Add Page"
                 (case state.mode of
@@ -2404,16 +2465,40 @@ newPageMenu state =
                             Nothing
 
                         else
-                            Just <| AddPage state
+                            { label = state.label
+                            , controller = Controller.Space
+                            , config =
+                                { gapSize = 2
+                                , debug = False
+                                }
+                            }
+                                |> AddPage
+                                |> Just
 
                     LoadPage ->
                         state.mSelectedPage
                             |> Maybe.andThen
                                 (\i ->
-                                    Dict.values state.savedPages
+                                    Dict.values savedPages
                                         |> Array.fromList
                                         |> Array.get i
-                                        |> Maybe.map (\p -> LoadSelectedPage p)
+                                        |> Maybe.map
+                                            (\p ->
+                                                case
+                                                    Maybe.andThen
+                                                        Midi.stringToChannel
+                                                        state.bulkEditChannel
+                                                of
+                                                    Just ch ->
+                                                        { p
+                                                            | controller =
+                                                                setChannel ch p.controller
+                                                        }
+                                                            |> AddPage
+
+                                                    Nothing ->
+                                                        AddPage p
+                                            )
                                 )
                 )
             ]

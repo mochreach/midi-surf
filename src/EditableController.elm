@@ -24,7 +24,6 @@ type alias EditModuleState =
     { label : String
     , controller : Controller
     , createMode : CreateMode
-    , savedModules : Dict String Controller
     , selectedModule : Maybe Int
     }
 

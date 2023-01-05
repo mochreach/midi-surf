@@ -622,3 +622,41 @@ buttonOff controller =
 
         _ ->
             ( controller, [] )
+
+
+setChannel : Midi.Channel -> Controller -> Controller
+setChannel channel controller =
+    case controller of
+        Module label subControl ->
+            Module label (setChannel channel subControl)
+
+        Row subcontrols ->
+            Row <|
+                List.map (setChannel channel) subcontrols
+
+        Column subcontrols ->
+            Column <|
+                List.map (setChannel channel) subcontrols
+
+        Note state ->
+            Note { state | channel = channel }
+
+        Chord state ->
+            Chord
+                { state
+                    | notes =
+                        state.notes
+                            |> List.map (\n -> { channel = channel, pitch = n.pitch })
+                }
+
+        CCValue state ->
+            CCValue { state | channel = channel }
+
+        Fader state ->
+            Fader { state | channel = channel }
+
+        MidiLog ->
+            MidiLog
+
+        Space ->
+            Space
