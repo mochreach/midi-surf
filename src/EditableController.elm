@@ -8,7 +8,7 @@ import Utils
 
 
 type EditableController
-    = EditModule String Controller
+    = EditModule EditModuleState
     | EditIsomorphic EditIsomorphicState
     | EditColumn (List Controller)
     | EditRow (List Controller)
@@ -18,6 +18,20 @@ type EditableController
     | EditFader EditFaderState
     | EditMidiLog
     | EditSpace
+
+
+type alias EditModuleState =
+    { label : String
+    , controller : Controller
+    , createMode : CreateMode
+    , savedModules : Dict String Controller
+    , selectedModule : Maybe Int
+    }
+
+
+type CreateMode
+    = New
+    | Load
 
 
 type alias EditIsomorphicState =
@@ -126,23 +140,19 @@ updateEditNoteWithMidiMsg midiMsg state =
 
 editStateToNote : EditNoteState -> Maybe Controller
 editStateToNote { label, colour, pitch, channel, velocity } =
-    if String.isEmpty label then
-        Nothing
+    case
+        ( Midi.stringToChannel channel
+        , String.toInt pitch
+        , String.toInt velocity
+        )
+    of
+        ( Just ch, Just nn, Just vel ) ->
+            -- TODO: These values should not exceed 127, handle with midi module
+            Controller.newNote label colour ch nn vel
+                |> Just
 
-    else
-        case
-            ( Midi.stringToChannel channel
-            , String.toInt pitch
-            , String.toInt velocity
-            )
-        of
-            ( Just ch, Just nn, Just vel ) ->
-                -- TODO: These values should not exceed 127, handle with midi module
-                Controller.newNote label colour ch nn vel
-                    |> Just
-
-            _ ->
-                Nothing
+        _ ->
+            Nothing
 
 
 type alias EditChordState =
@@ -194,13 +204,9 @@ updateEditChordWithMidiMsg midiMsg state =
 
 editStateToChord : EditChordState -> Maybe Controller
 editStateToChord { label, colour, velocity, notes } =
-    if String.isEmpty label then
-        Nothing
-
-    else
-        String.toInt velocity
-            |> Maybe.map
-                (\v -> Controller.newChord label colour v (Dict.values notes))
+    String.toInt velocity
+        |> Maybe.map
+            (\v -> Controller.newChord label colour v (Dict.values notes))
 
 
 type alias EditCCValueState =
@@ -239,23 +245,19 @@ updateEditCCValueWithMidiMsg midiMsg state =
 
 editStateToCCValue : EditCCValueState -> Maybe Controller
 editStateToCCValue { label, colour, channel, controller, value } =
-    if String.isEmpty label then
-        Nothing
+    case
+        ( Midi.stringToChannel channel
+        , String.toInt controller
+        , String.toInt value
+        )
+    of
+        ( Just ch, Just c, Just v ) ->
+            -- TODO: These values should not exceed 127, handle with midi module
+            Controller.newCCValue label colour ch c v
+                |> Just
 
-    else
-        case
-            ( Midi.stringToChannel channel
-            , String.toInt controller
-            , String.toInt value
-            )
-        of
-            ( Just ch, Just c, Just v ) ->
-                -- TODO: These values should not exceed 127, handle with midi module
-                Controller.newCCValue label colour ch c v
-                    |> Just
-
-            _ ->
-                Nothing
+        _ ->
+            Nothing
 
 
 type alias EditFaderState =
@@ -295,42 +297,38 @@ updateEditFaderWithMidiMsg midiMsg state =
 
 editStateToFader : EditFaderState -> Maybe Controller
 editStateToFader { label, colour, channel, ccNumber, valueMin, valueMax } =
-    if String.isEmpty label then
-        Nothing
+    case Midi.stringToChannel channel of
+        Just ch ->
+            case
+                ( String.toInt ccNumber
+                , String.toInt valueMin
+                , String.toInt valueMax
+                )
+            of
+                ( Just cc, Just vmin, Just vmax ) ->
+                    Controller.Fader
+                        { status = Controller.Set
+                        , label = label
+                        , colour = colour
+                        , channel = ch
+                        , ccNumber = cc
+                        , valuePercent = 50
+                        , valueMin = vmin
+                        , valueMax = vmax
+                        }
+                        |> Just
 
-    else
-        case Midi.stringToChannel channel of
-            Just ch ->
-                case
-                    ( String.toInt ccNumber
-                    , String.toInt valueMin
-                    , String.toInt valueMax
-                    )
-                of
-                    ( Just cc, Just vmin, Just vmax ) ->
-                        Controller.Fader
-                            { status = Controller.Set
-                            , label = label
-                            , colour = colour
-                            , channel = ch
-                            , ccNumber = cc
-                            , valuePercent = 50
-                            , valueMin = vmin
-                            , valueMax = vmax
-                            }
-                            |> Just
+                _ ->
+                    Nothing
 
-                    _ ->
-                        Nothing
-
-            _ ->
-                Nothing
+        _ ->
+            Nothing
 
 
 updateWithMidiMsg : MidiMsg -> EditableController -> EditableController
 updateWithMidiMsg midiMsg state =
     case state of
-        EditModule _ _ ->
+        EditModule _ ->
             state
 
         EditIsomorphic _ ->

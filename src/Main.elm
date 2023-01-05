@@ -16,12 +16,13 @@ import Element.Lazy as Lazy
 import Element.Region as Region
 import FeatherIcons as Icons
 import Html exposing (Html)
-import Html.Attributes exposing (accept)
+import Html.Attributes as HAtt
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
 import Midi exposing (MidiMsg(..), Status(..))
 import Ports
 import Style exposing (..)
+import Utils
 
 
 version : String
@@ -192,7 +193,7 @@ defaultPage =
             }
     , config =
         { gapSize = 2
-        , debug = True
+        , debug = False
         }
     }
 
@@ -234,7 +235,7 @@ makeIsomorphicRow channel velocity noteRange offset rowLength rowNumber =
         |> List.map Tuple.second
         |> List.map
             (\i ->
-                Controller.newNote (String.fromInt i) (Style.pitchToAppColour i) channel i velocity
+                Controller.newNote "" (Style.pitchToAppColour i) channel i velocity
             )
         |> Controller.Row
 
@@ -274,6 +275,7 @@ type Msg
     | FaderSet String
     | ClosePopUp
     | IncomingMidi { deviceName : String, midiData : Array Int }
+    | NoOp
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -356,12 +358,16 @@ update msg model =
 
                     else
                         ( page.label, page )
+
+                newModel =
+                    { model
+                        | savedPages = Dict.insert key updatedPage model.savedPages
+                        , popup = Nothing
+                    }
             in
-            ( { model
-                | savedPages = Dict.insert key updatedPage model.savedPages
-                , popup = Nothing
-              }
-            , Cmd.none
+            ( newModel
+            , Ports.saveState <|
+                Codec.encodeToValue modelCodec newModel
             )
 
         SaveSelectedModule controller ->
@@ -378,13 +384,17 @@ update msg model =
 
                             else
                                 ( label, modu )
+
+                        newModel =
+                            { model
+                                | savedModules =
+                                    Dict.insert key updatedModule model.savedModules
+                                , popup = Nothing
+                            }
                     in
-                    ( { model
-                        | savedModules =
-                            Dict.insert key updatedModule model.savedModules
-                        , popup = Nothing
-                      }
-                    , Cmd.none
+                    ( newModel
+                    , Ports.saveState <|
+                        Codec.encodeToValue modelCodec newModel
                     )
 
                 _ ->
@@ -519,7 +529,7 @@ update msg model =
                                 , controller = Controller.Space
                                 , config =
                                     { gapSize = 2
-                                    , debug = True
+                                    , debug = False
                                     }
                                 }
                                 model.pages
@@ -564,7 +574,7 @@ update msg model =
             in
             ( { model
                 | popup =
-                    Maybe.map (EditMenu id << convertToEditable) control
+                    Maybe.map (EditMenu id << convertToEditable model.savedModules) control
               }
             , Cmd.none
             )
@@ -901,12 +911,21 @@ update msg model =
             , Cmd.none
             )
 
+        NoOp ->
+            ( model, Cmd.none )
 
-convertToEditable : Controller -> EditableController
-convertToEditable control =
+
+convertToEditable : Dict String Controller -> Controller -> EditableController
+convertToEditable savedModules control =
     case control of
         Controller.Module label subController ->
-            EditModule label subController
+            EditModule
+                { label = label
+                , controller = subController
+                , createMode = EController.New
+                , savedModules = savedModules
+                , selectedModule = Nothing
+                }
 
         Controller.Row subControls ->
             EditRow subControls
@@ -978,7 +997,7 @@ view model =
         ((case model.popup of
             Just popup ->
                 (inFront <|
-                    renderPopup model.midiStatus popup
+                    renderPopup model.midiStatus model.savedModules popup
                 )
                     :: fillSpace
 
@@ -1212,8 +1231,8 @@ newPageButton =
 -- {{{ Popups
 
 
-renderPopup : Midi.Status -> PopUp -> Element Msg
-renderPopup midiStatus popup =
+renderPopup : Midi.Status -> Dict String Controller -> PopUp -> Element Msg
+renderPopup midiStatus savedModules popup =
     el
         ([ padding 5, Background.color (rgba 0.5 0.5 0.5 0.8) ]
             ++ fillSpace
@@ -1234,7 +1253,7 @@ renderPopup midiStatus popup =
                 saveMenu state
 
             EditMenu _ state ->
-                editMenu state
+                editMenu savedModules state
 
             NewPageMenu state ->
                 newPageMenu state
@@ -1432,7 +1451,7 @@ saveMenu ({ pages, mSelectedPage, modules, mSelectedModule, mode } as state) =
                             |> List.indexedMap
                                 (\i l -> String.fromInt i ++ ": " ++ l)
                             |> List.indexedMap
-                                (saveOption
+                                (selectableOption
                                     (\newSelected ->
                                         { state | mSelectedPage = Just newSelected }
                                             |> UpdateSaveMenuState
@@ -1443,7 +1462,7 @@ saveMenu ({ pages, mSelectedPage, modules, mSelectedModule, mode } as state) =
                     SaveModule ->
                         List.map Controller.controllerToString modules
                             |> List.indexedMap
-                                (saveOption
+                                (selectableOption
                                     (\newSelected ->
                                         { state | mSelectedModule = Just newSelected }
                                             |> UpdateSaveMenuState
@@ -1469,30 +1488,13 @@ saveMenu ({ pages, mSelectedPage, modules, mSelectedModule, mode } as state) =
             ]
 
 
-saveOption : (Int -> Msg) -> Maybe Int -> Int -> String -> Element Msg
-saveOption msg mSelected index label =
-    el
-        [ padding 10
-        , width fill
-        , Font.alignLeft
-        , case Maybe.map (\s -> s == index) mSelected of
-            Just True ->
-                backgroundColour Blue
-
-            _ ->
-                backgroundColour White
-        , Events.onClick <| msg index
-        ]
-        (text label)
-
-
 
 -- }}}
 -- {{{ Edit Menu
 
 
-editMenu : EditableController -> Element Msg
-editMenu menuType =
+editMenu : Dict String Controller -> EditableController -> Element Msg
+editMenu savedModules menuType =
     row [ padding 20, spacing 10, width fill, height fill ]
         [ el
             [ alignTop
@@ -1508,7 +1510,16 @@ editMenu menuType =
                 , selected = Just menuType
                 , label = Input.labelHidden "Type Selector"
                 , options =
-                    [ Input.option (EditModule "" Controller.Space) (text "Module")
+                    [ Input.option
+                        (EditModule
+                            { label = ""
+                            , controller = Controller.Space
+                            , createMode = EController.New
+                            , savedModules = savedModules
+                            , selectedModule = Nothing
+                            }
+                        )
+                        (text "Module")
                     , Input.option
                         (EditIsomorphic EController.defaultEditIsomorphicState)
                         (text "Isomorphic")
@@ -1555,8 +1566,8 @@ editMenu menuType =
                     ]
                 }
         , case menuType of
-            EditModule label subController ->
-                editModulePane label subController
+            EditModule state ->
+                editModulePane state
 
             EditIsomorphic state ->
                 editIsomorphicPane state
@@ -1605,8 +1616,8 @@ editMenu menuType =
         ]
 
 
-editModulePane : String -> Controller -> Element Msg
-editModulePane label subController =
+editModulePane : EController.EditModuleState -> Element Msg
+editModulePane state =
     column
         [ alignTop
         , padding 10
@@ -1614,18 +1625,69 @@ editModulePane label subController =
         , backgroundColour White
         , Border.width 4
         ]
-        [ editTextBox
-            { placeholder = "label"
-            , label = "Label"
-            , current = label
+        [ Input.radioRow
+            [ spacing 10 ]
+            { onChange =
+                \newMode ->
+                    { state | createMode = newMode }
+                        |> EController.EditModule
+                        |> UpdateControllerState
+            , selected = Just state.createMode
+            , label = Input.labelHidden "Create Mode"
+            , options =
+                [ Input.option EController.New (text "New")
+                , Input.option EController.Load (text "Load")
+                ]
             }
-            (\newLabel ->
-                EditModule newLabel subController
-                    |> UpdateControllerState
-            )
+        , case state.createMode of
+            EController.New ->
+                editTextBox
+                    { placeholder = "label"
+                    , label = "Label"
+                    , current = state.label
+                    }
+                    "text"
+                    (\newLabel ->
+                        { state | label = newLabel }
+                            |> EditModule
+                            |> UpdateControllerState
+                    )
+
+            EController.Load ->
+                column
+                    [ height (px 200)
+                    , width fill
+                    , scrollbarY
+                    , Border.width 2
+                    , Border.dashed
+                    ]
+                    (Dict.keys state.savedModules
+                        |> List.indexedMap
+                            (selectableOption
+                                (\newSelected ->
+                                    { state | selectedModule = Just newSelected }
+                                        |> EditModule
+                                        |> UpdateControllerState
+                                )
+                                state.selectedModule
+                            )
+                    )
         , acceptOrCloseButtons
             "Ok"
-            (Just <| FinishedEdit <| Controller.Module label subController)
+            (case state.createMode of
+                EController.New ->
+                    Just <| FinishedEdit <| Controller.Module state.label state.controller
+
+                EController.Load ->
+                    state.selectedModule
+                        |> Maybe.andThen
+                            (\i ->
+                                Dict.values state.savedModules
+                                    |> Array.fromList
+                                    |> Array.get i
+                                    |> Maybe.map (\m -> FinishedEdit m)
+                            )
+            )
         ]
 
 
@@ -1643,6 +1705,7 @@ editIsomorphicPane state =
             , label = "Channel"
             , current = state.channel
             }
+            "number"
             (\newChannel ->
                 { state | channel = newChannel }
                     |> EditIsomorphic
@@ -1653,6 +1716,7 @@ editIsomorphicPane state =
             , label = "Velocity"
             , current = state.velocity
             }
+            "number"
             (\newVelocity ->
                 { state | velocity = newVelocity }
                     |> EditIsomorphic
@@ -1663,6 +1727,7 @@ editIsomorphicPane state =
             , label = "First Note"
             , current = state.firstNote
             }
+            "number"
             (\newFirstNote ->
                 { state | firstNote = newFirstNote }
                     |> EditIsomorphic
@@ -1673,6 +1738,7 @@ editIsomorphicPane state =
             , label = "Number of Rows"
             , current = state.numberOfRows
             }
+            "number"
             (\newNumRows ->
                 { state | numberOfRows = newNumRows }
                     |> EditIsomorphic
@@ -1683,6 +1749,7 @@ editIsomorphicPane state =
             , label = "Note Offset"
             , current = state.offset
             }
+            "number"
             (\newOffset ->
                 { state | offset = newOffset }
                     |> EditIsomorphic
@@ -1693,6 +1760,7 @@ editIsomorphicPane state =
             , label = "Row Length"
             , current = state.rowLength
             }
+            "number"
             (\newRowLength ->
                 { state | rowLength = newRowLength }
                     |> EditIsomorphic
@@ -1837,6 +1905,7 @@ editNotePane state =
             , label = "Label"
             , current = state.label
             }
+            "text"
             (\newLabel ->
                 { state | label = newLabel }
                     |> EditNote
@@ -1854,6 +1923,7 @@ editNotePane state =
             , label = "Channel"
             , current = state.channel
             }
+            "number"
             (\newChannel ->
                 { state | channel = newChannel }
                     |> EditNote
@@ -1864,6 +1934,7 @@ editNotePane state =
             , label = "Note Number"
             , current = state.pitch
             }
+            "number"
             (\newNoteNumber ->
                 { state | pitch = newNoteNumber }
                     |> EditNote
@@ -1874,6 +1945,7 @@ editNotePane state =
             , label = "Velocity"
             , current = state.velocity
             }
+            "number"
             (\newVelocity ->
                 { state | velocity = newVelocity }
                     |> EditNote
@@ -1902,6 +1974,7 @@ editChordPane state =
             , label = "Label"
             , current = state.label
             }
+            "text"
             (\newLabel ->
                 { state | label = newLabel }
                     |> EditChord
@@ -1919,6 +1992,7 @@ editChordPane state =
             , label = "Velocity"
             , current = state.velocity
             }
+            "number"
             (\newVelocity ->
                 { state | velocity = newVelocity }
                     |> EditChord
@@ -1987,6 +2061,7 @@ editCCValuePane state =
             , label = "Label"
             , current = state.label
             }
+            "text"
             (\newLabel ->
                 { state | label = newLabel }
                     |> EditCCValue
@@ -2004,6 +2079,7 @@ editCCValuePane state =
             , label = "Channel"
             , current = state.channel
             }
+            "number"
             (\newChannel ->
                 { state | channel = newChannel }
                     |> EditCCValue
@@ -2014,6 +2090,7 @@ editCCValuePane state =
             , label = "Controller Number"
             , current = state.controller
             }
+            "number"
             (\newController ->
                 { state | controller = newController }
                     |> EditCCValue
@@ -2024,6 +2101,7 @@ editCCValuePane state =
             , label = "Value"
             , current = state.value
             }
+            "number"
             (\newValue ->
                 { state | value = newValue }
                     |> EditCCValue
@@ -2052,6 +2130,7 @@ editFaderPane state =
             , label = "Label"
             , current = state.label
             }
+            "text"
             (\newLabel ->
                 { state | label = newLabel }
                     |> EditFader
@@ -2069,6 +2148,7 @@ editFaderPane state =
             , label = "Channel"
             , current = state.channel
             }
+            "number"
             (\newChannel ->
                 { state | channel = newChannel }
                     |> EditFader
@@ -2079,6 +2159,7 @@ editFaderPane state =
             , label = "CC Number"
             , current = state.ccNumber
             }
+            "number"
             (\newCCNumber ->
                 { state | ccNumber = newCCNumber }
                     |> EditFader
@@ -2089,6 +2170,7 @@ editFaderPane state =
             , label = "Min Value"
             , current = state.valueMin
             }
+            "number"
             (\newMinValue ->
                 { state | valueMin = newMinValue }
                     |> EditFader
@@ -2099,6 +2181,7 @@ editFaderPane state =
             , label = "Max Value"
             , current = state.valueMax
             }
+            "number"
             (\newMaxValue ->
                 { state | valueMax = newMaxValue }
                     |> EditFader
@@ -2118,14 +2201,16 @@ editTextBox :
     , label : String
     , current : String
     }
+    -> String
     -> (String -> Msg)
     -> Element Msg
-editTextBox { placeholder, label, current } msg =
+editTextBox { placeholder, label, current } type_ msg =
     Input.text
         [ width fill
         , Border.width 2
         , Border.rounded 0
         , borderColour Black
+        , htmlAttribute <| HAtt.type_ type_
         ]
         { onChange = msg
         , text = current
@@ -2314,7 +2399,8 @@ renderPage mode midiLog page =
             page
     in
     el
-        (fillSpace
+        ((htmlAttribute <| Utils.onContextMenu NoOp)
+            :: fillSpace
             ++ (case mode of
                     Normal ->
                         []
@@ -2389,8 +2475,10 @@ renderController mode midiLog config idParts controller id =
 
         Controller.Row subControls ->
             Lazy.lazy2 row
-                (spacingXY config.gapSize 0
-                    :: fillSpace
+                ([ spacingXY config.gapSize 0
+                 , Events.onClick NoOp
+                 ]
+                    ++ fillSpace
                     ++ (case mode of
                             Normal ->
                                 []

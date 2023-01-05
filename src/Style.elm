@@ -4,6 +4,7 @@ import Codec exposing (Codec)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
+import Element.Events as Events
 import Element.Font as Font
 import Html.Attributes as Hatt
 
@@ -137,3 +138,20 @@ noSelect =
 fillSpace : List (Attribute msg)
 fillSpace =
     [ height fill, width fill ]
+
+
+selectableOption : (Int -> msg) -> Maybe Int -> Int -> String -> Element msg
+selectableOption msg mSelected index label =
+    el
+        [ padding 10
+        , width fill
+        , Font.alignLeft
+        , case Maybe.map (\s -> s == index) mSelected of
+            Just True ->
+                backgroundColour Blue
+
+            _ ->
+                backgroundColour White
+        , Events.onClick <| msg index
+        ]
+        (text label)

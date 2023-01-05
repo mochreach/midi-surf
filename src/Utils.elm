@@ -1,4 +1,18 @@
-module Utils exposing (mmap6)
+module Utils exposing (mmap6, onContextMenu)
+
+import Html
+import Html.Events exposing (preventDefaultOn)
+import Json.Decode as Json
+
+
+onContextMenu : msg -> Html.Attribute msg
+onContextMenu msg =
+    preventDefaultOn "contextmenu" (Json.map alwaysPreventDefault (Json.succeed msg))
+
+
+alwaysPreventDefault : msg -> ( msg, Bool )
+alwaysPreventDefault msg =
+    ( msg, True )
 
 
 mmap6 :
