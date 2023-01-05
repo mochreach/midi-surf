@@ -1,6 +1,6 @@
 set -e
 git checkout ghpages
-git merge main
+git merge --no-edit main
 rm -rf docs/
 elm-app build
 mv build/ docs/
