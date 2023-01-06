@@ -7,8 +7,9 @@
   "vendors~main.js": "/static/js/vendors~main.354e092f.chunk.js",
   "vendors~main.js.map": "/static/js/vendors~main.354e092f.chunk.js.map",
   "./service-worker.js": "/./service-worker.js",
+  "CNAME": "/CNAME",
   "favicon.ico": "/favicon.ico",
   "index.html": "/index.html",
   "manifest.json": "/manifest.json",
-  "precache-manifest.e4a3579795049dcfc62688bc21fe127c.js": "/precache-manifest.e4a3579795049dcfc62688bc21fe127c.js"
+  "precache-manifest.4a6ac3f72902c47bcb65c54ab1c2de18.js": "/precache-manifest.4a6ac3f72902c47bcb65c54ab1c2de18.js"
 }
