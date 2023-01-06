@@ -1315,7 +1315,7 @@ infoPanel =
             , Border.width 4
             ]
             [ column
-                [ spacing 20, height fill, scrollbarY ]
+                [ spacing 20, height fill, scrollbarY, Font.size 16 ]
                 [ column
                     [ centerX
                     , paddingXY 8 18
@@ -1328,23 +1328,39 @@ infoPanel =
                     [ text "MIDI"
                     , text "Surf"
                     ]
-                , paragraph [] [ text "Version ", text version ]
                 , paragraph []
-                    [ """Thank you for using MIDI Surf! If you find it useful,
-                      please consider supporting the development """
-                        |> text
+                    [ text "Version "
+                    , text version
+                    , text " ("
                     , newTabLink
                         linkStyle
-                        { url = "https://patreon.com/user?u=85350251"
-                        , label = text "on Patreon"
+                        { url = "https://github.com/mochreach/midi-surf"
+                        , label = text "source"
                         }
-                    , """, where you can request new features.
-                      Check out our channel
-                      """ |> text
+                    , text ")"
+                    ]
+                , paragraph []
+                    [ """ Please consider supporting the development of this
+                    app if you enjoy using it, I'd really appreciate it if you
+                    did! You can join our community on """ |> text
+                    , newTabLink
+                        linkStyle
+                        { url = "https://patreon.com/mochreach"
+                        , label = text "Patreon"
+                        }
+                    , """ and help guide the direction the app (and future software
+                    from Mo Chreach!) takes, or buy me a coffee/beer/cup of tea/sausage roll on
+                    """ |> text
+                    , newTabLink
+                        linkStyle
+                        { url = "https://ko-fi.com/mochreach"
+                        , label = text "Ko-Fi"
+                        }
+                    , """. Check out my channel on """ |> text
                     , newTabLink
                         linkStyle
                         { url = "https://www.youtube.com/@mochreach"
-                        , label = text "on YouTube"
+                        , label = text "YouTube"
                         }
                     , """ for more videos about MIDI Surf and other music
                       technology topics.
