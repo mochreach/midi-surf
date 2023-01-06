@@ -3,7 +3,7 @@ module Main exposing (..)
 import Array exposing (Array)
 import Browser
 import Codec exposing (Codec, Value)
-import Controller exposing (Controller, FaderStatus(..), controllerCodec, setChannel)
+import Controller as C exposing (Controller(..), FaderStatus(..), controllerCodec, setChannel)
 import Dict exposing (Dict)
 import EditableController as EController exposing (EditableController(..))
 import Element exposing (..)
@@ -127,7 +127,7 @@ pageCodec : Codec Page
 pageCodec =
     Codec.object Page
         |> Codec.field "label" .label Codec.string
-        |> Codec.field "controller" .controller Controller.controllerCodec
+        |> Codec.field "controller" .controller C.controllerCodec
         |> Codec.field "config" .config pageConfigCodec
         |> Codec.buildObject
 
@@ -151,7 +151,7 @@ getControllerFromActivePage id activePage pages =
     pages
         |> Array.get activePage
         |> Maybe.map .controller
-        |> Maybe.andThen (Controller.getWithId "0" id)
+        |> Maybe.andThen (C.getWithId "0" id)
 
 
 updateControllerOnActivePage :
@@ -167,7 +167,7 @@ updateControllerOnActivePage activePage updateInfo pages =
                 if i == activePage then
                     { p
                         | controller =
-                            Controller.updateWithId "0" p.controller updateInfo
+                            C.updateWithId "0" p.controller updateInfo
                     }
 
                 else
@@ -188,7 +188,7 @@ init { mInitialState } =
         _ ->
             ( { midiStatus = Midi.Initialising
               , mode = Normal
-              , pages = Array.fromList <| List.repeat 4 defaultPage
+              , pages = Array.fromList <| [ drumPage, synthWidePage, blankPage ]
               , activePage = 0
               , savedPages = Dict.empty
               , savedModules = Dict.empty
@@ -238,7 +238,7 @@ isomorphicKeyboard { channel, velocity, firstNote, numberOfRows, offset, rowLeng
     in
     List.map (makeIsomorphicRow channel velocity noteRange offset (rowLength - 1)) rowNumbers
         |> List.reverse
-        |> Controller.Column
+        |> C.Column
 
 
 makeIsomorphicRow : Midi.Channel -> Int -> List Int -> Int -> Int -> Int -> Controller
@@ -256,12 +256,247 @@ makeIsomorphicRow channel velocity noteRange offset rowLength rowNumber =
         |> List.map Tuple.second
         |> List.map
             (\i ->
-                Controller.newNote "" (Style.pitchToAppColour i) channel i velocity
+                C.newNote "" (Style.pitchToAppColour i) channel i velocity
             )
-        |> Controller.Row
+        |> C.Row
 
 
 
+-- {{{ Presets
+
+
+synthWidePage : Page
+synthWidePage =
+    { label = "🎹"
+    , controller = synthWideController
+    , config =
+        { gapSize = 2
+        , debug = False
+        }
+    }
+
+
+synthWideController : Controller
+synthWideController =
+    C.Row
+        [ C.Column
+            [ C.Row
+                [ C.Fader
+                    { status = C.Set
+                    , label = "P1"
+                    , colour = Green
+                    , channel = Midi.Ch6
+                    , ccNumber = 1
+                    , valuePercent = 50
+                    , valueMin = 0
+                    , valueMax = 0
+                    }
+                , C.Fader
+                    { status = C.Set
+                    , label = "P2"
+                    , colour = Blue
+                    , channel = Midi.Ch6
+                    , ccNumber = 2
+                    , valuePercent = 50
+                    , valueMin = 0
+                    , valueMax = 0
+                    }
+                , C.Fader
+                    { status = C.Set
+                    , label = "Fil"
+                    , colour = Yellow
+                    , channel = Midi.Ch6
+                    , ccNumber = 3
+                    , valuePercent = 50
+                    , valueMin = 0
+                    , valueMax = 0
+                    }
+                , C.Fader
+                    { status = C.Set
+                    , label = "Res"
+                    , colour = Red
+                    , channel = Midi.Ch6
+                    , ccNumber = 4
+                    , valuePercent = 50
+                    , valueMin = 0
+                    , valueMax = 0
+                    }
+                ]
+            , C.Row
+                [ C.Fader
+                    { status = C.Set
+                    , label = "Att"
+                    , colour = Green
+                    , channel = Midi.Ch6
+                    , ccNumber = 5
+                    , valuePercent = 50
+                    , valueMin = 0
+                    , valueMax = 0
+                    }
+                , C.Fader
+                    { status = C.Set
+                    , label = "Dec"
+                    , colour = Blue
+                    , channel = Midi.Ch6
+                    , ccNumber = 6
+                    , valuePercent = 50
+                    , valueMin = 0
+                    , valueMax = 0
+                    }
+                , C.Fader
+                    { status = C.Set
+                    , label = "Sus"
+                    , colour = Yellow
+                    , channel = Midi.Ch6
+                    , ccNumber = 7
+                    , valuePercent = 50
+                    , valueMin = 0
+                    , valueMax = 0
+                    }
+                , C.Fader
+                    { status = C.Set
+                    , label = "Rel"
+                    , colour = Red
+                    , channel = Midi.Ch6
+                    , ccNumber = 8
+                    , valuePercent = 50
+                    , valueMin = 0
+                    , valueMax = 0
+                    }
+                ]
+            ]
+        , C.Module "Isomorphic Keyboard (Ch 6)" <|
+            isomorphicKeyboard
+                { channel = Midi.Ch6
+                , velocity = 100
+                , firstNote = 48
+                , numberOfRows = 8
+                , offset = 5
+                , rowLength = 9
+                }
+        ]
+
+
+drumPage : Page
+drumPage =
+    { label = "🥁"
+    , controller = drumsController
+    , config =
+        { gapSize = 2
+        , debug = False
+        }
+    }
+
+
+drumsController : Controller
+drumsController =
+    C.Column
+        [ C.Column
+            [ C.Row
+                [ C.CCValue
+                    { status = C.Off
+                    , label = "Unmute\nKick"
+                    , colour = LightGrey
+                    , channel = Midi.Ch1
+                    , controller = 53
+                    , value = 0
+                    }
+                , C.CCValue
+                    { status = C.Off
+                    , label = "Unmute\nSnare"
+                    , colour = LightGrey
+                    , channel = Midi.Ch2
+                    , controller = 53
+                    , value = 0
+                    }
+                , C.CCValue
+                    { status = C.Off
+                    , label = "Unmute\nHat"
+                    , colour = LightGrey
+                    , channel = Midi.Ch3
+                    , controller = 53
+                    , value = 0
+                    }
+                ]
+            , C.Row
+                [ C.CCValue
+                    { status = C.Off
+                    , label = "Mute\nKick"
+                    , colour = DarkGrey
+                    , channel = Midi.Ch1
+                    , controller = 53
+                    , value = 1
+                    }
+                , C.CCValue
+                    { status = C.Off
+                    , label = "Mute\nSnare"
+                    , colour = DarkGrey
+                    , channel = Midi.Ch2
+                    , controller = 53
+                    , value = 1
+                    }
+                , C.CCValue
+                    { status = C.Off
+                    , label = "Mute\nHat"
+                    , colour = DarkGrey
+                    , channel = Midi.Ch3
+                    , controller = 53
+                    , value = 1
+                    }
+                ]
+            ]
+        , Row
+            [ C.Note
+                { status = C.Off
+                , label = "Snare"
+                , colour = Green
+                , channel = Midi.Ch2
+                , pitch = 53
+                , velocity = 100
+                }
+            , C.Note
+                { status = C.Off
+                , label = "Hat 50"
+                , colour = Blue
+                , channel = Midi.Ch3
+                , pitch = 53
+                , velocity = 50
+                }
+            ]
+        , Row
+            [ C.Note
+                { status = C.Off
+                , label = "Kick"
+                , colour = Red
+                , channel = Midi.Ch1
+                , pitch = 53
+                , velocity = 100
+                }
+            , C.Note
+                { status = C.Off
+                , label = "Hat 100"
+                , colour = Blue
+                , channel = Midi.Ch3
+                , pitch = 53
+                , velocity = 100
+                }
+            ]
+        ]
+
+
+blankPage : Page
+blankPage =
+    { label = "Blank"
+    , controller = C.Module "Click the pencil in\n the menu to edit me!" C.Space
+    , config =
+        { gapSize = 2
+        , debug = False
+        }
+    }
+
+
+
+-- }}}
 -- }}}
 -- {{{ UPDATE
 
@@ -342,7 +577,7 @@ update msg model =
                             , modules =
                                 Array.map .controller model.pages
                                     |> Array.toList
-                                    |> List.map (Controller.getModules [])
+                                    |> List.map (C.getModules [])
                                     |> List.concat
                             , mSelectedModule = Nothing
                             , mode = SavePage
@@ -395,7 +630,7 @@ update msg model =
 
         SaveSelectedModule controller ->
             case controller of
-                (Controller.Module label subControl) as modu ->
+                (C.Module label subControl) as modu ->
                     let
                         ( key, updatedModule ) =
                             if Dict.member label model.savedModules then
@@ -403,7 +638,7 @@ update msg model =
                                     newLabel =
                                         label ++ "_0"
                                 in
-                                ( newLabel, Controller.Module newLabel subControl )
+                                ( newLabel, C.Module newLabel subControl )
 
                             else
                                 ( label, modu )
@@ -583,7 +818,7 @@ update msg model =
                 | pages =
                     updateControllerOnActivePage
                         model.activePage
-                        { id = id, updateFn = Controller.addSpace }
+                        { id = id, updateFn = C.addSpace }
                         model.pages
               }
             , Cmd.none
@@ -594,7 +829,7 @@ update msg model =
                 | pages =
                     updateControllerOnActivePage
                         model.activePage
-                        { id = id, updateFn = Controller.removeItem }
+                        { id = id, updateFn = C.removeItem }
                         model.pages
               }
             , Cmd.none
@@ -683,19 +918,19 @@ update msg model =
 
         ButtonDown id ->
             case getControllerFromActivePage id model.activePage model.pages of
-                Just (Controller.Module _ _) ->
+                Just (C.Module _ _) ->
                     ( model, Cmd.none )
 
-                Just (Controller.Column _) ->
+                Just (C.Column _) ->
                     ( model, Cmd.none )
 
-                Just (Controller.Row _) ->
+                Just (C.Row _) ->
                     ( model, Cmd.none )
 
-                Just ((Controller.Note _) as note) ->
+                Just ((C.Note _) as note) ->
                     let
                         ( updatedNote, midiMsgs ) =
-                            Controller.buttonOn note
+                            C.buttonOn note
                     in
                     ( { model
                         | pages =
@@ -708,10 +943,10 @@ update msg model =
                         |> Cmd.batch
                     )
 
-                Just ((Controller.Chord _) as chord) ->
+                Just ((C.Chord _) as chord) ->
                     let
                         ( updatedChord, midiMsgs ) =
-                            Controller.buttonOn chord
+                            C.buttonOn chord
                     in
                     ( { model
                         | pages =
@@ -724,10 +959,10 @@ update msg model =
                         |> Cmd.batch
                     )
 
-                Just ((Controller.CCValue _) as ccValue) ->
+                Just ((C.CCValue _) as ccValue) ->
                     let
                         ( updatedCCValue, midiMsgs ) =
-                            Controller.buttonOn ccValue
+                            C.buttonOn ccValue
                     in
                     ( { model
                         | pages =
@@ -740,13 +975,13 @@ update msg model =
                         |> Cmd.batch
                     )
 
-                Just (Controller.Fader _) ->
+                Just (C.Fader _) ->
                     ( model, Cmd.none )
 
-                Just Controller.MidiLog ->
+                Just C.MidiLog ->
                     ( model, Cmd.none )
 
-                Just Controller.Space ->
+                Just C.Space ->
                     ( model, Cmd.none )
 
                 Nothing ->
@@ -754,19 +989,19 @@ update msg model =
 
         ButtonUp id ->
             case getControllerFromActivePage id model.activePage model.pages of
-                Just (Controller.Module _ _) ->
+                Just (C.Module _ _) ->
                     ( model, Cmd.none )
 
-                Just (Controller.Column _) ->
+                Just (C.Column _) ->
                     ( model, Cmd.none )
 
-                Just (Controller.Row _) ->
+                Just (C.Row _) ->
                     ( model, Cmd.none )
 
-                Just ((Controller.Note _) as note) ->
+                Just ((C.Note _) as note) ->
                     let
                         ( updatedNote, midiMsgs ) =
-                            Controller.buttonOff note
+                            C.buttonOff note
                     in
                     ( { model
                         | pages =
@@ -779,10 +1014,10 @@ update msg model =
                         |> Cmd.batch
                     )
 
-                Just ((Controller.Chord _) as chord) ->
+                Just ((C.Chord _) as chord) ->
                     let
                         ( updatedChord, midiMsgs ) =
-                            Controller.buttonOff chord
+                            C.buttonOff chord
                     in
                     ( { model
                         | pages =
@@ -795,10 +1030,10 @@ update msg model =
                         |> Cmd.batch
                     )
 
-                Just ((Controller.CCValue _) as ccValue) ->
+                Just ((C.CCValue _) as ccValue) ->
                     let
                         ( updatedCCValue, _ ) =
-                            Controller.buttonOff ccValue
+                            C.buttonOff ccValue
                     in
                     ( { model
                         | pages =
@@ -810,13 +1045,13 @@ update msg model =
                     , Cmd.none
                     )
 
-                Just (Controller.Fader _) ->
+                Just (C.Fader _) ->
                     ( model, Cmd.none )
 
-                Just Controller.MidiLog ->
+                Just C.MidiLog ->
                     ( model, Cmd.none )
 
-                Just Controller.Space ->
+                Just C.Space ->
                     ( model, Cmd.none )
 
                 Nothing ->
@@ -837,8 +1072,8 @@ update msg model =
                 fader =
                     getControllerFromActivePage id model.activePage model.pages
                         |> Maybe.withDefault
-                            (Controller.Fader
-                                { status = Controller.Set
+                            (C.Fader
+                                { status = C.Set
                                 , label = "ERROR"
                                 , colour = LightGrey
                                 , channel = Midi.Ch1
@@ -850,7 +1085,7 @@ update msg model =
                             )
 
                 ( newFader, midiMsg ) =
-                    Controller.faderChanging identifier touchCoordinates fader
+                    C.faderChanging identifier touchCoordinates fader
             in
             ( { model
                 | pages =
@@ -872,8 +1107,8 @@ update msg model =
                 fader =
                     getControllerFromActivePage id model.activePage model.pages
                         |> Maybe.withDefault
-                            (Controller.Fader
-                                { status = Controller.Set
+                            (C.Fader
+                                { status = C.Set
                                 , label = "ERROR"
                                 , colour = LightGrey
                                 , channel = Midi.Ch1
@@ -885,7 +1120,7 @@ update msg model =
                             )
 
                 ( newFader, midiMsg ) =
-                    Controller.faderChanging -1 mouseEvent.clientPos fader
+                    C.faderChanging -1 mouseEvent.clientPos fader
             in
             ( { model
                 | pages =
@@ -907,7 +1142,7 @@ update msg model =
                 | pages =
                     updateControllerOnActivePage
                         model.activePage
-                        { id = id, updateFn = Controller.faderSet }
+                        { id = id, updateFn = C.faderSet }
                         model.pages
               }
             , Cmd.none
@@ -950,7 +1185,7 @@ update msg model =
 convertToEditable : Controller -> EditableController
 convertToEditable control =
     case control of
-        Controller.Module label subController ->
+        C.Module label subController ->
             EditModule
                 { label = label
                 , controller = subController
@@ -958,13 +1193,13 @@ convertToEditable control =
                 , selectedModule = Nothing
                 }
 
-        Controller.Row subControls ->
+        C.Row subControls ->
             EditRow subControls
 
-        Controller.Column subControls ->
+        C.Column subControls ->
             EditColumn subControls
 
-        Controller.Note { label, colour, pitch, channel, velocity } ->
+        C.Note { label, colour, pitch, channel, velocity } ->
             EditNote
                 { label = label
                 , colour = colour
@@ -973,7 +1208,7 @@ convertToEditable control =
                 , velocity = String.fromInt velocity
                 }
 
-        Controller.Chord { label, colour, velocity, notes } ->
+        C.Chord { label, colour, velocity, notes } ->
             EditChord
                 { label = label
                 , colour = colour
@@ -991,7 +1226,7 @@ convertToEditable control =
                         |> Dict.fromList
                 }
 
-        Controller.CCValue { label, colour, channel, controller, value } ->
+        C.CCValue { label, colour, channel, controller, value } ->
             EditCCValue
                 { label = label
                 , colour = colour
@@ -1000,7 +1235,7 @@ convertToEditable control =
                 , value = String.fromInt value
                 }
 
-        Controller.Fader state ->
+        C.Fader state ->
             EditFader
                 { label = state.label
                 , colour = state.colour
@@ -1010,10 +1245,10 @@ convertToEditable control =
                 , valueMax = String.fromInt state.valueMax
                 }
 
-        Controller.MidiLog ->
+        C.MidiLog ->
             EditMidiLog
 
-        Controller.Space ->
+        C.Space ->
             EditSpace
 
 
@@ -1512,7 +1747,7 @@ saveMenu ({ pages, mSelectedPage, modules, mSelectedModule, mode } as state) =
                                 )
 
                     SaveModule ->
-                        List.map Controller.controllerToString modules
+                        List.map C.controllerToString modules
                             |> List.indexedMap
                                 (selectableOption
                                     (\newSelected ->
@@ -1547,7 +1782,7 @@ saveMenu ({ pages, mSelectedPage, modules, mSelectedModule, mode } as state) =
 
 editMenu : Dict String Controller -> EditableController -> Element Msg
 editMenu savedModules menuType =
-    row [ padding 20, spacing 10, width fill, height fill ]
+    row [ spacing 4, width fill, height fill ]
         [ el
             [ alignTop
             , padding 10
@@ -1565,7 +1800,7 @@ editMenu savedModules menuType =
                     [ Input.option
                         (EditModule
                             { label = ""
-                            , controller = Controller.Space
+                            , controller = C.Space
                             , createMode = EController.New
                             , selectedModule = Nothing
                             }
@@ -1651,7 +1886,7 @@ editMenu savedModules menuType =
                 <|
                     acceptOrCloseButtons
                         "Ok"
-                        (Just <| FinishedEdit <| Controller.MidiLog)
+                        (Just <| FinishedEdit <| C.MidiLog)
 
             EditSpace ->
                 el
@@ -1663,7 +1898,7 @@ editMenu savedModules menuType =
                 <|
                     acceptOrCloseButtons
                         "Ok"
-                        (Just <| FinishedEdit <| Controller.Space)
+                        (Just <| FinishedEdit <| C.Space)
         ]
 
 
@@ -1749,7 +1984,7 @@ editModulePane savedModules state =
             "Ok"
             (case state.createMode of
                 EController.New ->
-                    Just <| FinishedEdit <| Controller.Module state.label state.controller
+                    Just <| FinishedEdit <| C.Module state.label state.controller
 
                 EController.Load ->
                     state.selectedModule
@@ -1807,8 +2042,8 @@ editIsomorphicPane state =
                     |> UpdateControllerState
             )
         , editTextBox
-            { placeholder = "num rows"
-            , label = "Number of Rows"
+            { placeholder = "num of rows"
+            , label = "Rows"
             , current = state.numberOfRows
             }
             "number"
@@ -1865,7 +2100,7 @@ editRowPane subControls =
                 , borderColour Black
                 ]
                 { onPress =
-                    List.append subControls [ Controller.Space ]
+                    List.append subControls [ C.Space ]
                         |> EditRow
                         |> UpdateControllerState
                         |> Just
@@ -1888,8 +2123,9 @@ editRowPane subControls =
                 , label = text "Remove"
                 }
             ]
+        , paragraph [ Font.size 18 ] [ text "Listening for MIDI..." ]
         , column
-            [ height (px 400)
+            [ height (px 300)
             , width fill
             , padding 2
             , spacing 4
@@ -1897,12 +2133,12 @@ editRowPane subControls =
             , Border.width 2
             , Border.dashed
             ]
-            (List.map Controller.controllerToString subControls
+            (List.map C.controllerToString subControls
                 |> List.map text
             )
         , acceptOrCloseButtons
             "Ok"
-            (Just <| FinishedEdit <| Controller.Row subControls)
+            (Just <| FinishedEdit <| C.Row subControls)
         ]
 
 
@@ -1923,7 +2159,7 @@ editColumnPane subControls =
                 , borderColour Black
                 ]
                 { onPress =
-                    List.append subControls [ Controller.Space ]
+                    List.append subControls [ C.Space ]
                         |> EditColumn
                         |> UpdateControllerState
                         |> Just
@@ -1946,8 +2182,9 @@ editColumnPane subControls =
                 , label = text "Remove"
                 }
             ]
+        , paragraph [ Font.size 18 ] [ text "Listening for MIDI..." ]
         , column
-            [ height (px 400)
+            [ height (px 300)
             , width fill
             , padding 2
             , spacing 4
@@ -1955,12 +2192,12 @@ editColumnPane subControls =
             , Border.width 2
             , Border.dashed
             ]
-            (List.map Controller.controllerToString subControls
+            (List.map C.controllerToString subControls
                 |> List.map text
             )
         , acceptOrCloseButtons
             "Ok"
-            (Just <| FinishedEdit <| Controller.Column subControls)
+            (Just <| FinishedEdit <| C.Column subControls)
         ]
 
 
@@ -2160,7 +2397,7 @@ editCCValuePane state =
             )
         , editTextBox
             { placeholder = "controller#"
-            , label = "Controller Number"
+            , label = "Controller\nNumber"
             , current = state.controller
             }
             "number"
@@ -2482,7 +2719,7 @@ newPageMenu savedPages state =
 
                         else
                             { label = state.label
-                            , controller = Controller.Space
+                            , controller = C.Space
                             , config =
                                 { gapSize = 2
                                 , debug = False
@@ -2613,7 +2850,7 @@ renderController mode midiLog config idParts controller id =
             String.fromInt id :: idParts
     in
     case controller of
-        Controller.Module label subControls ->
+        C.Module label subControls ->
             Lazy.lazy2
                 column
                 ([ padding config.gapSize
@@ -2647,7 +2884,7 @@ renderController mode midiLog config idParts controller id =
                                         ]
                                       <|
                                         renderEditButton config
-                                            Controller.EditContainer
+                                            C.EditContainer
                                             (updatedParts
                                                 |> List.reverse
                                                 |> String.join "_"
@@ -2658,7 +2895,7 @@ renderController mode midiLog config idParts controller id =
                 , renderController mode midiLog config updatedParts subControls 0
                 ]
 
-        Controller.Row subControls ->
+        C.Row subControls ->
             Lazy.lazy2 row
                 ([ spacingXY config.gapSize 0
                  , Events.onClick NoOp
@@ -2692,7 +2929,7 @@ renderController mode midiLog config idParts controller id =
                                     ]
                                   <|
                                     renderEditButton config
-                                        Controller.EditContainer
+                                        C.EditContainer
                                         (updatedParts
                                             |> List.reverse
                                             |> String.join "_"
@@ -2701,7 +2938,7 @@ renderController mode midiLog config idParts controller id =
                        )
                 )
 
-        Controller.Column subControls ->
+        C.Column subControls ->
             case mode of
                 Normal ->
                     Lazy.lazy2 column
@@ -2734,7 +2971,7 @@ renderController mode midiLog config idParts controller id =
                             ++ fillSpace
                         )
                         [ renderEditButton config
-                            Controller.EditContainer
+                            C.EditContainer
                             (updatedParts
                                 |> List.reverse
                                 |> String.join "_"
@@ -2752,7 +2989,7 @@ renderController mode midiLog config idParts controller id =
                                 (List.range 0 <| List.length subControls)
                         ]
 
-        Controller.Note state ->
+        C.Note state ->
             renderNote
                 config
                 mode
@@ -2762,7 +2999,7 @@ renderController mode midiLog config idParts controller id =
                     |> String.join "_"
                 )
 
-        Controller.Chord state ->
+        C.Chord state ->
             renderChord
                 config
                 mode
@@ -2772,7 +3009,7 @@ renderController mode midiLog config idParts controller id =
                     |> String.join "_"
                 )
 
-        Controller.CCValue state ->
+        C.CCValue state ->
             renderCCValue
                 config
                 mode
@@ -2782,7 +3019,7 @@ renderController mode midiLog config idParts controller id =
                     |> String.join "_"
                 )
 
-        Controller.Fader state ->
+        C.Fader state ->
             renderFader
                 config
                 mode
@@ -2792,7 +3029,7 @@ renderController mode midiLog config idParts controller id =
                     |> String.join "_"
                 )
 
-        Controller.MidiLog ->
+        C.MidiLog ->
             case mode of
                 Normal ->
                     column fillSpace
@@ -2846,7 +3083,7 @@ renderController mode midiLog config idParts controller id =
                             text "MIDI Log"
                         )
 
-        Controller.Space ->
+        C.Space ->
             case mode of
                 Normal ->
                     el
@@ -2879,7 +3116,7 @@ renderController mode midiLog config idParts controller id =
                         )
 
 
-renderNote : PageConfig -> Mode -> Controller.NoteState -> String -> Element Msg
+renderNote : PageConfig -> Mode -> C.NoteState -> String -> Element Msg
 renderNote config mode state id =
     case mode of
         Normal ->
@@ -2888,10 +3125,10 @@ renderNote config mode state id =
                  , spacing 0
                  , Border.width 4
                  , case state.status of
-                    Controller.Off ->
+                    C.Off ->
                         backgroundColour state.colour
 
-                    Controller.On ->
+                    C.On ->
                         Border.dashed
                  , htmlAttribute <|
                     Touch.onStart
@@ -2951,7 +3188,7 @@ renderNote config mode state id =
                 }
 
 
-renderChord : PageConfig -> Mode -> Controller.ChordState -> String -> Element Msg
+renderChord : PageConfig -> Mode -> C.ChordState -> String -> Element Msg
 renderChord config mode state id =
     case mode of
         Normal ->
@@ -2960,10 +3197,10 @@ renderChord config mode state id =
                  , spacing 0
                  , Border.width 4
                  , case state.status of
-                    Controller.Off ->
+                    C.Off ->
                         backgroundColour state.colour
 
-                    Controller.On ->
+                    C.On ->
                         Border.dashed
                  , htmlAttribute <|
                     Touch.onStart
@@ -3017,7 +3254,7 @@ renderChord config mode state id =
                 }
 
 
-renderCCValue : PageConfig -> Mode -> Controller.CCValueState -> String -> Element Msg
+renderCCValue : PageConfig -> Mode -> C.CCValueState -> String -> Element Msg
 renderCCValue config mode state id =
     case mode of
         Normal ->
@@ -3026,10 +3263,10 @@ renderCCValue config mode state id =
                  , spacing 0
                  , Border.width 4
                  , case state.status of
-                    Controller.Off ->
+                    C.Off ->
                         backgroundColour state.colour
 
-                    Controller.On ->
+                    C.On ->
                         Border.dashed
                  , htmlAttribute <|
                     Touch.onStart
@@ -3057,10 +3294,10 @@ renderCCValue config mode state id =
                 )
                 ((if config.debug then
                     case state.status of
-                        Controller.Off ->
+                        C.Off ->
                             "Off\n" ++ Midi.channelToString state.channel ++ "\n"
 
-                        Controller.On ->
+                        C.On ->
                             "Off\n" ++ Midi.channelToString state.channel ++ "\n"
 
                   else
@@ -3094,7 +3331,7 @@ renderCCValue config mode state id =
                 }
 
 
-renderFader : PageConfig -> Mode -> Controller.FaderState -> String -> Element Msg
+renderFader : PageConfig -> Mode -> C.FaderState -> String -> Element Msg
 renderFader config mode state id =
     case mode of
         Normal ->
@@ -3103,10 +3340,10 @@ renderFader config mode state id =
                  , spacing 0
                  , Border.width 4
                  , case state.status of
-                    Controller.Set ->
+                    C.Set ->
                         Border.solid
 
-                    Controller.Changing _ _ ->
+                    C.Changing _ _ ->
                         Border.dashed
                  , htmlAttribute <|
                     Touch.onStart
@@ -3151,7 +3388,7 @@ renderFader config mode state id =
                 )
                 (column
                     (backgroundColour White :: fillSpace)
-                    [ el [ centerX, padding 10, Font.size 16 ] <|
+                    [ el [ centerX, padding 10, Font.size 14 ] <|
                         text (String.fromInt state.valuePercent ++ "%")
                     , column
                         fillSpace
@@ -3169,7 +3406,7 @@ renderFader config mode state id =
                             ]
                             none
                         ]
-                    , el [ centerX, padding 10, Font.size 16 ] <| text state.label
+                    , el [ centerX, padding 10, Font.size 14 ] <| text state.label
                     ]
                 )
 
@@ -3192,10 +3429,10 @@ renderFader config mode state id =
                 }
 
 
-renderEditButton : PageConfig -> Controller.EditOperation -> String -> Element Msg
+renderEditButton : PageConfig -> C.EditOperation -> String -> Element Msg
 renderEditButton config editOperation parentId =
     case editOperation of
-        Controller.EditContainer ->
+        C.EditContainer ->
             Input.button
                 [ centerX
                 , padding config.gapSize
@@ -3210,7 +3447,7 @@ renderEditButton config editOperation parentId =
                         |> html
                 }
 
-        Controller.Add ->
+        C.Add ->
             Input.button
                 [ centerX
                 , padding config.gapSize
@@ -3225,7 +3462,7 @@ renderEditButton config editOperation parentId =
                         |> html
                 }
 
-        Controller.Remove ->
+        C.Remove ->
             Input.button
                 [ centerX
                 , padding config.gapSize
