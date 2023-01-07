@@ -7,6 +7,8 @@ optimised to work on a range of devices, including tablets and smartphones. It
 is highly customisable, enabling you to make a controller that is exactly what
 you need to make or perform your music at any given moment.
 
+Take a look at [this video](https://youtu.be/c5BpeMxs5ZU) to see it in action.
+
 ### Features
 
 Here's a quick rundown of some of the features:
