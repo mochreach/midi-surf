@@ -1574,6 +1574,19 @@ infoPanel =
                         }
                     , text ")"
                     ]
+                , Html.iframe
+                    [ HAtt.height 400
+                    , HAtt.src "https://www.youtube.com/embed/c5BpeMxs5ZU"
+                    , HAtt.title "YouTube video player"
+                    , HAtt.attribute "frameborder" "0"
+                    , HAtt.attribute
+                        "allow"
+                        "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    , HAtt.attribute "allowfullscreen" ""
+                    ]
+                    []
+                    |> html
+                    |> el [ centerX, width <| maximum 700 <| fill ]
                 , paragraph []
                     [ """ Please consider supporting the development of this
                     app if you enjoy using it, I'd really appreciate it if you
