@@ -136,6 +136,71 @@ midiMsgToString midiMsg =
                 ++ (Array.map String.fromInt data |> Array.toList |> String.join " ")
 
 
+midiMsgToIntArray : MidiMsg -> Array Int
+midiMsgToIntArray midiMsg =
+    case midiMsg of
+        NoteOff { channel, pitch, velocity } ->
+            Array.fromList [ 0x80 + channel, pitch, velocity ]
+
+        NoteOn { channel, pitch, velocity } ->
+            Array.fromList [ 0x90 + channel, pitch, velocity ]
+
+        KeyPressure { channel, key, pressure } ->
+            Array.fromList [ 0xA0 + channel, key, pressure ]
+
+        ControllerChange { channel, controller, value } ->
+            Array.fromList [ 0xB0 + channel, controller, value ]
+
+        ProgramChange { channel, preset } ->
+            Array.fromList [ 0xC0 + channel, preset ]
+
+        ChannelPressure { channel, pressure } ->
+            Array.fromList [ 0xD0 + channel, pressure ]
+
+        PitchBend { channel, bendLSB, bendMSB } ->
+            Array.fromList [ 0xE0 + channel, bendLSB, bendMSB ]
+
+        SystemExclusive { vendorId, data } ->
+            Array.fromList [ 0xF0, vendorId ]
+                |> Array.append data
+
+        SongPosition { positionLSB, positionMSB } ->
+            Array.fromList [ 0xF2, positionLSB, positionMSB ]
+
+        SongSelect songNumber ->
+            Array.fromList [ 0xF3, songNumber ]
+
+        UnofficialBusSelect busNumber ->
+            Array.fromList [ 0xF5, busNumber ]
+
+        TuneRequest ->
+            Array.fromList [ 0xF6 ]
+
+        EndOfSysEx ->
+            Array.fromList [ 0xF7 ]
+
+        TimingTick ->
+            Array.fromList [ 0xF8 ]
+
+        StartSong ->
+            Array.fromList [ 0xFA ]
+
+        ContinueSong ->
+            Array.fromList [ 0xFB ]
+
+        StopSong ->
+            Array.fromList [ 0xFC ]
+
+        ActiveSensing ->
+            Array.fromList [ 0xFE ]
+
+        SystemReset ->
+            Array.fromList [ 0xFF ]
+
+        Unknown data ->
+            data
+
+
 intArrayToMidiMsg : Array Int -> MidiMsg
 intArrayToMidiMsg intArray =
     let

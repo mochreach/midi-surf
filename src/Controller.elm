@@ -540,7 +540,7 @@ newCCValue label colour channel controller value =
 buttonOn : Controller -> ( Controller, List Midi.MidiMsg )
 buttonOn controller =
     let
-        makeNoteOnMsg { channel, pitch, velocity } =
+        makeNoteOn { channel, pitch, velocity } =
             Midi.NoteOn
                 { channel = Midi.channelToMidiNumber channel
                 , pitch = pitch
@@ -550,7 +550,7 @@ buttonOn controller =
     case controller of
         Note state ->
             ( Note { state | status = On }
-            , makeNoteOnMsg state
+            , makeNoteOn state
                 |> List.singleton
             )
 
@@ -564,7 +564,7 @@ buttonOn controller =
                         , velocity = state.velocity
                         }
                     )
-                |> List.map makeNoteOnMsg
+                |> List.map makeNoteOn
             )
 
         CCValue state ->
@@ -584,7 +584,7 @@ buttonOn controller =
 buttonOff : Controller -> ( Controller, List Midi.MidiMsg )
 buttonOff controller =
     let
-        makeNoteOffMsg { channel, pitch, velocity } =
+        makeNoteOff { channel, pitch, velocity } =
             Midi.NoteOff
                 { channel = Midi.channelToMidiNumber channel
                 , pitch = pitch
@@ -612,7 +612,7 @@ buttonOff controller =
                         , velocity = state.velocity
                         }
                     )
-                |> List.map makeNoteOffMsg
+                |> List.map makeNoteOff
             )
 
         CCValue state ->

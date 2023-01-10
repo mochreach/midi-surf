@@ -939,8 +939,9 @@ update msg model =
                                 { id = id, updateFn = always updatedNote }
                                 model.pages
                       }
-                    , List.map Ports.midiMsgToCmd midiMsgs
-                        |> Cmd.batch
+                    , List.map Midi.midiMsgToIntArray midiMsgs
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
                     )
 
                 Just ((C.Chord _) as chord) ->
@@ -955,8 +956,9 @@ update msg model =
                                 { id = id, updateFn = always updatedChord }
                                 model.pages
                       }
-                    , List.map Ports.midiMsgToCmd midiMsgs
-                        |> Cmd.batch
+                    , List.map Midi.midiMsgToIntArray midiMsgs
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
                     )
 
                 Just ((C.CCValue _) as ccValue) ->
@@ -971,8 +973,9 @@ update msg model =
                                 { id = id, updateFn = always updatedCCValue }
                                 model.pages
                       }
-                    , List.map Ports.midiMsgToCmd midiMsgs
-                        |> Cmd.batch
+                    , List.map Midi.midiMsgToIntArray midiMsgs
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
                     )
 
                 Just (C.Fader _) ->
@@ -1010,8 +1013,9 @@ update msg model =
                                 { id = id, updateFn = always updatedNote }
                                 model.pages
                       }
-                    , List.map Ports.midiMsgToCmd midiMsgs
-                        |> Cmd.batch
+                    , List.map Midi.midiMsgToIntArray midiMsgs
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
                     )
 
                 Just ((C.Chord _) as chord) ->
@@ -1026,8 +1030,9 @@ update msg model =
                                 { id = id, updateFn = always updatedChord }
                                 model.pages
                       }
-                    , List.map Ports.midiMsgToCmd midiMsgs
-                        |> Cmd.batch
+                    , List.map Midi.midiMsgToIntArray midiMsgs
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
                     )
 
                 Just ((C.CCValue _) as ccValue) ->
@@ -1095,8 +1100,10 @@ update msg model =
                         model.pages
               }
             , case midiMsg of
-                Just (Midi.ControllerChange data) ->
-                    Ports.sendCC data
+                Just ((Midi.ControllerChange _) as cc) ->
+                    [ Midi.midiMsgToIntArray cc ]
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
 
                 _ ->
                     Cmd.none
@@ -1130,8 +1137,10 @@ update msg model =
                         model.pages
               }
             , case midiMsg of
-                Just (Midi.ControllerChange data) ->
-                    Ports.sendCC data
+                Just ((Midi.ControllerChange _) as cc) ->
+                    [ Midi.midiMsgToIntArray cc ]
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
 
                 _ ->
                     Cmd.none
