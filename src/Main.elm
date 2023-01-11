@@ -981,6 +981,9 @@ update msg model =
                 Just (C.Fader _) ->
                     ( model, Cmd.none )
 
+                Just (C.XYFader _) ->
+                    ( model, Cmd.none )
+
                 Just C.MidiLog ->
                     ( model, Cmd.none )
 
@@ -1053,6 +1056,9 @@ update msg model =
                 Just (C.Fader _) ->
                     ( model, Cmd.none )
 
+                Just (C.XYFader _) ->
+                    ( model, Cmd.none )
+
                 Just C.MidiLog ->
                     ( model, Cmd.none )
 
@@ -1089,7 +1095,7 @@ update msg model =
                                 }
                             )
 
-                ( newFader, midiMsg ) =
+                ( newFader, midiMsgs ) =
                     C.faderChanging identifier touchCoordinates fader
             in
             ( { model
@@ -1099,14 +1105,9 @@ update msg model =
                         { id = id, updateFn = always newFader }
                         model.pages
               }
-            , case midiMsg of
-                Just ((Midi.ControllerChange _) as cc) ->
-                    [ Midi.midiMsgToIntArray cc ]
-                        |> Array.fromList
-                        |> Ports.outgoingMidi
-
-                _ ->
-                    Cmd.none
+            , List.map Midi.midiMsgToIntArray midiMsgs
+                |> Array.fromList
+                |> Ports.outgoingMidi
             )
 
         FaderChangingMouse id mouseEvent ->
@@ -1126,7 +1127,7 @@ update msg model =
                                 }
                             )
 
-                ( newFader, midiMsg ) =
+                ( newFader, midiMsgs ) =
                     C.faderChanging -1 mouseEvent.clientPos fader
             in
             ( { model
@@ -1136,14 +1137,9 @@ update msg model =
                         { id = id, updateFn = always newFader }
                         model.pages
               }
-            , case midiMsg of
-                Just ((Midi.ControllerChange _) as cc) ->
-                    [ Midi.midiMsgToIntArray cc ]
-                        |> Array.fromList
-                        |> Ports.outgoingMidi
-
-                _ ->
-                    Cmd.none
+            , List.map Midi.midiMsgToIntArray midiMsgs
+                |> Array.fromList
+                |> Ports.outgoingMidi
             )
 
         FaderSet id ->
@@ -1252,6 +1248,21 @@ convertToEditable control =
                 , ccNumber = String.fromInt state.ccNumber
                 , valueMin = String.fromInt state.valueMin
                 , valueMax = String.fromInt state.valueMax
+                }
+
+        C.XYFader state ->
+            EditXYFader
+                { label = state.label
+                , colour = state.colour
+                , active = EController.Params1
+                , channel1 = Midi.channelToString state.channel1
+                , ccNumber1 = String.fromInt state.ccNumber1
+                , valueMin1 = String.fromInt state.valueMin1
+                , valueMax1 = String.fromInt state.valueMax1
+                , channel2 = Midi.channelToString state.channel2
+                , ccNumber2 = String.fromInt state.ccNumber2
+                , valueMin2 = String.fromInt state.valueMin2
+                , valueMax2 = String.fromInt state.valueMax2
                 }
 
         C.MidiLog ->
@@ -1869,6 +1880,15 @@ editMenu savedModules menuType =
                                 EditFader EController.defaultEditFaderState
                         )
                         (text "Fader")
+                    , Input.option
+                        (case menuType of
+                            EditXYFader _ ->
+                                menuType
+
+                            _ ->
+                                EditXYFader EController.defaultEditXYFaderState
+                        )
+                        (text "XY Fader")
                     , Input.option EditMidiLog (text "MIDI Log")
                     , Input.option EditSpace (text "Space")
                     ]
@@ -1897,6 +1917,9 @@ editMenu savedModules menuType =
 
             EditFader state ->
                 editFaderPane state
+
+            EditXYFader state ->
+                editXYFaderPane state
 
             EditMidiLog ->
                 el
@@ -2528,6 +2551,152 @@ editFaderPane state =
         ]
 
 
+editXYFaderPane : EController.EditXYFaderState -> Element Msg
+editXYFaderPane state =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , backgroundColour White
+        , Border.width 4
+        ]
+        [ editTextBox
+            { placeholder = "label"
+            , label = "Label"
+            , current = state.label
+            }
+            "text"
+            (\newLabel ->
+                { state | label = newLabel }
+                    |> EditXYFader
+                    |> UpdateControllerState
+            )
+        , colourRadio
+            state.colour
+            (\newColour ->
+                { state | colour = newColour }
+                    |> EditXYFader
+                    |> UpdateControllerState
+            )
+        , Input.radio
+            [ spacing 10 ]
+            { onChange =
+                \newActive ->
+                    { state | active = newActive }
+                        |> EditXYFader
+                        |> UpdateControllerState
+            , selected = Just state.active
+            , label = Input.labelHidden "Param Select"
+            , options =
+                [ Input.option EController.Params1 (text "Params X")
+                , Input.option EController.Params2 (text "Params Y")
+                ]
+            }
+        , case state.active of
+            EController.Params1 ->
+                column [ padding 5, Border.width 2, Border.dashed ]
+                    [ editTextBox
+                        { placeholder = "channel x#"
+                        , label = "Channel X"
+                        , current = state.channel1
+                        }
+                        "number"
+                        (\newChannel ->
+                            { state | channel1 = newChannel }
+                                |> EditXYFader
+                                |> UpdateControllerState
+                        )
+                    , editTextBox
+                        { placeholder = "cc x #"
+                        , label = "CC X Number"
+                        , current = state.ccNumber1
+                        }
+                        "number"
+                        (\newCCNumber ->
+                            { state | ccNumber1 = newCCNumber }
+                                |> EditXYFader
+                                |> UpdateControllerState
+                        )
+                    , editTextBox
+                        { placeholder = "x min value"
+                        , label = "X Min Value"
+                        , current = state.valueMin1
+                        }
+                        "number"
+                        (\newMinValue ->
+                            { state | valueMin1 = newMinValue }
+                                |> EditXYFader
+                                |> UpdateControllerState
+                        )
+                    , editTextBox
+                        { placeholder = "x max value"
+                        , label = "X Max Value"
+                        , current = state.valueMax1
+                        }
+                        "number"
+                        (\newMaxValue ->
+                            { state | valueMax1 = newMaxValue }
+                                |> EditXYFader
+                                |> UpdateControllerState
+                        )
+                    ]
+
+            EController.Params2 ->
+                column [ padding 5, Border.width 2, Border.dashed ]
+                    [ editTextBox
+                        { placeholder = "channel y#"
+                        , label = "Channel Y"
+                        , current = state.channel2
+                        }
+                        "number"
+                        (\newChannel ->
+                            { state | channel2 = newChannel }
+                                |> EditXYFader
+                                |> UpdateControllerState
+                        )
+                    , editTextBox
+                        { placeholder = "cc y #"
+                        , label = "CC Y Number"
+                        , current = state.ccNumber2
+                        }
+                        "number"
+                        (\newCCNumber ->
+                            { state | ccNumber2 = newCCNumber }
+                                |> EditXYFader
+                                |> UpdateControllerState
+                        )
+                    , editTextBox
+                        { placeholder = "y min value"
+                        , label = "Y Min Value"
+                        , current = state.valueMin2
+                        }
+                        "number"
+                        (\newMinValue ->
+                            { state | valueMin2 = newMinValue }
+                                |> EditXYFader
+                                |> UpdateControllerState
+                        )
+                    , editTextBox
+                        { placeholder = "y max value"
+                        , label = "Y Max Value"
+                        , current = state.valueMax2
+                        }
+                        "number"
+                        (\newMaxValue ->
+                            { state | valueMax2 = newMaxValue }
+                                |> EditXYFader
+                                |> UpdateControllerState
+                        )
+                    ]
+        , acceptOrCloseButtons
+            "Ok"
+            (Maybe.map
+                (\c -> FinishedEdit c)
+                (EController.editStateToXYFader state)
+            )
+        ]
+
+
 editTextBox :
     { placeholder : String
     , label : String
@@ -3051,6 +3220,16 @@ renderController mode midiLog config idParts controller id =
                     |> String.join "_"
                 )
 
+        C.XYFader state ->
+            renderXYFader
+                config
+                mode
+                state
+                (updatedParts
+                    |> List.reverse
+                    |> String.join "_"
+                )
+
         C.MidiLog ->
             case mode of
                 Normal ->
@@ -3424,6 +3603,127 @@ renderFader config mode state id =
                             [ height <| fillPortion state.valuePercent
                             , width fill
                             , backgroundColour state.colour
+                            , Border.widthEach { bottom = 0, top = 8, left = 0, right = 0 }
+                            ]
+                            none
+                        ]
+                    , el [ centerX, padding 10, Font.size 14 ] <| text state.label
+                    ]
+                )
+
+        Edit _ ->
+            Input.button
+                ([ padding config.gapSize
+                 , spacing config.gapSize
+                 , Border.width 2
+                 , Border.dashed
+                 , Font.size 14
+                 , backgroundColour state.colour
+                 ]
+                    ++ Style.noSelect
+                    ++ fillSpace
+                )
+                { onPress = Just <| OpenEditController id
+                , label =
+                    state.label
+                        |> text
+                }
+
+
+renderXYFader : PageConfig -> Mode -> C.XYFaderState -> String -> Element Msg
+renderXYFader config mode state id =
+    case mode of
+        Normal ->
+            el
+                ([ padding 0
+                 , spacing 0
+                 , Border.width 4
+                 , case state.status of
+                    C.Set ->
+                        Border.solid
+
+                    C.Changing _ _ ->
+                        Border.dashed
+                 , htmlAttribute <|
+                    Touch.onStart
+                        (\event ->
+                            FaderChanging id event
+                        )
+                 , htmlAttribute <|
+                    Mouse.onDown
+                        (\event ->
+                            FaderChangingMouse id event
+                        )
+                 , htmlAttribute <|
+                    Touch.onMove
+                        (\event ->
+                            FaderChanging id event
+                        )
+                 , htmlAttribute <|
+                    Touch.onEnd
+                        (\_ ->
+                            FaderSet id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onUp
+                        (\_ ->
+                            FaderSet id
+                        )
+                 ]
+                    ++ (case state.status of
+                            Changing _ _ ->
+                                [ htmlAttribute <|
+                                    Mouse.onMove
+                                        (\event ->
+                                            FaderChangingMouse id event
+                                        )
+                                ]
+
+                            Set ->
+                                []
+                       )
+                    ++ Style.noSelect
+                    ++ fillSpace
+                )
+                (column
+                    (backgroundColour White :: fillSpace)
+                    [ el [ centerX, padding 10, Font.size 14 ] <|
+                        text
+                            ("X "
+                                ++ String.fromInt state.valuePercent1
+                                ++ "%, "
+                                ++ "Y "
+                                ++ String.fromInt state.valuePercent2
+                                ++ "%"
+                            )
+                    , column
+                        ([ inFront <|
+                            row
+                                fillSpace
+                                [ el
+                                    [ height fill
+                                    , width <| fillPortion state.valuePercent1
+                                    ]
+                                    none
+                                , el
+                                    [ height fill
+                                    , width <| fillPortion (100 - state.valuePercent1)
+                                    , Border.widthEach { bottom = 0, top = 0, left = 8, right = 0 }
+                                    ]
+                                    none
+                                ]
+                         , backgroundColour state.colour
+                         ]
+                            ++ fillSpace
+                        )
+                        [ el
+                            [ height <| fillPortion (100 - state.valuePercent2)
+                            , width fill
+                            ]
+                            none
+                        , el
+                            [ height <| fillPortion state.valuePercent2
+                            , width fill
                             , Border.widthEach { bottom = 0, top = 8, left = 0, right = 0 }
                             ]
                             none

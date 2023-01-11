@@ -16,6 +16,7 @@ type EditableController
     | EditChord EditChordState
     | EditCCValue EditCCValueState
     | EditFader EditFaderState
+    | EditXYFader EditXYFaderState
     | EditMidiLog
     | EditSpace
 
@@ -324,6 +325,103 @@ editStateToFader { label, colour, channel, ccNumber, valueMin, valueMax } =
             Nothing
 
 
+type alias EditXYFaderState =
+    { label : String
+    , colour : AppColour
+    , active : XYParamsActive
+    , channel1 : String
+    , ccNumber1 : String
+    , valueMin1 : String
+    , valueMax1 : String
+    , channel2 : String
+    , ccNumber2 : String
+    , valueMin2 : String
+    , valueMax2 : String
+    }
+
+
+type XYParamsActive
+    = Params1
+    | Params2
+
+
+defaultEditXYFaderState : EditXYFaderState
+defaultEditXYFaderState =
+    { label = ""
+    , colour = Yellow
+    , active = Params1
+    , channel1 = "1"
+    , ccNumber1 = "1"
+    , valueMin1 = "0"
+    , valueMax1 = "127"
+    , channel2 = "1"
+    , ccNumber2 = "2"
+    , valueMin2 = "0"
+    , valueMax2 = "127"
+    }
+
+
+updateEditXYFaderWithMidiMsg : MidiMsg -> EditXYFaderState -> EditXYFaderState
+updateEditXYFaderWithMidiMsg midiMsg state =
+    case midiMsg of
+        ControllerChange { channel, controller } ->
+            case state.active of
+                Params1 ->
+                    { state
+                      -- Adding 1 to the channel so that they're labelled 1-16
+                        | channel1 = String.fromInt (channel + 1)
+                        , ccNumber1 = String.fromInt controller
+                    }
+
+                Params2 ->
+                    { state
+                      -- Adding 1 to the channel so that they're labelled 1-16
+                        | channel2 = String.fromInt (channel + 1)
+                        , ccNumber2 = String.fromInt controller
+                    }
+
+        _ ->
+            state
+
+
+editStateToXYFader : EditXYFaderState -> Maybe Controller
+editStateToXYFader state =
+    case ( Midi.stringToChannel state.channel1, Midi.stringToChannel state.channel2 ) of
+        ( Just ch1, Just ch2 ) ->
+            case
+                [ String.toInt state.ccNumber1
+                , String.toInt state.valueMin1
+                , String.toInt state.valueMax1
+                , String.toInt state.ccNumber2
+                , String.toInt state.valueMin2
+                , String.toInt state.valueMax2
+                ]
+            of
+                [ Just cc1, Just vmin1, Just vmax1, Just cc2, Just vmin2, Just vmax2 ] ->
+                    Controller.XYFader
+                        { status = Controller.Set
+                        , label = state.label
+                        , colour = state.colour
+                        , channel1 = ch1
+                        , ccNumber1 = cc1
+                        , valuePercent1 = 50
+                        , valueMin1 = vmin1
+                        , valueMax1 = vmax1
+                        , channel2 = ch2
+                        , ccNumber2 = cc2
+                        , valuePercent2 = 50
+                        , valueMin2 = vmin2
+                        , valueMax2 = vmax2
+                        }
+                        |> Just
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
+
+
 updateWithMidiMsg : MidiMsg -> EditableController -> EditableController
 updateWithMidiMsg midiMsg state =
     case state of
@@ -455,6 +553,10 @@ updateWithMidiMsg midiMsg state =
         EditFader faderState ->
             updateEditFaderWithMidiMsg midiMsg faderState
                 |> EditFader
+
+        EditXYFader xyFaderState ->
+            updateEditXYFaderWithMidiMsg midiMsg xyFaderState
+                |> EditXYFader
 
         EditMidiLog ->
             state

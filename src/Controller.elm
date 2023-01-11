@@ -13,6 +13,7 @@ type Controller
     | Chord ChordState
     | CCValue CCValueState
     | Fader FaderState
+    | XYFader XYFaderState
     | MidiLog
     | Space
 
@@ -22,7 +23,7 @@ controllerCodec =
     Codec.recursive
         (\rmeta ->
             Codec.custom
-                (\mod row col note cho ccv fad mid spa value ->
+                (\mod row col note cho ccv fad xy mid spa value ->
                     case value of
                         Module l c ->
                             mod l c
@@ -45,6 +46,9 @@ controllerCodec =
                         Fader s ->
                             fad s
 
+                        XYFader s ->
+                            xy s
+
                         MidiLog ->
                             mid
 
@@ -58,6 +62,7 @@ controllerCodec =
                 |> Codec.variant1 "Chord" Chord chordStateCodec
                 |> Codec.variant1 "CCValue" CCValue ccValueStateCodec
                 |> Codec.variant1 "Fader" Fader faderStateCodec
+                |> Codec.variant1 "XYFader" XYFader xyFaderStateCodec
                 |> Codec.variant0 "MidiLog" MidiLog
                 |> Codec.variant0 "Space" Space
                 |> Codec.buildCustom
@@ -100,6 +105,16 @@ controllerToString control =
                 ++ Midi.channelToString channel
                 ++ " "
                 ++ String.fromInt ccNumber
+
+        XYFader { channel1, channel2, ccNumber1, ccNumber2 } ->
+            "Fader: "
+                ++ Midi.channelToString channel1
+                ++ " cc1 "
+                ++ String.fromInt ccNumber1
+                ++ " "
+                ++ Midi.channelToString channel2
+                ++ " cc2 "
+                ++ String.fromInt ccNumber2
 
         MidiLog ->
             "MidiLog"
@@ -219,7 +234,7 @@ type FaderStatus
     | Changing Int ( Float, Float )
 
 
-faderChanging : Int -> ( Float, Float ) -> Controller -> ( Controller, Maybe Midi.MidiMsg )
+faderChanging : Int -> ( Float, Float ) -> Controller -> ( Controller, List Midi.MidiMsg )
 faderChanging identifier ( newX, newY ) controller =
     case controller of
         Fader state ->
@@ -243,22 +258,74 @@ faderChanging identifier ( newX, newY ) controller =
                                 | status = Changing oldIdentifier ( newX, newY )
                                 , valuePercent = newPercent
                             }
-                        , Midi.ControllerChange
-                            { channel = Midi.channelToMidiNumber state.channel
-                            , controller = state.ccNumber
-                            , value = value
-                            }
-                            |> Just
+                        , [ Midi.ControllerChange
+                                { channel = Midi.channelToMidiNumber state.channel
+                                , controller = state.ccNumber
+                                , value = value
+                                }
+                          ]
                         )
 
                     else
-                        ( Fader state, Nothing )
+                        ( Fader state, [] )
 
                 Set ->
-                    ( Fader { state | status = Changing identifier ( newX, newY ) }, Nothing )
+                    ( Fader { state | status = Changing identifier ( newX, newY ) }, [] )
+
+        XYFader state ->
+            case state.status of
+                Changing oldIdentifier ( oldX, oldY ) ->
+                    if identifier == oldIdentifier then
+                        let
+                            valueChange1 =
+                                newX - oldX |> round
+
+                            newPercent1 =
+                                state.valuePercent1
+                                    + valueChange1
+                                    |> clamp 0 100
+
+                            value1 =
+                                (127 // 100) * newPercent1
+
+                            valueChange2 =
+                                oldY - newY |> round
+
+                            newPercent2 =
+                                state.valuePercent2
+                                    + valueChange2
+                                    |> clamp 0 100
+
+                            value2 =
+                                (127 // 100) * newPercent2
+                        in
+                        ( XYFader
+                            { state
+                                | status = Changing oldIdentifier ( newX, newY )
+                                , valuePercent1 = newPercent1
+                                , valuePercent2 = newPercent2
+                            }
+                        , [ Midi.ControllerChange
+                                { channel = Midi.channelToMidiNumber state.channel1
+                                , controller = state.ccNumber1
+                                , value = value1
+                                }
+                          , Midi.ControllerChange
+                                { channel = Midi.channelToMidiNumber state.channel2
+                                , controller = state.ccNumber2
+                                , value = value2
+                                }
+                          ]
+                        )
+
+                    else
+                        ( XYFader state, [] )
+
+                Set ->
+                    ( XYFader { state | status = Changing identifier ( newX, newY ) }, [] )
 
         _ ->
-            ( controller, Nothing )
+            ( controller, [] )
 
 
 faderSet : Controller -> Controller
@@ -267,8 +334,47 @@ faderSet controller =
         Fader state ->
             Fader { state | status = Set }
 
+        XYFader state ->
+            XYFader { state | status = Set }
+
         _ ->
             controller
+
+
+type alias XYFaderState =
+    { status : FaderStatus
+    , label : String
+    , colour : AppColour
+    , channel1 : Channel
+    , ccNumber1 : Int
+    , valuePercent1 : Int
+    , valueMin1 : Int
+    , valueMax1 : Int
+    , channel2 : Channel
+    , ccNumber2 : Int
+    , valuePercent2 : Int
+    , valueMin2 : Int
+    , valueMax2 : Int
+    }
+
+
+xyFaderStateCodec : Codec XYFaderState
+xyFaderStateCodec =
+    Codec.object XYFaderState
+        |> Codec.field "status" .status (Codec.constant Set)
+        |> Codec.field "label" .label Codec.string
+        |> Codec.field "colour" .colour Style.appColourCodec
+        |> Codec.field "channel1" .channel1 Midi.channelCodec
+        |> Codec.field "ccNumber1" .ccNumber1 Codec.int
+        |> Codec.field "valuePercent1" .valuePercent1 Codec.int
+        |> Codec.field "valueMin1" .valueMin1 Codec.int
+        |> Codec.field "valueMax1" .valueMax1 Codec.int
+        |> Codec.field "channel2" .channel2 Midi.channelCodec
+        |> Codec.field "ccNumber2" .ccNumber2 Codec.int
+        |> Codec.field "valuePercent2" .valuePercent2 Codec.int
+        |> Codec.field "valueMin2" .valueMin2 Codec.int
+        |> Codec.field "valueMax2" .valueMax2 Codec.int
+        |> Codec.buildObject
 
 
 type EditOperation
@@ -335,6 +441,13 @@ getWithId currentId id control =
                 Nothing
 
         Fader _ ->
+            if currentId == id then
+                Just control
+
+            else
+                Nothing
+
+        XYFader _ ->
             if currentId == id then
                 Just control
 
@@ -422,6 +535,13 @@ updateWithId currentId toUpdate updateInfo =
 
             else
                 Fader state
+
+        XYFader state ->
+            if currentId == id then
+                updateFn toUpdate
+
+            else
+                XYFader state
 
         MidiLog ->
             if currentId == id then
@@ -654,6 +774,9 @@ setChannel channel controller =
 
         Fader state ->
             Fader { state | channel = channel }
+
+        XYFader state ->
+            XYFader { state | channel1 = channel, channel2 = channel }
 
         MidiLog ->
             MidiLog
