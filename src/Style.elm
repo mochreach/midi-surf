@@ -6,7 +6,8 @@ import Element.Background as Background
 import Element.Border as Border
 import Element.Events as Events
 import Element.Font as Font
-import Html.Attributes as Hatt
+import Element.Input as Input
+import Html.Attributes as HAtt
 
 
 type AppColour
@@ -118,6 +119,67 @@ fontColour appColour =
         |> Font.color
 
 
+acceptOrCloseButtons : String -> msg -> Maybe msg -> Element msg
+acceptOrCloseButtons acceptString cancelMsg acceptMsg =
+    row
+        [ alignTop
+        , spacing 4
+        , backgroundColour White
+        ]
+        [ Input.button
+            ([ padding 5
+             , Border.width 2
+             , Border.solid
+             , borderColour Black
+             ]
+                ++ (case acceptMsg of
+                        Just _ ->
+                            [ fontColour Black
+                            , borderColour Black
+                            ]
+
+                        _ ->
+                            [ fontColour LightGrey
+                            , borderColour LightGrey
+                            ]
+                   )
+            )
+            { onPress = acceptMsg
+            , label = text acceptString
+            }
+        , Input.button
+            [ padding 5
+            , Border.width 2
+            , Border.solid
+            , borderColour Black
+            ]
+            { onPress = Just cancelMsg, label = text "Cancel" }
+        ]
+
+
+editTextBox :
+    { placeholder : String
+    , label : String
+    , current : String
+    }
+    -> String
+    -> (String -> msg)
+    -> Element msg
+editTextBox { placeholder, label, current } type_ msg =
+    Input.text
+        [ width fill
+        , Border.width 2
+        , Border.rounded 0
+        , borderColour Black
+        , htmlAttribute <| HAtt.type_ type_
+        ]
+        { onChange = msg
+        , text = current
+        , placeholder = Just <| Input.placeholder [] (text placeholder)
+        , label = Input.labelAbove [] (text label)
+        }
+
+
 linkStyle : List (Element.Attribute msg)
 linkStyle =
     [ Font.underline, fontColour Blue ]
@@ -126,12 +188,12 @@ linkStyle =
 noSelect : List (Element.Attribute msg)
 noSelect =
     List.map htmlAttribute
-        [ Hatt.style "-webkit-touch-callout" "none"
-        , Hatt.style "-webkit-user-select" "none"
-        , Hatt.style "-khtml-user-select" "none"
-        , Hatt.style "-moz-user-select" "none"
-        , Hatt.style "-ms-user-select" "none"
-        , Hatt.style "user-select" "none"
+        [ HAtt.style "-webkit-touch-callout" "none"
+        , HAtt.style "-webkit-user-select" "none"
+        , HAtt.style "-khtml-user-select" "none"
+        , HAtt.style "-moz-user-select" "none"
+        , HAtt.style "-ms-user-select" "none"
+        , HAtt.style "user-select" "none"
         ]
 
 

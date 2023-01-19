@@ -12,6 +12,7 @@ type Controller
     | Note NoteState
     | Chord ChordState
     | CCValue CCValueState
+    | Command CommandState
     | Fader FaderState
     | XYFader XYFaderState
     | MidiLog
@@ -23,7 +24,7 @@ controllerCodec =
     Codec.recursive
         (\rmeta ->
             Codec.custom
-                (\mod row col note cho ccv fad xy mid spa value ->
+                (\mod row col note cho ccv com fad xy mid spa value ->
                     case value of
                         Module l c ->
                             mod l c
@@ -43,6 +44,9 @@ controllerCodec =
                         CCValue s ->
                             ccv s
 
+                        Command s ->
+                            com s
+
                         Fader s ->
                             fad s
 
@@ -61,6 +65,7 @@ controllerCodec =
                 |> Codec.variant1 "Note" Note noteStateCodec
                 |> Codec.variant1 "Chord" Chord chordStateCodec
                 |> Codec.variant1 "CCValue" CCValue ccValueStateCodec
+                |> Codec.variant1 "Command" Command commandStateCodec
                 |> Codec.variant1 "Fader" Fader faderStateCodec
                 |> Codec.variant1 "XYFader" XYFader xyFaderStateCodec
                 |> Codec.variant0 "MidiLog" MidiLog
@@ -99,6 +104,13 @@ controllerToString control =
                 ++ String.fromInt controller
                 ++ " "
                 ++ String.fromInt value
+
+        Command { onPressMsgs, onReleaseMsgs } ->
+            "Command: "
+                ++ String.fromInt (List.length onPressMsgs)
+                ++ " msgs on press, "
+                ++ String.fromInt (List.length onReleaseMsgs)
+                ++ " msgs on release "
 
         Fader { channel, ccNumber } ->
             "Fader: "
@@ -200,6 +212,26 @@ ccValueStateCodec =
         |> Codec.field "channel" .channel Midi.channelCodec
         |> Codec.field "controller" .controller Codec.int
         |> Codec.field "value" .value Codec.int
+        |> Codec.buildObject
+
+
+type alias CommandState =
+    { status : ButtonStatus
+    , label : String
+    , colour : AppColour
+    , onPressMsgs : List MidiMsg
+    , onReleaseMsgs : List MidiMsg
+    }
+
+
+commandStateCodec : Codec CommandState
+commandStateCodec =
+    Codec.object CommandState
+        |> Codec.field "status" .status (Codec.constant Off)
+        |> Codec.field "label" .label Codec.string
+        |> Codec.field "colour" .colour Style.appColourCodec
+        |> Codec.field "onPressMsgs" .onPressMsgs (Codec.list Midi.midiMsgCodec)
+        |> Codec.field "onReleaseMsgs" .onReleaseMsgs (Codec.list Midi.midiMsgCodec)
         |> Codec.buildObject
 
 
@@ -440,6 +472,13 @@ getWithId currentId id control =
             else
                 Nothing
 
+        Command _ ->
+            if currentId == id then
+                Just control
+
+            else
+                Nothing
+
         Fader _ ->
             if currentId == id then
                 Just control
@@ -528,6 +567,13 @@ updateWithId currentId toUpdate updateInfo =
 
             else
                 CCValue state
+
+        Command state ->
+            if currentId == id then
+                updateFn toUpdate
+
+            else
+                Command state
 
         Fader state ->
             if currentId == id then
@@ -657,6 +703,17 @@ newCCValue label colour channel controller value =
         }
 
 
+newCommand : String -> AppColour -> List MidiMsg -> List MidiMsg -> Controller
+newCommand label colour onPressMsgs onReleaseMsgs =
+    Command
+        { status = Off
+        , colour = colour
+        , label = label
+        , onPressMsgs = onPressMsgs
+        , onReleaseMsgs = onReleaseMsgs
+        }
+
+
 buttonOn : Controller -> ( Controller, List Midi.MidiMsg )
 buttonOn controller =
     let
@@ -695,6 +752,11 @@ buttonOn controller =
                 , value = state.value
                 }
                 |> List.singleton
+            )
+
+        Command state ->
+            ( Command { state | status = On }
+            , state.onPressMsgs
             )
 
         _ ->
@@ -740,6 +802,11 @@ buttonOff controller =
             , []
             )
 
+        Command state ->
+            ( Command { state | status = Off }
+            , state.onReleaseMsgs
+            )
+
         _ ->
             ( controller, [] )
 
@@ -771,6 +838,23 @@ setChannel channel controller =
 
         CCValue state ->
             CCValue { state | channel = channel }
+
+        Command state ->
+            Command
+                { state
+                    | onPressMsgs =
+                        List.map
+                            (Midi.changeChannel
+                                (Midi.channelToMidiNumber channel)
+                            )
+                            state.onPressMsgs
+                    , onReleaseMsgs =
+                        List.map
+                            (Midi.changeChannel
+                                (Midi.channelToMidiNumber channel)
+                            )
+                            state.onReleaseMsgs
+                }
 
         Fader state ->
             Fader { state | channel = channel }

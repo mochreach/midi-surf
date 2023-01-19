@@ -87,6 +87,7 @@ app.ports.outgoingMidi.subscribe(function (midiMsgArray) {
     midiDevices.forEach(((device) => {
         if (device.output != null) {
             midiMsgArray.forEach(msg => {
+                console.log(msg);
                 device.output.send(msg);
             });
         } else {

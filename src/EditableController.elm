@@ -15,6 +15,7 @@ type EditableController
     | EditNote EditNoteState
     | EditChord EditChordState
     | EditCCValue EditCCValueState
+    | EditCommand EditCommandState
     | EditFader EditFaderState
     | EditXYFader EditXYFaderState
     | EditMidiLog
@@ -241,6 +242,43 @@ updateEditCCValueWithMidiMsg midiMsg state =
 
         _ ->
             state
+
+
+editStateToCommand : EditCommandState -> Maybe Controller
+editStateToCommand { label, colour, onPressMsgs, onReleaseMsgs } =
+    Controller.newCommand label colour onPressMsgs onReleaseMsgs
+        |> Just
+
+
+type alias EditCommandState =
+    { label : String
+    , colour : AppColour
+    , editMode : CommandEditMode
+    , onPressMsgs : List MidiMsg
+    , onReleaseMsgs : List MidiMsg
+    , newMsg : Maybe Midi.EditMidiButtonMsg
+    }
+
+
+type CommandEditMode
+    = OnPressMsgs
+    | OnReleaseMsgs
+
+
+defaultEditCommandState : EditCommandState
+defaultEditCommandState =
+    { label = ""
+    , colour = Green
+    , editMode = OnPressMsgs
+    , onPressMsgs = []
+    , onReleaseMsgs = []
+    , newMsg = Nothing
+    }
+
+
+updateEditCommandWithMidiMsg : MidiMsg -> EditCommandState -> EditCommandState
+updateEditCommandWithMidiMsg midiMsg state =
+    { state | newMsg = Midi.midiMsgToEditMidiButtonMsg midiMsg }
 
 
 editStateToCCValue : EditCCValueState -> Maybe Controller
@@ -549,6 +587,10 @@ updateWithMidiMsg midiMsg state =
         EditCCValue ccState ->
             updateEditCCValueWithMidiMsg midiMsg ccState
                 |> EditCCValue
+
+        EditCommand comState ->
+            updateEditCommandWithMidiMsg midiMsg comState
+                |> EditCommand
 
         EditFader faderState ->
             updateEditFaderWithMidiMsg midiMsg faderState
