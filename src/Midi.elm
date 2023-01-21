@@ -188,51 +188,51 @@ midiMsgToString : MidiMsg -> String
 midiMsgToString midiMsg =
     case midiMsg of
         NoteOn { channel, pitch, velocity } ->
-            "Note On: Channel "
+            "Note On: Ch "
                 ++ String.fromInt channel
-                ++ ", Pitch "
+                ++ ", Pit "
                 ++ String.fromInt pitch
-                ++ ", Velocity "
+                ++ ", Vel "
                 ++ String.fromInt velocity
 
         NoteOff { channel, pitch, velocity } ->
-            "Note Off: Channel "
+            "Note Off: Ch "
                 ++ String.fromInt channel
-                ++ ", Pitch "
+                ++ ", Pit "
                 ++ String.fromInt pitch
-                ++ ", Velocity "
+                ++ ", Vel "
                 ++ String.fromInt velocity
 
         KeyPressure { channel, key, pressure } ->
-            "Key Pressure: Channel "
+            "Key Pressure: Ch "
                 ++ String.fromInt channel
                 ++ ", Key "
                 ++ String.fromInt key
-                ++ ", Pressure "
+                ++ ", Pres "
                 ++ String.fromInt pressure
 
         ControllerChange { channel, controller, value } ->
-            "Controller Change: Channel "
+            "CC: Ch "
                 ++ String.fromInt channel
-                ++ ", Controller "
+                ++ ", Con "
                 ++ String.fromInt controller
-                ++ ", Value "
+                ++ ", Val "
                 ++ String.fromInt value
 
         ProgramChange { channel, preset } ->
-            "Program Change: Channel "
+            "Program Change: Ch "
                 ++ String.fromInt channel
-                ++ ", Preset "
+                ++ ", Pre "
                 ++ String.fromInt preset
 
         ChannelPressure { channel, pressure } ->
-            "Channel Pressure: Channel "
+            "Channel Pressure: Ch "
                 ++ String.fromInt channel
-                ++ ", Pressure "
+                ++ ", Pres "
                 ++ String.fromInt pressure
 
         PitchBend { channel, bendLSB, bendMSB } ->
-            "Pitch Bend: Channel "
+            "Pitch Bend: Ch "
                 ++ String.fromInt channel
                 ++ ", LSB "
                 ++ String.fromInt bendLSB
@@ -252,11 +252,11 @@ midiMsgToString midiMsg =
                 ++ String.fromInt positionMSB
 
         SongSelect songNumber ->
-            "Song Select:  Song Number "
+            "Song Select:  Song# "
                 ++ String.fromInt songNumber
 
         UnofficialBusSelect busNumber ->
-            "Unofficial Bus Select: Bus Number "
+            "Unofficial Bus Select: Bus# "
                 ++ String.fromInt busNumber
 
         TuneRequest ->

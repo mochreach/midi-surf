@@ -19,7 +19,7 @@ import Html exposing (Html)
 import Html.Attributes as HAtt
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
-import Midi exposing (MidiMsg(..), Status(..))
+import Midi exposing (EditMidiButtonMsg(..), MidiMsg(..), Status(..))
 import Ports
 import Style exposing (..)
 import Utils
@@ -1188,7 +1188,7 @@ update msg model =
             )
 
         ClosePopUp ->
-            ( { model | popup = Nothing }
+            ( { model | popup = Nothing, mode = resetMode model.mode }
             , Cmd.none
             )
 
@@ -2420,6 +2420,7 @@ editChordPane state =
         , column
             [ padding 2
             , spacing 4
+            , width fill
             , Border.width 2
             , Border.dashed
             ]
@@ -2431,6 +2432,7 @@ editChordPane state =
                     , Border.width 2
                     , Border.solid
                     , borderColour Black
+                    , Font.size 14
                     ]
                     { onPress =
                         { state | notes = Dict.empty }
@@ -2444,6 +2446,7 @@ editChordPane state =
                 [ height (px 90)
                 , padding 2
                 , spacing 1
+                , width fill
                 , scrollbarY
                 ]
                 (List.map
@@ -2593,15 +2596,48 @@ editCommandPane state =
                         , Border.width 2
                         , Border.dashed
                         ]
-                        ((case state.editMode of
-                            EController.OnPressMsgs ->
-                                state.onPressMsgs
+                        [ column
+                            [ spacing 6
+                            , width fill
+                            ]
+                            (Input.button
+                                [ padding 5
+                                , spacing 2
+                                , Border.width 2
+                                , Border.solid
+                                , borderColour Black
+                                , Font.size 14
+                                ]
+                                { onPress =
+                                    (case state.editMode of
+                                        EController.OnPressMsgs ->
+                                            { state | onPressMsgs = [] }
 
-                            EController.OnReleaseMsgs ->
-                                state.onReleaseMsgs
-                         )
-                            |> List.map (\midiMsg -> text <| Midi.midiMsgToString midiMsg)
-                        )
+                                        EController.OnReleaseMsgs ->
+                                            { state | onReleaseMsgs = [] }
+                                    )
+                                        |> EditCommand
+                                        |> UpdateControllerState
+                                        |> Just
+                                , label = text "Clear"
+                                }
+                                :: ((case state.editMode of
+                                        EController.OnPressMsgs ->
+                                            state.onPressMsgs
+
+                                        EController.OnReleaseMsgs ->
+                                            state.onReleaseMsgs
+                                    )
+                                        |> List.map
+                                            (\midiMsg ->
+                                                paragraph []
+                                                    [ text <|
+                                                        Midi.midiMsgToString midiMsg
+                                                    ]
+                                            )
+                                   )
+                            )
+                        ]
                     , Input.button
                         [ padding 5
                         , Border.width 2
