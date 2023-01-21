@@ -677,11 +677,11 @@ editMidiButtonSelector selectMsg selected =
 editMidiButtonMsgView : (EditMidiButtonMsg -> msg) -> EditMidiButtonMsg -> Element msg
 editMidiButtonMsgView editMsg midiButtonMsg =
     column
-        [ padding 4, spacing 4 ]
+        [ padding 4, spacing 4, width fill ]
         [ case midiButtonMsg of
             ENoteOn state ->
                 column
-                    [ spacing 4 ]
+                    [ spacing 4, width fill ]
                     [ editTextBox
                         { placeholder = "1-16"
                         , label = "Channel"
@@ -719,7 +719,7 @@ editMidiButtonMsgView editMsg midiButtonMsg =
 
             ENoteOff state ->
                 column
-                    [ spacing 4 ]
+                    [ spacing 4, width fill ]
                     [ editTextBox
                         { placeholder = "1-16"
                         , label = "Channel"
@@ -757,7 +757,7 @@ editMidiButtonMsgView editMsg midiButtonMsg =
 
             EControllerChange state ->
                 column
-                    [ spacing 4 ]
+                    [ spacing 4, width fill ]
                     [ editTextBox
                         { placeholder = "1-16"
                         , label = "Channel"
@@ -795,7 +795,7 @@ editMidiButtonMsgView editMsg midiButtonMsg =
 
             EProgramChange state ->
                 column
-                    [ spacing 4 ]
+                    [ spacing 4, width fill ]
                     [ editTextBox
                         { placeholder = "1-16"
                         , label = "Channel"
@@ -822,7 +822,7 @@ editMidiButtonMsgView editMsg midiButtonMsg =
 
             ESongSelect songNumber ->
                 column
-                    [ spacing 4 ]
+                    [ spacing 4, width fill ]
                     [ editTextBox
                         { placeholder = "0-127"
                         , label = "Song Number"
