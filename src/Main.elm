@@ -1500,6 +1500,18 @@ menuRow mode menuOpen =
                                     |> Icons.toHtml []
                                     |> html
                             }
+                        , newTabLink
+                            [ padding 10
+                            , Border.width 4
+                            , backgroundColour White
+                            ]
+                            { url = "https://ko-fi.com/mochreach"
+                            , label =
+                                Icons.coffee
+                                    |> Icons.withSize 28
+                                    |> Icons.toHtml []
+                                    |> html
+                            }
                         , Input.button
                             [ padding 10
                             , Border.width 4
