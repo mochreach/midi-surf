@@ -2,7 +2,7 @@ module Controller exposing (..)
 
 import Codec exposing (Codec)
 import Midi exposing (Channel(..), MidiMsg(..))
-import Style exposing (AppColour(..))
+import Style exposing (..)
 
 
 type Controller
@@ -138,6 +138,7 @@ controllerToString control =
 type alias NoteState =
     { status : ButtonStatus
     , label : String
+    , labelSize : LabelSize
     , colour : AppColour
     , channel : Channel
     , pitch : Int
@@ -150,6 +151,7 @@ noteStateCodec =
     Codec.object NoteState
         |> Codec.field "status" .status (Codec.constant Off)
         |> Codec.field "label" .label Codec.string
+        |> Codec.field "labelSize" .labelSize labelSizeCodec
         |> Codec.field "colour" .colour Style.appColourCodec
         |> Codec.field "channel" .channel Midi.channelCodec
         |> Codec.field "pitch" .pitch Codec.int
@@ -160,6 +162,7 @@ noteStateCodec =
 type alias ChordState =
     { status : ButtonStatus
     , label : String
+    , labelSize : LabelSize
     , colour : AppColour
     , velocity : Int
     , notes :
@@ -182,6 +185,7 @@ chordStateCodec =
     Codec.object ChordState
         |> Codec.field "status" .status (Codec.constant Off)
         |> Codec.field "label" .label Codec.string
+        |> Codec.field "labelSize" .labelSize labelSizeCodec
         |> Codec.field "colour" .colour Style.appColourCodec
         |> Codec.field "velocity" .velocity Codec.int
         |> Codec.field "notes" .notes (Codec.list noteCodec)
@@ -196,6 +200,7 @@ type ButtonStatus
 type alias CCValueState =
     { status : ButtonStatus
     , label : String
+    , labelSize : LabelSize
     , colour : AppColour
     , channel : Channel
     , controller : Int
@@ -208,6 +213,7 @@ ccValueStateCodec =
     Codec.object CCValueState
         |> Codec.field "status" .status (Codec.constant Off)
         |> Codec.field "label" .label Codec.string
+        |> Codec.field "labelSize" .labelSize labelSizeCodec
         |> Codec.field "colour" .colour Style.appColourCodec
         |> Codec.field "channel" .channel Midi.channelCodec
         |> Codec.field "controller" .controller Codec.int
@@ -218,6 +224,7 @@ ccValueStateCodec =
 type alias CommandState =
     { status : ButtonStatus
     , label : String
+    , labelSize : LabelSize
     , colour : AppColour
     , onPressMsgs : List MidiMsg
     , onReleaseMsgs : List MidiMsg
@@ -229,6 +236,7 @@ commandStateCodec =
     Codec.object CommandState
         |> Codec.field "status" .status (Codec.constant Off)
         |> Codec.field "label" .label Codec.string
+        |> Codec.field "labelSize" .labelSize labelSizeCodec
         |> Codec.field "colour" .colour Style.appColourCodec
         |> Codec.field "onPressMsgs" .onPressMsgs (Codec.list Midi.midiMsgCodec)
         |> Codec.field "onReleaseMsgs" .onReleaseMsgs (Codec.list Midi.midiMsgCodec)
@@ -238,6 +246,7 @@ commandStateCodec =
 type alias FaderState =
     { status : FaderStatus
     , label : String
+    , labelSize : LabelSize
     , colour : AppColour
     , channel : Channel
     , ccNumber : Int
@@ -252,6 +261,7 @@ faderStateCodec =
     Codec.object FaderState
         |> Codec.field "status" .status (Codec.constant Set)
         |> Codec.field "label" .label Codec.string
+        |> Codec.field "labelSize" .labelSize labelSizeCodec
         |> Codec.field "colour" .colour Style.appColourCodec
         |> Codec.field "channel" .channel Midi.channelCodec
         |> Codec.field "ccNumber" .ccNumber Codec.int
@@ -376,6 +386,7 @@ faderSet controller =
 type alias XYFaderState =
     { status : FaderStatus
     , label : String
+    , labelSize : LabelSize
     , colour : AppColour
     , channel1 : Channel
     , ccNumber1 : Int
@@ -395,6 +406,7 @@ xyFaderStateCodec =
     Codec.object XYFaderState
         |> Codec.field "status" .status (Codec.constant Set)
         |> Codec.field "label" .label Codec.string
+        |> Codec.field "labelSize" .labelSize labelSizeCodec
         |> Codec.field "colour" .colour Style.appColourCodec
         |> Codec.field "channel1" .channel1 Midi.channelCodec
         |> Codec.field "ccNumber1" .ccNumber1 Codec.int
@@ -663,11 +675,12 @@ removeItem controller =
             controller
 
 
-newNote : String -> AppColour -> Channel -> Int -> Int -> Controller
-newNote label colour channel pitch velocity =
+newNote : String -> LabelSize -> AppColour -> Channel -> Int -> Int -> Controller
+newNote label labelSize colour channel pitch velocity =
     Note
         { status = Off
         , label = label
+        , labelSize = labelSize
         , colour = colour
         , channel = channel
         , pitch = pitch
@@ -677,38 +690,42 @@ newNote label colour channel pitch velocity =
 
 newChord :
     String
+    -> LabelSize
     -> AppColour
     -> Int
     -> List { channel : Channel, pitch : Int }
     -> Controller
-newChord label colour velocity notes =
+newChord label labelSize colour velocity notes =
     Chord
         { status = Off
         , label = label
+        , labelSize = labelSize
         , colour = colour
         , velocity = velocity
         , notes = notes
         }
 
 
-newCCValue : String -> AppColour -> Channel -> Int -> Int -> Controller
-newCCValue label colour channel controller value =
+newCCValue : String -> LabelSize -> AppColour -> Channel -> Int -> Int -> Controller
+newCCValue label labelSize colour channel controller value =
     CCValue
         { status = Off
         , colour = colour
         , label = label
+        , labelSize = labelSize
         , channel = channel
         , controller = controller
         , value = value
         }
 
 
-newCommand : String -> AppColour -> List MidiMsg -> List MidiMsg -> Controller
-newCommand label colour onPressMsgs onReleaseMsgs =
+newCommand : String -> LabelSize -> AppColour -> List MidiMsg -> List MidiMsg -> Controller
+newCommand label labelSize colour onPressMsgs onReleaseMsgs =
     Command
         { status = Off
-        , colour = colour
         , label = label
+        , labelSize = labelSize
+        , colour = colour
         , onPressMsgs = onPressMsgs
         , onReleaseMsgs = onReleaseMsgs
         }

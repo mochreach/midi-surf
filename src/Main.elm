@@ -287,7 +287,7 @@ makeIsomorphicRow channel velocity noteRange offset rowLength rowNumber =
         |> List.map Tuple.second
         |> List.map
             (\i ->
-                C.newNote "" (Style.pitchToAppColour i) channel i velocity
+                C.newNote "" Medium (Style.pitchToAppColour i) channel i velocity
             )
         |> C.Row
 
@@ -315,6 +315,7 @@ synthWideController =
                 [ C.Fader
                     { status = C.Set
                     , label = "P1"
+                    , labelSize = Medium
                     , colour = Green
                     , channel = Midi.Ch6
                     , ccNumber = 1
@@ -325,6 +326,7 @@ synthWideController =
                 , C.Fader
                     { status = C.Set
                     , label = "P2"
+                    , labelSize = Medium
                     , colour = Blue
                     , channel = Midi.Ch6
                     , ccNumber = 2
@@ -335,6 +337,7 @@ synthWideController =
                 , C.Fader
                     { status = C.Set
                     , label = "Fil"
+                    , labelSize = Medium
                     , colour = Yellow
                     , channel = Midi.Ch6
                     , ccNumber = 3
@@ -345,6 +348,7 @@ synthWideController =
                 , C.Fader
                     { status = C.Set
                     , label = "Res"
+                    , labelSize = Medium
                     , colour = Red
                     , channel = Midi.Ch6
                     , ccNumber = 4
@@ -357,6 +361,7 @@ synthWideController =
                 [ C.Fader
                     { status = C.Set
                     , label = "Att"
+                    , labelSize = Medium
                     , colour = Green
                     , channel = Midi.Ch6
                     , ccNumber = 5
@@ -367,6 +372,7 @@ synthWideController =
                 , C.Fader
                     { status = C.Set
                     , label = "Dec"
+                    , labelSize = Medium
                     , colour = Blue
                     , channel = Midi.Ch6
                     , ccNumber = 6
@@ -377,6 +383,7 @@ synthWideController =
                 , C.Fader
                     { status = C.Set
                     , label = "Sus"
+                    , labelSize = Medium
                     , colour = Yellow
                     , channel = Midi.Ch6
                     , ccNumber = 7
@@ -387,6 +394,7 @@ synthWideController =
                 , C.Fader
                     { status = C.Set
                     , label = "Rel"
+                    , labelSize = Medium
                     , colour = Red
                     , channel = Midi.Ch6
                     , ccNumber = 8
@@ -427,6 +435,7 @@ drumsController =
                 [ C.CCValue
                     { status = C.Off
                     , label = "Unmute\nKick"
+                    , labelSize = Medium
                     , colour = LightGrey
                     , channel = Midi.Ch1
                     , controller = 53
@@ -435,6 +444,7 @@ drumsController =
                 , C.CCValue
                     { status = C.Off
                     , label = "Unmute\nSnare"
+                    , labelSize = Medium
                     , colour = LightGrey
                     , channel = Midi.Ch2
                     , controller = 53
@@ -443,6 +453,7 @@ drumsController =
                 , C.CCValue
                     { status = C.Off
                     , label = "Unmute\nHat"
+                    , labelSize = Medium
                     , colour = LightGrey
                     , channel = Midi.Ch3
                     , controller = 53
@@ -453,6 +464,7 @@ drumsController =
                 [ C.CCValue
                     { status = C.Off
                     , label = "Mute\nKick"
+                    , labelSize = Medium
                     , colour = DarkGrey
                     , channel = Midi.Ch1
                     , controller = 53
@@ -461,6 +473,7 @@ drumsController =
                 , C.CCValue
                     { status = C.Off
                     , label = "Mute\nSnare"
+                    , labelSize = Medium
                     , colour = DarkGrey
                     , channel = Midi.Ch2
                     , controller = 53
@@ -469,6 +482,7 @@ drumsController =
                 , C.CCValue
                     { status = C.Off
                     , label = "Mute\nHat"
+                    , labelSize = Medium
                     , colour = DarkGrey
                     , channel = Midi.Ch3
                     , controller = 53
@@ -480,6 +494,7 @@ drumsController =
             [ C.Note
                 { status = C.Off
                 , label = "Snare"
+                , labelSize = Medium
                 , colour = Green
                 , channel = Midi.Ch2
                 , pitch = 53
@@ -488,6 +503,7 @@ drumsController =
             , C.Note
                 { status = C.Off
                 , label = "Hat 50"
+                , labelSize = Medium
                 , colour = Blue
                 , channel = Midi.Ch3
                 , pitch = 53
@@ -498,6 +514,7 @@ drumsController =
             [ C.Note
                 { status = C.Off
                 , label = "Kick"
+                , labelSize = Medium
                 , colour = Red
                 , channel = Midi.Ch1
                 , pitch = 53
@@ -506,6 +523,7 @@ drumsController =
             , C.Note
                 { status = C.Off
                 , label = "Hat 100"
+                , labelSize = Medium
                 , colour = Blue
                 , channel = Midi.Ch3
                 , pitch = 53
@@ -1152,6 +1170,7 @@ update msg model =
                             (C.Fader
                                 { status = C.Set
                                 , label = "ERROR"
+                                , labelSize = Medium
                                 , colour = LightGrey
                                 , channel = Midi.Ch1
                                 , ccNumber = 1
@@ -1184,6 +1203,7 @@ update msg model =
                             (C.Fader
                                 { status = C.Set
                                 , label = "ERROR"
+                                , labelSize = Medium
                                 , colour = LightGrey
                                 , channel = Midi.Ch1
                                 , ccNumber = 1
@@ -1277,18 +1297,20 @@ convertToEditable control =
         C.Column subControls ->
             EditColumn subControls
 
-        C.Note { label, colour, pitch, channel, velocity } ->
+        C.Note { label, labelSize, colour, pitch, channel, velocity } ->
             EditNote
                 { label = label
+                , labelSize = labelSize
                 , colour = colour
                 , pitch = String.fromInt pitch
                 , channel = Midi.channelToString channel
                 , velocity = String.fromInt velocity
                 }
 
-        C.Chord { label, colour, velocity, notes } ->
+        C.Chord { label, labelSize, colour, velocity, notes } ->
             EditChord
                 { label = label
+                , labelSize = labelSize
                 , colour = colour
                 , velocity = String.fromInt velocity
                 , notes =
@@ -1304,18 +1326,20 @@ convertToEditable control =
                         |> Dict.fromList
                 }
 
-        C.CCValue { label, colour, channel, controller, value } ->
+        C.CCValue { label, labelSize, colour, channel, controller, value } ->
             EditCCValue
                 { label = label
+                , labelSize = labelSize
                 , colour = colour
                 , channel = Midi.channelToString channel
                 , controller = String.fromInt controller
                 , value = String.fromInt value
                 }
 
-        C.Command { label, colour, onPressMsgs, onReleaseMsgs } ->
+        C.Command { label, labelSize, colour, onPressMsgs, onReleaseMsgs } ->
             EditCommand
                 { label = label
+                , labelSize = labelSize
                 , colour = colour
                 , editMode = EController.OnPressMsgs
                 , onPressMsgs = onPressMsgs
@@ -1326,6 +1350,7 @@ convertToEditable control =
         C.Fader state ->
             EditFader
                 { label = state.label
+                , labelSize = state.labelSize
                 , colour = state.colour
                 , channel = Midi.channelToString state.channel
                 , ccNumber = String.fromInt state.ccNumber
@@ -1336,6 +1361,7 @@ convertToEditable control =
         C.XYFader state ->
             EditXYFader
                 { label = state.label
+                , labelSize = state.labelSize
                 , colour = state.colour
                 , active = EController.Params1
                 , channel1 = Midi.channelToString state.channel1
@@ -1660,7 +1686,7 @@ renderPopup screen midiStatus savedPages savedModules popup =
                 saveMenu state
 
             EditMenu _ state ->
-                editMenu screen savedModules state
+                editMenu savedModules state
 
             NewPageMenu state ->
                 newPageMenu savedPages state
@@ -1935,8 +1961,8 @@ editPanelWidth =
     width <| minimum 320 <| maximum 540 <| fill
 
 
-editMenu : Maybe Screen -> Dict String Controller -> EditableController -> Element Msg
-editMenu screen savedModules menuType =
+editMenu : Dict String Controller -> EditableController -> Element Msg
+editMenu savedModules menuType =
     wrappedRow
         [ spacing 4
         , width fill
@@ -2416,6 +2442,13 @@ editNotePane state =
                     |> EditNote
                     |> UpdateControllerState
             )
+        , labelSizeRadio
+            state.labelSize
+            (\newLabelSize ->
+                { state | labelSize = newLabelSize }
+                    |> EditNote
+                    |> UpdateControllerState
+            )
         , colourRadio
             state.colour
             (\newColour ->
@@ -2484,6 +2517,13 @@ editChordPane state =
             "text"
             (\newLabel ->
                 { state | label = newLabel }
+                    |> EditChord
+                    |> UpdateControllerState
+            )
+        , labelSizeRadio
+            state.labelSize
+            (\newLabelSize ->
+                { state | labelSize = newLabelSize }
                     |> EditChord
                     |> UpdateControllerState
             )
@@ -2578,6 +2618,13 @@ editCCValuePane state =
                     |> EditCCValue
                     |> UpdateControllerState
             )
+        , labelSizeRadio
+            state.labelSize
+            (\newLabelSize ->
+                { state | labelSize = newLabelSize }
+                    |> EditCCValue
+                    |> UpdateControllerState
+            )
         , colourRadio
             state.colour
             (\newColour ->
@@ -2646,6 +2693,13 @@ editCommandPane state =
             "text"
             (\newLabel ->
                 { state | label = newLabel }
+                    |> EditCommand
+                    |> UpdateControllerState
+            )
+        , labelSizeRadio
+            state.labelSize
+            (\newLabelSize ->
+                { state | labelSize = newLabelSize }
                     |> EditCommand
                     |> UpdateControllerState
             )
@@ -2852,6 +2906,13 @@ editFaderPane state =
                     |> EditFader
                     |> UpdateControllerState
             )
+        , labelSizeRadio
+            state.labelSize
+            (\newLabelSize ->
+                { state | labelSize = newLabelSize }
+                    |> EditFader
+                    |> UpdateControllerState
+            )
         , colourRadio
             state.colour
             (\newColour ->
@@ -2931,6 +2992,13 @@ editXYFaderPane state =
             "text"
             (\newLabel ->
                 { state | label = newLabel }
+                    |> EditXYFader
+                    |> UpdateControllerState
+            )
+        , labelSizeRadio
+            state.labelSize
+            (\newLabelSize ->
+                { state | labelSize = newLabelSize }
                     |> EditXYFader
                     |> UpdateControllerState
             )
@@ -3059,37 +3127,6 @@ editXYFaderPane state =
                 (EController.editStateToXYFader state)
             )
         ]
-
-
-colourRadio : AppColour -> (AppColour -> Msg) -> Element Msg
-colourRadio colour msg =
-    Input.radio
-        [ padding 2
-        , spacing 10
-        , height (px 100)
-        , width fill
-        , scrollbarY
-        , Border.width 2
-        , Border.dashed
-        ]
-        { onChange = msg
-        , selected = Just colour
-        , label =
-            Input.labelAbove
-                [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
-                ]
-                (text "Colour")
-        , options =
-            [ Input.option Green (text "Green")
-            , Input.option Blue (text "Blue")
-            , Input.option Yellow (text "Yellow")
-            , Input.option Red (text "Red")
-            , Input.option White (text "White")
-            , Input.option LightGrey (text "Light Grey")
-            , Input.option DarkGrey (text "Dark Grey")
-            , Input.option Black (text "Black")
-            ]
-        }
 
 
 
@@ -3680,7 +3717,7 @@ renderNote config mode state id =
                     |> el
                         [ centerX
                         , centerY
-                        , Font.size 14
+                        , labelSizeToFontSize state.labelSize
                         ]
                 )
 
@@ -3746,7 +3783,7 @@ renderChord config mode state id =
                     |> el
                         [ centerX
                         , centerY
-                        , Font.size 14
+                        , labelSizeToFontSize state.labelSize
                         ]
                 )
 
@@ -3823,7 +3860,7 @@ renderCCValue config mode state id =
                     |> el
                         [ centerX
                         , centerY
-                        , Font.size 14
+                        , labelSizeToFontSize state.labelSize
                         ]
                 )
 
@@ -3889,7 +3926,7 @@ renderCommand config mode state id =
                     |> el
                         [ centerX
                         , centerY
-                        , Font.size 14
+                        , labelSizeToFontSize state.labelSize
                         ]
                 )
 
@@ -3987,7 +4024,13 @@ renderFader config mode state id =
                             ]
                             none
                         ]
-                    , el [ centerX, padding 10, Font.size 14 ] <| text state.label
+                    , el
+                        [ centerX
+                        , padding 10
+                        , labelSizeToFontSize state.labelSize
+                        ]
+                      <|
+                        text state.label
                     ]
                 )
 
@@ -4108,7 +4151,13 @@ renderXYFader config mode state id =
                             ]
                             none
                         ]
-                    , el [ centerX, padding 10, Font.size 14 ] <| text state.label
+                    , el
+                        [ centerX
+                        , padding 10
+                        , labelSizeToFontSize state.labelSize
+                        ]
+                      <|
+                        text state.label
                     ]
                 )
 

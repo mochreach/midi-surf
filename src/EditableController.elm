@@ -107,6 +107,7 @@ toIsomorphicInput state =
 
 type alias EditNoteState =
     { label : String
+    , labelSize : LabelSize
     , colour : AppColour
     , channel : String
     , pitch : String
@@ -117,6 +118,7 @@ type alias EditNoteState =
 defaultEditNoteState : EditNoteState
 defaultEditNoteState =
     { label = ""
+    , labelSize = Medium
     , colour = LightGrey
     , channel = "1"
     , pitch = "60"
@@ -140,7 +142,7 @@ updateEditNoteWithMidiMsg midiMsg state =
 
 
 editStateToNote : EditNoteState -> Maybe Controller
-editStateToNote { label, colour, pitch, channel, velocity } =
+editStateToNote { label, labelSize, colour, pitch, channel, velocity } =
     case
         ( Midi.stringToChannel channel
         , String.toInt pitch
@@ -149,7 +151,7 @@ editStateToNote { label, colour, pitch, channel, velocity } =
     of
         ( Just ch, Just nn, Just vel ) ->
             -- TODO: These values should not exceed 127, handle with midi module
-            Controller.newNote label colour ch nn vel
+            Controller.newNote label labelSize colour ch nn vel
                 |> Just
 
         _ ->
@@ -158,6 +160,7 @@ editStateToNote { label, colour, pitch, channel, velocity } =
 
 type alias EditChordState =
     { label : String
+    , labelSize : LabelSize
     , colour : AppColour
     , velocity : String
     , notes :
@@ -172,6 +175,7 @@ type alias EditChordState =
 defaultEditChordState : EditChordState
 defaultEditChordState =
     { label = ""
+    , labelSize = Medium
     , colour = LightGrey
     , velocity = "100"
     , notes = Dict.empty
@@ -204,14 +208,15 @@ updateEditChordWithMidiMsg midiMsg state =
 
 
 editStateToChord : EditChordState -> Maybe Controller
-editStateToChord { label, colour, velocity, notes } =
+editStateToChord { label, labelSize, colour, velocity, notes } =
     String.toInt velocity
         |> Maybe.map
-            (\v -> Controller.newChord label colour v (Dict.values notes))
+            (\v -> Controller.newChord label labelSize colour v (Dict.values notes))
 
 
 type alias EditCCValueState =
     { label : String
+    , labelSize : LabelSize
     , colour : AppColour
     , channel : String
     , controller : String
@@ -222,6 +227,7 @@ type alias EditCCValueState =
 defaultEditCCValueState : EditCCValueState
 defaultEditCCValueState =
     { label = ""
+    , labelSize = Medium
     , colour = Green
     , channel = "1"
     , controller = "1"
@@ -245,13 +251,14 @@ updateEditCCValueWithMidiMsg midiMsg state =
 
 
 editStateToCommand : EditCommandState -> Maybe Controller
-editStateToCommand { label, colour, onPressMsgs, onReleaseMsgs } =
-    Controller.newCommand label colour onPressMsgs onReleaseMsgs
+editStateToCommand { label, labelSize, colour, onPressMsgs, onReleaseMsgs } =
+    Controller.newCommand label labelSize colour onPressMsgs onReleaseMsgs
         |> Just
 
 
 type alias EditCommandState =
     { label : String
+    , labelSize : LabelSize
     , colour : AppColour
     , editMode : CommandEditMode
     , onPressMsgs : List MidiMsg
@@ -268,6 +275,7 @@ type CommandEditMode
 defaultEditCommandState : EditCommandState
 defaultEditCommandState =
     { label = ""
+    , labelSize = Medium
     , colour = Green
     , editMode = OnPressMsgs
     , onPressMsgs = []
@@ -282,7 +290,7 @@ updateEditCommandWithMidiMsg midiMsg state =
 
 
 editStateToCCValue : EditCCValueState -> Maybe Controller
-editStateToCCValue { label, colour, channel, controller, value } =
+editStateToCCValue { label, labelSize, colour, channel, controller, value } =
     case
         ( Midi.stringToChannel channel
         , String.toInt controller
@@ -291,7 +299,7 @@ editStateToCCValue { label, colour, channel, controller, value } =
     of
         ( Just ch, Just c, Just v ) ->
             -- TODO: These values should not exceed 127, handle with midi module
-            Controller.newCCValue label colour ch c v
+            Controller.newCCValue label labelSize colour ch c v
                 |> Just
 
         _ ->
@@ -300,6 +308,7 @@ editStateToCCValue { label, colour, channel, controller, value } =
 
 type alias EditFaderState =
     { label : String
+    , labelSize : LabelSize
     , colour : AppColour
     , channel : String
     , ccNumber : String
@@ -311,6 +320,7 @@ type alias EditFaderState =
 defaultEditFaderState : EditFaderState
 defaultEditFaderState =
     { label = ""
+    , labelSize = Medium
     , colour = Yellow
     , channel = "1"
     , ccNumber = "1"
@@ -334,7 +344,7 @@ updateEditFaderWithMidiMsg midiMsg state =
 
 
 editStateToFader : EditFaderState -> Maybe Controller
-editStateToFader { label, colour, channel, ccNumber, valueMin, valueMax } =
+editStateToFader { label, labelSize, colour, channel, ccNumber, valueMin, valueMax } =
     case Midi.stringToChannel channel of
         Just ch ->
             case
@@ -347,6 +357,7 @@ editStateToFader { label, colour, channel, ccNumber, valueMin, valueMax } =
                     Controller.Fader
                         { status = Controller.Set
                         , label = label
+                        , labelSize = labelSize
                         , colour = colour
                         , channel = ch
                         , ccNumber = cc
@@ -365,6 +376,7 @@ editStateToFader { label, colour, channel, ccNumber, valueMin, valueMax } =
 
 type alias EditXYFaderState =
     { label : String
+    , labelSize : LabelSize
     , colour : AppColour
     , active : XYParamsActive
     , channel1 : String
@@ -386,6 +398,7 @@ type XYParamsActive
 defaultEditXYFaderState : EditXYFaderState
 defaultEditXYFaderState =
     { label = ""
+    , labelSize = Medium
     , colour = Yellow
     , active = Params1
     , channel1 = "1"
@@ -439,6 +452,7 @@ editStateToXYFader state =
                     Controller.XYFader
                         { status = Controller.Set
                         , label = state.label
+                        , labelSize = state.labelSize
                         , colour = state.colour
                         , channel1 = ch1
                         , ccNumber1 = cc1
@@ -484,7 +498,9 @@ updateWithMidiMsg midiMsg state =
                                 ++ String.fromInt pitch
                     in
                     List.append subControls
-                        [ Controller.newNote label
+                        [ Controller.newNote
+                            label
+                            Medium
                             (pitchToAppColour pitch)
                             ch
                             pitch
@@ -509,6 +525,7 @@ updateWithMidiMsg midiMsg state =
                         [ Controller.Fader
                             { status = Controller.Set
                             , label = label
+                            , labelSize = Medium
                             , colour = Yellow
                             , channel = ch
                             , ccNumber = controller
@@ -539,6 +556,7 @@ updateWithMidiMsg midiMsg state =
                     List.append subControls
                         [ Controller.newNote
                             label
+                            Medium
                             (pitchToAppColour pitch)
                             ch
                             pitch
@@ -563,6 +581,7 @@ updateWithMidiMsg midiMsg state =
                         [ Controller.Fader
                             { status = Controller.Set
                             , label = label
+                            , labelSize = Medium
                             , colour = Yellow
                             , channel = ch
                             , ccNumber = controller

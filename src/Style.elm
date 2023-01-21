@@ -101,6 +101,111 @@ pitchToAppColour pitch =
         LightGrey
 
 
+colourRadio : AppColour -> (AppColour -> msg) -> Element msg
+colourRadio colour msg =
+    Input.radio
+        [ padding 2
+        , spacing 10
+        , height (px 100)
+        , width fill
+        , scrollbarY
+        , Border.width 2
+        , Border.dashed
+        ]
+        { onChange = msg
+        , selected = Just colour
+        , label =
+            Input.labelAbove
+                [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
+                ]
+                (text "Colour")
+        , options =
+            [ Input.option Green (text "Green")
+            , Input.option Blue (text "Blue")
+            , Input.option Yellow (text "Yellow")
+            , Input.option Red (text "Red")
+            , Input.option White (text "White")
+            , Input.option LightGrey (text "Light Grey")
+            , Input.option DarkGrey (text "Dark Grey")
+            , Input.option Black (text "Black")
+            ]
+        }
+
+
+type LabelSize
+    = Small
+    | Medium
+    | Large
+    | ExtraLarge
+
+
+labelSizeCodec : Codec LabelSize
+labelSizeCodec =
+    Codec.custom
+        (\sm me la xl value ->
+            case value of
+                Small ->
+                    sm
+
+                Medium ->
+                    me
+
+                Large ->
+                    la
+
+                ExtraLarge ->
+                    xl
+        )
+        |> Codec.variant0 "Small" Small
+        |> Codec.variant0 "Medium" Medium
+        |> Codec.variant0 "Large" Large
+        |> Codec.variant0 "ExtraLarge" ExtraLarge
+        |> Codec.buildCustom
+
+
+labelSizeToFontSize : LabelSize -> Element.Attribute msg
+labelSizeToFontSize labelSize =
+    case labelSize of
+        Small ->
+            Font.size 14
+
+        Medium ->
+            Font.size 24
+
+        Large ->
+            Font.size 32
+
+        ExtraLarge ->
+            Font.size 48
+
+
+labelSizeRadio : LabelSize -> (LabelSize -> msg) -> Element msg
+labelSizeRadio labelSize msg =
+    Input.radio
+        [ padding 2
+        , spacing 10
+        , height (px 100)
+        , width fill
+        , scrollbarY
+        , Border.width 2
+        , Border.dashed
+        ]
+        { onChange = msg
+        , selected = Just labelSize
+        , label =
+            Input.labelAbove
+                [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
+                ]
+                (text "Label size")
+        , options =
+            [ Input.option Small (text "Small")
+            , Input.option Medium (text "Medium")
+            , Input.option Large (text "Large")
+            , Input.option ExtraLarge (text "ExtraLarge")
+            ]
+        }
+
+
 backgroundColour : AppColour -> Element.Attribute msg
 backgroundColour appColour =
     appColourToRGB appColour
