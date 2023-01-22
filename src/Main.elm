@@ -2047,7 +2047,7 @@ editMenu savedModules menuType =
         , width fill
         , height fill
         ]
-        [ el
+        [ wrappedRow
             [ alignTop
             , padding 10
             , spacing 10
@@ -2055,8 +2055,7 @@ editMenu savedModules menuType =
             , backgroundColour White
             , Border.width 4
             ]
-          <|
-            Input.radio
+            [ Input.radio
                 [ spacing 10 ]
                 { onChange = SetEditType
                 , selected = Just menuType
@@ -2152,6 +2151,17 @@ editMenu savedModules menuType =
                     , Input.option EditSpace (text "Space")
                     ]
                 }
+            , paragraph
+                [ alignTop
+                , height fill
+                , padding 10
+                , Border.width 2
+                , Border.dashed
+                , Font.size 14
+                , Font.alignLeft
+                ]
+                [ text <| EController.description menuType ]
+            ]
         , case menuType of
             EditModule state ->
                 editModulePane savedModules state

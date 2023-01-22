@@ -25,6 +25,96 @@ type EditableController
     | EditSpace
 
 
+description : EditableController -> String
+description eController =
+    case eController of
+        EditModule _ ->
+            """A container used to group other controls.
+            Modules can be saved for future use with the save button
+            in the menu.
+            """
+
+        EditIsomorphic _ ->
+            """A tool to create isomorphic keyboards. Once created,
+            you can customise colours and labels of individual notes.
+            """
+
+        EditColumn _ ->
+            """A container that holds multiple controls in a column.
+            Press "Add" to add a space that you can edit later.
+            While creating, you can press MIDI notes and send CC on your
+            device to automatically add them to the column. 
+            """
+
+        EditRow _ ->
+            """A container that holds multiple controls in a row.
+            Press "Add" to add a space that you can edit later.
+            While creating, you can press MIDI notes and send CC on your
+            device to automatically add them to the row. 
+            """
+
+        EditNote _ ->
+            """A button that when pressed will send a note on message and
+            when released will send a note off message. 
+            While creating, you can press MIDI notes on your device to set parameters.
+            """
+
+        EditChord _ ->
+            """A button that when pressed will send multiple note on messages
+            and when released will send corresponding note off messages.
+            While creating, you can press notes on your device to set parameters.
+            """
+
+        EditCCValue _ ->
+            """A button that when pressed will send a single CC value.
+            While creating, you can send a CC value on your device
+            to set parameters.
+            """
+
+        EditCommand _ ->
+            """A button that when pressed and/or released can send multiple
+            MIDI messages. You can send a wide range of message types,
+            including notes, CC, play, stop, programme change etc.
+            While adding messages, you can press a note or send a CC value on your device
+            to set parameters.
+            """
+
+        EditSequence _ ->
+            """A button that when pressed will cycle through a sequence of
+            MIDI messages. You can send a wide range of message types,
+            including notes, CC, play, stop, programme change etc.
+            While adding messages, you can press a note or send a CC value on your device
+            to set parameters.
+            """
+
+        EditFader _ ->
+            """A fader that can be used to send CC messages.
+            While adding messages, you can send a CC value on your device
+            to set parameters.
+            """
+
+        EditXYFader _ ->
+            """A xy fader that can be used to send two CC messages simultaneously.
+            While adding messages, you can send a CC value on your device
+            to set parameters.
+            """
+
+        EditPitchBend _ ->
+            """A fader that can be used to send pitch bend messages. The position
+            resets when released.
+            While adding messages, you can press a note or send a CC
+            value on your device to set the channel.
+            """
+
+        EditMidiLog ->
+            """A log that shows MIDI messages sent from your devices.
+            """
+
+        EditSpace ->
+            """A space that can be used to make a gap or as a placeholder.
+            """
+
+
 type alias EditModuleState =
     { label : String
     , controller : Controller
