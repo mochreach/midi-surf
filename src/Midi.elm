@@ -1,6 +1,7 @@
 module Midi exposing (..)
 
 import Array exposing (Array)
+import Bitwise
 import Codec exposing (Codec)
 import Element exposing (..)
 import Element.Border as Border
@@ -234,10 +235,8 @@ midiMsgToString midiMsg =
         PitchBend { channel, bendLSB, bendMSB } ->
             "Pitch Bend: Ch "
                 ++ String.fromInt channel
-                ++ ", LSB "
-                ++ String.fromInt bendLSB
-                ++ ", MSB "
-                ++ String.fromInt bendMSB
+                ++ ", comb "
+                ++ String.fromInt (bendLSB + Bitwise.shiftLeftBy 7 bendMSB)
 
         SystemExclusive { vendorId, data } ->
             "System Exclusive: Vendor ID "
@@ -503,6 +502,19 @@ changeChannel newChannel midiMsg =
 
         Unknown data ->
             Unknown data
+
+
+intToMsbLsb : Int -> { lsb : Int, msb : Int }
+intToMsbLsb input =
+    let
+        clamped =
+            clamp 0 16383 input
+    in
+    { lsb = 0 -- Bitwise.and clamped 0xFF
+    , msb =
+        Bitwise.and clamped 0xFF00
+            |> Bitwise.shiftRightBy 7
+    }
 
 
 

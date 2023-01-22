@@ -17,6 +17,7 @@ type Controller
     | Sequence SequenceState
     | Fader FaderState
     | XYFader XYFaderState
+    | PitchBend PitchBendState
     | MidiLog
     | Space
 
@@ -26,7 +27,7 @@ controllerCodec =
     Codec.recursive
         (\rmeta ->
             Codec.custom
-                (\mod row col note cho ccv com seq fad xy mid spa value ->
+                (\mod row col note cho ccv com seq fad xy pb mid spa value ->
                     case value of
                         Module l c ->
                             mod l c
@@ -58,6 +59,9 @@ controllerCodec =
                         XYFader s ->
                             xy s
 
+                        PitchBend s ->
+                            pb s
+
                         MidiLog ->
                             mid
 
@@ -74,6 +78,7 @@ controllerCodec =
                 |> Codec.variant1 "Sequence" Sequence sequenceStateCodec
                 |> Codec.variant1 "Fader" Fader faderStateCodec
                 |> Codec.variant1 "XYFader" XYFader xyFaderStateCodec
+                |> Codec.variant1 "PitchBend" PitchBend pitchBendStateCodec
                 |> Codec.variant0 "MidiLog" MidiLog
                 |> Codec.variant0 "Space" Space
                 |> Codec.buildCustom
@@ -138,6 +143,10 @@ controllerToString control =
                 ++ Midi.channelToString channel2
                 ++ " cc2 "
                 ++ String.fromInt ccNumber2
+
+        PitchBend { channel } ->
+            "PitchBend: Ch "
+                ++ Midi.channelToString channel
 
         MidiLog ->
             "MidiLog"
@@ -399,21 +408,82 @@ faderChanging identifier ( newX, newY ) controller =
                 Set ->
                     ( XYFader { state | status = Changing identifier ( newX, newY ) }, [] )
 
+        PitchBend state ->
+            case state.status of
+                Changing oldIdentifier ( _, oldY ) ->
+                    if identifier == oldIdentifier then
+                        let
+                            valueChange =
+                                oldY - newY |> round
+
+                            value =
+                                state.bendValue
+                                    + (valueChange * 80)
+
+                            { lsb, msb } =
+                                Midi.intToMsbLsb value
+                        in
+                        ( PitchBend
+                            { state
+                                | status = Changing oldIdentifier ( newX, newY )
+                                , bendValue = value
+                            }
+                        , [ Midi.PitchBend
+                                { channel = Midi.channelToMidiNumber state.channel
+                                , bendLSB = lsb
+                                , bendMSB = msb
+                                }
+                          ]
+                        )
+
+                    else
+                        ( PitchBend state, [] )
+
+                Set ->
+                    ( PitchBend { state | status = Changing identifier ( newX, newY ) }, [] )
+
         _ ->
             ( controller, [] )
 
 
-faderSet : Controller -> Controller
+faderSet : Controller -> ( Controller, List MidiMsg )
 faderSet controller =
     case controller of
         Fader state ->
-            Fader { state | status = Set }
+            ( Fader { state | status = Set }
+            , []
+            )
 
         XYFader state ->
-            XYFader { state | status = Set }
+            ( XYFader { state | status = Set }
+            , []
+            )
+
+        PitchBend state ->
+            let
+                defaultBend =
+                    8192
+
+                { lsb, msb } =
+                    Midi.intToMsbLsb defaultBend
+            in
+            ( PitchBend
+                { state
+                    | status = Set
+                    , bendValue = defaultBend
+                }
+            , [ Midi.PitchBend
+                    { channel = Midi.channelToMidiNumber state.channel
+                    , bendLSB = lsb
+                    , bendMSB = msb
+                    }
+              ]
+            )
 
         _ ->
-            controller
+            ( controller
+            , []
+            )
 
 
 type alias XYFaderState =
@@ -451,6 +521,28 @@ xyFaderStateCodec =
         |> Codec.field "valuePercent2" .valuePercent2 Codec.int
         |> Codec.field "valueMin2" .valueMin2 Codec.int
         |> Codec.field "valueMax2" .valueMax2 Codec.int
+        |> Codec.buildObject
+
+
+type alias PitchBendState =
+    { status : FaderStatus
+    , label : String
+    , labelSize : LabelSize
+    , colour : AppColour
+    , channel : Channel
+    , bendValue : Int
+    }
+
+
+pitchBendStateCodec : Codec PitchBendState
+pitchBendStateCodec =
+    Codec.object PitchBendState
+        |> Codec.field "status" .status (Codec.constant Set)
+        |> Codec.field "label" .label Codec.string
+        |> Codec.field "labelSize" .labelSize labelSizeCodec
+        |> Codec.field "colour" .colour Style.appColourCodec
+        |> Codec.field "channel" .channel Midi.channelCodec
+        |> Codec.field "bendValue" .bendValue (Codec.constant 8192)
         |> Codec.buildObject
 
 
@@ -539,6 +631,13 @@ getWithId currentId id control =
                 Nothing
 
         XYFader _ ->
+            if currentId == id then
+                Just control
+
+            else
+                Nothing
+
+        PitchBend _ ->
             if currentId == id then
                 Just control
 
@@ -647,6 +746,13 @@ updateWithId currentId toUpdate updateInfo =
 
             else
                 XYFader state
+
+        PitchBend state ->
+            if currentId == id then
+                updateFn toUpdate
+
+            else
+                PitchBend state
 
         MidiLog ->
             if currentId == id then
@@ -967,6 +1073,9 @@ setChannel channel controller =
 
         XYFader state ->
             XYFader { state | channel1 = channel, channel2 = channel }
+
+        PitchBend state ->
+            PitchBend { state | channel = channel }
 
         MidiLog ->
             MidiLog

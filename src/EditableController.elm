@@ -20,6 +20,7 @@ type EditableController
     | EditSequence EditSequenceState
     | EditFader EditFaderState
     | EditXYFader EditXYFaderState
+    | EditPitchBend EditPitchBendState
     | EditMidiLog
     | EditSpace
 
@@ -506,6 +507,70 @@ editStateToXYFader state =
             Nothing
 
 
+type alias EditPitchBendState =
+    { label : String
+    , labelSize : LabelSize
+    , colour : AppColour
+    , channel : String
+    }
+
+
+defaultEditPitchBendState : EditPitchBendState
+defaultEditPitchBendState =
+    { label = ""
+    , labelSize = Medium
+    , colour = Blue
+    , channel = "1"
+    }
+
+
+updateEditPitchBendWithMidiMsg : MidiMsg -> EditPitchBendState -> EditPitchBendState
+updateEditPitchBendWithMidiMsg midiMsg state =
+    case midiMsg of
+        NoteOn { channel } ->
+            { state
+              -- Adding 1 to the channel so that they're labelled 1-16
+                | channel = String.fromInt (channel + 1)
+            }
+
+        NoteOff { channel } ->
+            { state
+              -- Adding 1 to the channel so that they're labelled 1-16
+                | channel = String.fromInt (channel + 1)
+            }
+
+        ControllerChange { channel } ->
+            { state
+              -- Adding 1 to the channel so that they're labelled 1-16
+                | channel = String.fromInt (channel + 1)
+            }
+
+        PitchBend { channel } ->
+            { state
+              -- Adding 1 to the channel so that they're labelled 1-16
+                | channel = String.fromInt (channel + 1)
+            }
+
+        _ ->
+            state
+
+
+editStateToPitchBend : EditPitchBendState -> Maybe Controller
+editStateToPitchBend state =
+    Maybe.map
+        (\ch ->
+            Controller.PitchBend
+                { status = Controller.Set
+                , label = state.label
+                , labelSize = state.labelSize
+                , colour = state.colour
+                , channel = ch
+                , bendValue = 8192
+                }
+        )
+        (Midi.stringToChannel state.channel)
+
+
 updateWithMidiMsg : MidiMsg -> EditableController -> EditableController
 updateWithMidiMsg midiMsg state =
     case state of
@@ -654,6 +719,10 @@ updateWithMidiMsg midiMsg state =
         EditXYFader xyFaderState ->
             updateEditXYFaderWithMidiMsg midiMsg xyFaderState
                 |> EditXYFader
+
+        EditPitchBend pbState ->
+            updateEditPitchBendWithMidiMsg midiMsg pbState
+                |> EditPitchBend
 
         EditMidiLog ->
             state

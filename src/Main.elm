@@ -1068,6 +1068,9 @@ update msg model =
                 Just (C.XYFader _) ->
                     ( model, Cmd.none )
 
+                Just (C.PitchBend _) ->
+                    ( model, Cmd.none )
+
                 Just C.MidiLog ->
                     ( model, Cmd.none )
 
@@ -1177,6 +1180,9 @@ update msg model =
                 Just (C.XYFader _) ->
                     ( model, Cmd.none )
 
+                Just (C.PitchBend _) ->
+                    ( model, Cmd.none )
+
                 Just C.MidiLog ->
                     ( model, Cmd.none )
 
@@ -1263,14 +1269,36 @@ update msg model =
             )
 
         FaderSet id ->
+            let
+                fader =
+                    getControllerFromActivePage id model.activePage model.pages
+                        |> Maybe.withDefault
+                            (C.Fader
+                                { status = C.Set
+                                , label = "ERROR"
+                                , labelSize = Medium
+                                , colour = LightGrey
+                                , channel = Midi.Ch1
+                                , ccNumber = 1
+                                , valuePercent = 50
+                                , valueMin = 0
+                                , valueMax = 127
+                                }
+                            )
+
+                ( newFader, midiMsgs ) =
+                    C.faderSet fader
+            in
             ( { model
                 | pages =
                     updateControllerOnActivePage
                         model.activePage
-                        { id = id, updateFn = C.faderSet }
+                        { id = id, updateFn = always newFader }
                         model.pages
               }
-            , Cmd.none
+            , List.map Midi.midiMsgToIntArray midiMsgs
+                |> Array.fromList
+                |> Ports.outgoingMidi
             )
 
         PageResized width height ->
@@ -1415,6 +1443,14 @@ convertToEditable control =
                 , ccNumber2 = String.fromInt state.ccNumber2
                 , valueMin2 = String.fromInt state.valueMin2
                 , valueMax2 = String.fromInt state.valueMax2
+                }
+
+        C.PitchBend state ->
+            EditPitchBend
+                { label = state.label
+                , labelSize = state.labelSize
+                , colour = state.colour
+                , channel = Midi.channelToString state.channel
                 }
 
         C.MidiLog ->
@@ -2103,6 +2139,15 @@ editMenu savedModules menuType =
                                 EditXYFader EController.defaultEditXYFaderState
                         )
                         (text "XY Fader")
+                    , Input.option
+                        (case menuType of
+                            EditPitchBend _ ->
+                                menuType
+
+                            _ ->
+                                EditPitchBend EController.defaultEditPitchBendState
+                        )
+                        (text "Pitch Bend")
                     , Input.option EditMidiLog (text "MIDI Log")
                     , Input.option EditSpace (text "Space")
                     ]
@@ -2140,6 +2185,9 @@ editMenu savedModules menuType =
 
             EditXYFader state ->
                 editXYFaderPane state
+
+            EditPitchBend state ->
+                editPitchBendPane state
 
             EditMidiLog ->
                 el
@@ -3359,6 +3407,62 @@ editXYFaderPane state =
         ]
 
 
+editPitchBendPane : EController.EditPitchBendState -> Element Msg
+editPitchBendPane state =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , editPanelWidth
+        , backgroundColour White
+        , Border.width 4
+        ]
+        [ editTextBox
+            { placeholder = "label"
+            , label = "Label"
+            , current = state.label
+            }
+            "text"
+            (\newLabel ->
+                { state | label = newLabel }
+                    |> EditPitchBend
+                    |> UpdateControllerState
+            )
+        , labelSizeRadio
+            state.labelSize
+            (\newLabelSize ->
+                { state | labelSize = newLabelSize }
+                    |> EditPitchBend
+                    |> UpdateControllerState
+            )
+        , colourRadio
+            state.colour
+            (\newColour ->
+                { state | colour = newColour }
+                    |> EditPitchBend
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "channel#"
+            , label = "Channel"
+            , current = state.channel
+            }
+            "number"
+            (\newChannel ->
+                { state | channel = newChannel }
+                    |> EditPitchBend
+                    |> UpdateControllerState
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            ClosePopUp
+            (Maybe.map
+                (\c -> FinishedEdit c)
+                (EController.editStateToPitchBend state)
+            )
+        ]
+
+
 
 -- }}}
 -- {{{ New/Edit Page Menu
@@ -3813,6 +3917,16 @@ renderController mode midiLog config idParts controller id =
 
         C.XYFader state ->
             renderXYFader
+                config
+                mode
+                state
+                (updatedParts
+                    |> List.reverse
+                    |> String.join "_"
+                )
+
+        C.PitchBend state ->
+            renderPitchBend
                 config
                 mode
                 state
@@ -4455,6 +4569,112 @@ renderXYFader config mode state id =
                         , el
                             [ height <| fillPortion state.valuePercent2
                             , width fill
+                            , Border.widthEach { bottom = 0, top = 8, left = 0, right = 0 }
+                            ]
+                            none
+                        ]
+                    , el
+                        [ centerX
+                        , padding 10
+                        , labelSizeToFontSize state.labelSize
+                        ]
+                      <|
+                        text state.label
+                    ]
+                )
+
+        Edit _ ->
+            Input.button
+                ([ padding config.gapSize
+                 , spacing config.gapSize
+                 , Border.width 2
+                 , Border.dashed
+                 , Font.size 14
+                 , backgroundColour state.colour
+                 ]
+                    ++ Style.noSelect
+                    ++ fillSpace
+                )
+                { onPress = Just <| OpenEditController id
+                , label =
+                    state.label
+                        |> text
+                }
+
+
+renderPitchBend : PageConfig -> Mode -> C.PitchBendState -> String -> Element Msg
+renderPitchBend config mode state id =
+    let
+        fillFraction =
+            round <| 100 * (toFloat state.bendValue / 16383)
+    in
+    case mode of
+        Normal ->
+            el
+                ([ padding 0
+                 , spacing 0
+                 , Border.width 4
+                 , case state.status of
+                    C.Set ->
+                        Border.solid
+
+                    C.Changing _ _ ->
+                        Border.dashed
+                 , htmlAttribute <|
+                    Touch.onStart
+                        (\event ->
+                            FaderChanging id event
+                        )
+                 , htmlAttribute <|
+                    Mouse.onDown
+                        (\event ->
+                            FaderChangingMouse id event
+                        )
+                 , htmlAttribute <|
+                    Touch.onMove
+                        (\event ->
+                            FaderChanging id event
+                        )
+                 , htmlAttribute <|
+                    Touch.onEnd
+                        (\_ ->
+                            FaderSet id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onUp
+                        (\_ ->
+                            FaderSet id
+                        )
+                 ]
+                    ++ (case state.status of
+                            Changing _ _ ->
+                                [ htmlAttribute <|
+                                    Mouse.onMove
+                                        (\event ->
+                                            FaderChangingMouse id event
+                                        )
+                                ]
+
+                            Set ->
+                                []
+                       )
+                    ++ Style.noSelect
+                    ++ fillSpace
+                )
+                (column
+                    (backgroundColour White :: fillSpace)
+                    [ column
+                        fillSpace
+                        [ el
+                            [ height <| fillPortion (100 - fillFraction)
+                            , width fill
+                            , backgroundColour state.colour
+                            ]
+                            none
+                        , el
+                            [ height <| fillPortion fillFraction
+                            , width fill
+                            , backgroundColour state.colour
                             , Border.widthEach { bottom = 0, top = 8, left = 0, right = 0 }
                             ]
                             none
