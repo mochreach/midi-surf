@@ -1,5 +1,6 @@
 module EditableController exposing (..)
 
+import Array exposing (Array)
 import Controller exposing (Controller)
 import Dict exposing (Dict)
 import Midi exposing (MidiMsg(..))
@@ -16,6 +17,7 @@ type EditableController
     | EditChord EditChordState
     | EditCCValue EditCCValueState
     | EditCommand EditCommandState
+    | EditSequence EditSequenceState
     | EditFader EditFaderState
     | EditXYFader EditXYFaderState
     | EditMidiLog
@@ -250,10 +252,21 @@ updateEditCCValueWithMidiMsg midiMsg state =
             state
 
 
-editStateToCommand : EditCommandState -> Maybe Controller
-editStateToCommand { label, labelSize, colour, onPressMsgs, onReleaseMsgs } =
-    Controller.newCommand label labelSize colour onPressMsgs onReleaseMsgs
-        |> Just
+editStateToCCValue : EditCCValueState -> Maybe Controller
+editStateToCCValue { label, labelSize, colour, channel, controller, value } =
+    case
+        ( Midi.stringToChannel channel
+        , String.toInt controller
+        , String.toInt value
+        )
+    of
+        ( Just ch, Just c, Just v ) ->
+            -- TODO: These values should not exceed 127, handle with midi module
+            Controller.newCCValue label labelSize colour ch c v
+                |> Just
+
+        _ ->
+            Nothing
 
 
 type alias EditCommandState =
@@ -289,21 +302,40 @@ updateEditCommandWithMidiMsg midiMsg state =
     { state | newMsg = Midi.midiMsgToEditMidiButtonMsg midiMsg }
 
 
-editStateToCCValue : EditCCValueState -> Maybe Controller
-editStateToCCValue { label, labelSize, colour, channel, controller, value } =
-    case
-        ( Midi.stringToChannel channel
-        , String.toInt controller
-        , String.toInt value
-        )
-    of
-        ( Just ch, Just c, Just v ) ->
-            -- TODO: These values should not exceed 127, handle with midi module
-            Controller.newCCValue label labelSize colour ch c v
-                |> Just
+editStateToCommand : EditCommandState -> Maybe Controller
+editStateToCommand { label, labelSize, colour, onPressMsgs, onReleaseMsgs } =
+    Controller.newCommand label labelSize colour onPressMsgs onReleaseMsgs
+        |> Just
 
-        _ ->
-            Nothing
+
+type alias EditSequenceState =
+    { label : String
+    , labelSize : LabelSize
+    , colour : AppColour
+    , midiMsgs : Array MidiMsg
+    , newMsg : Maybe Midi.EditMidiButtonMsg
+    }
+
+
+defaultEditSequenceState : EditSequenceState
+defaultEditSequenceState =
+    { label = ""
+    , labelSize = Medium
+    , colour = Yellow
+    , midiMsgs = Array.empty
+    , newMsg = Nothing
+    }
+
+
+updateEditSequenceWithMidiMsg : MidiMsg -> EditSequenceState -> EditSequenceState
+updateEditSequenceWithMidiMsg midiMsg state =
+    { state | newMsg = Midi.midiMsgToEditMidiButtonMsg midiMsg }
+
+
+editStateToSequence : EditSequenceState -> Maybe Controller
+editStateToSequence { label, labelSize, colour, midiMsgs } =
+    Controller.newSequence label labelSize colour midiMsgs
+        |> Just
 
 
 type alias EditFaderState =
@@ -610,6 +642,10 @@ updateWithMidiMsg midiMsg state =
         EditCommand comState ->
             updateEditCommandWithMidiMsg midiMsg comState
                 |> EditCommand
+
+        EditSequence seqState ->
+            updateEditSequenceWithMidiMsg midiMsg seqState
+                |> EditSequence
 
         EditFader faderState ->
             updateEditFaderWithMidiMsg midiMsg faderState

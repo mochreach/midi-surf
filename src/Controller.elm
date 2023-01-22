@@ -1,5 +1,6 @@
 module Controller exposing (..)
 
+import Array exposing (Array)
 import Codec exposing (Codec)
 import Midi exposing (Channel(..), MidiMsg(..))
 import Style exposing (..)
@@ -13,6 +14,7 @@ type Controller
     | Chord ChordState
     | CCValue CCValueState
     | Command CommandState
+    | Sequence SequenceState
     | Fader FaderState
     | XYFader XYFaderState
     | MidiLog
@@ -24,7 +26,7 @@ controllerCodec =
     Codec.recursive
         (\rmeta ->
             Codec.custom
-                (\mod row col note cho ccv com fad xy mid spa value ->
+                (\mod row col note cho ccv com seq fad xy mid spa value ->
                     case value of
                         Module l c ->
                             mod l c
@@ -47,6 +49,9 @@ controllerCodec =
                         Command s ->
                             com s
 
+                        Sequence s ->
+                            seq s
+
                         Fader s ->
                             fad s
 
@@ -66,6 +71,7 @@ controllerCodec =
                 |> Codec.variant1 "Chord" Chord chordStateCodec
                 |> Codec.variant1 "CCValue" CCValue ccValueStateCodec
                 |> Codec.variant1 "Command" Command commandStateCodec
+                |> Codec.variant1 "Sequence" Sequence sequenceStateCodec
                 |> Codec.variant1 "Fader" Fader faderStateCodec
                 |> Codec.variant1 "XYFader" XYFader xyFaderStateCodec
                 |> Codec.variant0 "MidiLog" MidiLog
@@ -111,6 +117,11 @@ controllerToString control =
                 ++ " msgs on press, "
                 ++ String.fromInt (List.length onReleaseMsgs)
                 ++ " msgs on release "
+
+        Sequence { midiMsgs } ->
+            "Sequence: "
+                ++ String.fromInt (Array.length midiMsgs)
+                ++ " msgs"
 
         Fader { channel, ccNumber } ->
             "Fader: "
@@ -240,6 +251,28 @@ commandStateCodec =
         |> Codec.field "colour" .colour Style.appColourCodec
         |> Codec.field "onPressMsgs" .onPressMsgs (Codec.list Midi.midiMsgCodec)
         |> Codec.field "onReleaseMsgs" .onReleaseMsgs (Codec.list Midi.midiMsgCodec)
+        |> Codec.buildObject
+
+
+type alias SequenceState =
+    { status : ButtonStatus
+    , label : String
+    , labelSize : LabelSize
+    , colour : AppColour
+    , midiMsgs : Array MidiMsg
+    , index : Int
+    }
+
+
+sequenceStateCodec : Codec SequenceState
+sequenceStateCodec =
+    Codec.object SequenceState
+        |> Codec.field "status" .status (Codec.constant Off)
+        |> Codec.field "label" .label Codec.string
+        |> Codec.field "labelSize" .labelSize labelSizeCodec
+        |> Codec.field "colour" .colour Style.appColourCodec
+        |> Codec.field "midiMsgs" .midiMsgs (Codec.array Midi.midiMsgCodec)
+        |> Codec.field "index" .index Codec.int
         |> Codec.buildObject
 
 
@@ -491,6 +524,13 @@ getWithId currentId id control =
             else
                 Nothing
 
+        Sequence _ ->
+            if currentId == id then
+                Just control
+
+            else
+                Nothing
+
         Fader _ ->
             if currentId == id then
                 Just control
@@ -586,6 +626,13 @@ updateWithId currentId toUpdate updateInfo =
 
             else
                 Command state
+
+        Sequence state ->
+            if currentId == id then
+                updateFn toUpdate
+
+            else
+                Sequence state
 
         Fader state ->
             if currentId == id then
@@ -731,6 +778,18 @@ newCommand label labelSize colour onPressMsgs onReleaseMsgs =
         }
 
 
+newSequence : String -> LabelSize -> AppColour -> Array MidiMsg -> Controller
+newSequence label labelSize colour midiMsgs =
+    Sequence
+        { status = Off
+        , label = label
+        , labelSize = labelSize
+        , colour = colour
+        , midiMsgs = midiMsgs
+        , index = 0
+        }
+
+
 buttonOn : Controller -> ( Controller, List Midi.MidiMsg )
 buttonOn controller =
     let
@@ -774,6 +833,17 @@ buttonOn controller =
         Command state ->
             ( Command { state | status = On }
             , state.onPressMsgs
+            )
+
+        Sequence state ->
+            ( Sequence
+                { state
+                    | status = On
+                    , index = modBy (Array.length state.midiMsgs) (state.index + 1)
+                }
+            , Array.get state.index state.midiMsgs
+                |> Maybe.map List.singleton
+                |> Maybe.withDefault []
             )
 
         _ ->
@@ -824,6 +894,14 @@ buttonOff controller =
             , state.onReleaseMsgs
             )
 
+        Sequence state ->
+            ( Sequence
+                { state
+                    | status = Off
+                }
+            , []
+            )
+
         _ ->
             ( controller, [] )
 
@@ -871,6 +949,17 @@ setChannel channel controller =
                                 (Midi.channelToMidiNumber channel)
                             )
                             state.onReleaseMsgs
+                }
+
+        Sequence state ->
+            Sequence
+                { state
+                    | midiMsgs =
+                        Array.map
+                            (Midi.changeChannel
+                                (Midi.channelToMidiNumber channel)
+                            )
+                            state.midiMsgs
                 }
 
         Fader state ->

@@ -1045,6 +1045,23 @@ update msg model =
                         |> Ports.outgoingMidi
                     )
 
+                Just ((C.Sequence _) as sequence) ->
+                    let
+                        ( updatedSequence, midiMsgs ) =
+                            C.buttonOn sequence
+                    in
+                    ( { model
+                        | pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = id, updateFn = always updatedSequence }
+                                model.pages
+                      }
+                    , List.map Midi.midiMsgToIntArray midiMsgs
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
+                    )
+
                 Just (C.Fader _) ->
                     ( model, Cmd.none )
 
@@ -1130,6 +1147,23 @@ update msg model =
                             updateControllerOnActivePage
                                 model.activePage
                                 { id = id, updateFn = always updatedCommand }
+                                model.pages
+                      }
+                    , List.map Midi.midiMsgToIntArray midiMsgs
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
+                    )
+
+                Just ((C.Sequence _) as sequence) ->
+                    let
+                        ( updatedSequence, midiMsgs ) =
+                            C.buttonOff sequence
+                    in
+                    ( { model
+                        | pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = id, updateFn = always updatedSequence }
                                 model.pages
                       }
                     , List.map Midi.midiMsgToIntArray midiMsgs
@@ -1344,6 +1378,15 @@ convertToEditable control =
                 , editMode = EController.OnPressMsgs
                 , onPressMsgs = onPressMsgs
                 , onReleaseMsgs = onReleaseMsgs
+                , newMsg = Nothing
+                }
+
+        C.Sequence { label, labelSize, colour, midiMsgs } ->
+            EditSequence
+                { label = label
+                , labelSize = labelSize
+                , colour = colour
+                , midiMsgs = midiMsgs
                 , newMsg = Nothing
                 }
 
@@ -2035,6 +2078,15 @@ editMenu savedModules menuType =
                         (text "Command")
                     , Input.option
                         (case menuType of
+                            EditSequence _ ->
+                                menuType
+
+                            _ ->
+                                EditSequence EController.defaultEditSequenceState
+                        )
+                        (text "Sequence")
+                    , Input.option
+                        (case menuType of
                             EditFader _ ->
                                 menuType
 
@@ -2079,6 +2131,9 @@ editMenu savedModules menuType =
 
             EditCommand state ->
                 editCommandPane state
+
+            EditSequence state ->
+                editSequencePane state
 
             EditFader state ->
                 editFaderPane state
@@ -2726,7 +2781,7 @@ editCommandPane state =
             }
         , case state.newMsg of
             Just newMsg ->
-                newMidiMsgView newMsg state
+                newCommandMidiMsgView newMsg state
 
             Nothing ->
                 column [ spacing 4, width fill ]
@@ -2819,8 +2874,8 @@ editCommandPane state =
         ]
 
 
-newMidiMsgView : Midi.EditMidiButtonMsg -> EController.EditCommandState -> Element Msg
-newMidiMsgView newMsg state =
+newCommandMidiMsgView : Midi.EditMidiButtonMsg -> EController.EditCommandState -> Element Msg
+newCommandMidiMsgView newMsg state =
     column
         [ padding 4
         , spacing 4
@@ -2880,6 +2935,181 @@ newMidiMsgView newMsg state =
                                     }
                                         |> EditCommand
                                         |> UpdateControllerState
+                        )
+                )
+        ]
+
+
+editSequencePane : EController.EditSequenceState -> Element Msg
+editSequencePane state =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , editPanelWidth
+        , backgroundColour White
+        , Border.width 4
+        ]
+        [ editTextBox
+            { placeholder = "label"
+            , label = "Label"
+            , current = state.label
+            }
+            "text"
+            (\newLabel ->
+                { state | label = newLabel }
+                    |> EditSequence
+                    |> UpdateControllerState
+            )
+        , labelSizeRadio
+            state.labelSize
+            (\newLabelSize ->
+                { state | labelSize = newLabelSize }
+                    |> EditSequence
+                    |> UpdateControllerState
+            )
+        , colourRadio
+            state.colour
+            (\newColour ->
+                { state | colour = newColour }
+                    |> EditSequence
+                    |> UpdateControllerState
+            )
+        , case state.newMsg of
+            Just newMsg ->
+                newSequenceMidiMsgView newMsg state
+
+            Nothing ->
+                column [ spacing 4, width fill ]
+                    [ column
+                        [ height (px 300)
+                        , width fill
+                        , spacing 4
+                        , scrollbarY
+                        , Border.width 2
+                        , Border.dashed
+                        ]
+                        [ column
+                            [ spacing 6
+                            , width fill
+                            ]
+                            (row [ padding 4, spacing 4, width fill, backgroundColour LightGrey ]
+                                [ text "Messages"
+                                , Input.button
+                                    [ alignRight
+                                    , padding 5
+                                    , Border.width 2
+                                    , Border.solid
+                                    , borderColour Black
+                                    , Font.size 14
+                                    ]
+                                    { onPress =
+                                        Just
+                                            ({ state
+                                                | newMsg =
+                                                    Just <|
+                                                        Midi.ENoteOn
+                                                            { channel = ""
+                                                            , pitch = ""
+                                                            , velocity = ""
+                                                            }
+                                             }
+                                                |> EditSequence
+                                                |> UpdateControllerState
+                                            )
+                                    , label = text "Add Msg"
+                                    }
+                                , Input.button
+                                    [ alignRight
+                                    , padding 5
+                                    , spacing 2
+                                    , Border.width 2
+                                    , Border.solid
+                                    , borderColour Black
+                                    , Font.size 14
+                                    ]
+                                    { onPress =
+                                        { state | midiMsgs = Array.empty }
+                                            |> EditSequence
+                                            |> UpdateControllerState
+                                            |> Just
+                                    , label = text "Clear"
+                                    }
+                                ]
+                                :: (state.midiMsgs
+                                        |> Array.map
+                                            (\midiMsg ->
+                                                paragraph []
+                                                    [ text <|
+                                                        Midi.midiMsgToString midiMsg
+                                                    ]
+                                            )
+                                        |> Array.toList
+                                   )
+                            )
+                        ]
+                    ]
+        , acceptOrCloseButtons
+            "Ok"
+            ClosePopUp
+            (Maybe.map
+                (\c -> FinishedEdit c)
+                (EController.editStateToSequence state)
+            )
+        ]
+
+
+newSequenceMidiMsgView : Midi.EditMidiButtonMsg -> EController.EditSequenceState -> Element Msg
+newSequenceMidiMsgView newMsg state =
+    column
+        [ padding 4
+        , spacing 4
+        , width fill
+        , Border.dashed
+        , Border.width 2
+        ]
+        [ Midi.editMidiButtonSelector
+            (\msgType ->
+                { state
+                    | newMsg =
+                        Just <|
+                            msgType
+                }
+                    |> EditSequence
+                    |> UpdateControllerState
+            )
+            newMsg
+        , Midi.editMidiButtonMsgView
+            (\updatedMidi ->
+                { state
+                    | newMsg =
+                        Just <|
+                            updatedMidi
+                }
+                    |> EditSequence
+                    |> UpdateControllerState
+            )
+            newMsg
+        , el [ centerX ] <|
+            acceptOrCloseButtons
+                "Add"
+                ({ state
+                    | newMsg = Nothing
+                 }
+                    |> EditSequence
+                    |> UpdateControllerState
+                )
+                (Midi.editMidiButtonToMidiMsg newMsg
+                    |> Maybe.map
+                        (\completeMsg ->
+                            { state
+                                | midiMsgs =
+                                    Array.append state.midiMsgs <|
+                                        Array.fromList [ completeMsg ]
+                                , newMsg = Nothing
+                            }
+                                |> EditSequence
+                                |> UpdateControllerState
                         )
                 )
         ]
@@ -3561,6 +3791,16 @@ renderController mode midiLog config idParts controller id =
                     |> String.join "_"
                 )
 
+        C.Sequence state ->
+            renderSequence
+                config
+                mode
+                state
+                (updatedParts
+                    |> List.reverse
+                    |> String.join "_"
+                )
+
         C.Fader state ->
             renderFader
                 config
@@ -3922,6 +4162,74 @@ renderCommand config mode state id =
                     ++ fillSpace
                 )
                 (state.label
+                    |> text
+                    |> el
+                        [ centerX
+                        , centerY
+                        , labelSizeToFontSize state.labelSize
+                        ]
+                )
+
+        Edit _ ->
+            Input.button
+                ([ padding config.gapSize
+                 , spacing config.gapSize
+                 , Border.width 2
+                 , Border.dashed
+                 , Font.size 14
+                 , backgroundColour state.colour
+                 ]
+                    ++ Style.noSelect
+                    ++ fillSpace
+                )
+                { onPress = Just <| OpenEditController id
+                , label =
+                    state.label
+                        |> text
+                }
+
+
+renderSequence : PageConfig -> Mode -> C.SequenceState -> String -> Element Msg
+renderSequence config mode state id =
+    case mode of
+        Normal ->
+            el
+                ([ padding 0
+                 , spacing 0
+                 , Border.width 4
+                 , case state.status of
+                    C.Off ->
+                        backgroundColour state.colour
+
+                    C.On ->
+                        Border.dashed
+                 , htmlAttribute <|
+                    Touch.onStart
+                        (\_ ->
+                            ButtonDown id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onDown
+                        (\_ ->
+                            ButtonDown id
+                        )
+                 , htmlAttribute <|
+                    Touch.onEnd
+                        (\_ ->
+                            ButtonUp id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onUp
+                        (\_ ->
+                            ButtonUp id
+                        )
+                 ]
+                    ++ Style.noSelect
+                    ++ fillSpace
+                )
+                (state.label
+                    ++ "\n\n"
+                    ++ String.fromInt (state.index + 1)
                     |> text
                     |> el
                         [ centerX
