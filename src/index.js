@@ -54,7 +54,6 @@ function initialiseDevices(midiAccess) {
             midiDevices.set(output.name, {input: null, output: output});
         }
     }));
-    console.log(midiDevices);
 
     let devices = Array.from(midiDevices.entries()).map(makeMidiStatusFromDevice);
     app.ports.midiDevices.send(devices);
@@ -83,43 +82,15 @@ function onMIDIFailure(msg) {
     console.log("Failed to get MIDI access - " + msg);
 }
 
-
-app.ports.sendNoteOn.subscribe(function (midiMsg) {
+app.ports.outgoingMidi.subscribe(function (midiMsgArray) {
     midiDevices.forEach(((device) => {
         if (device.output != null) {
-            let {channel, pitch, velocity} = midiMsg;
-            device.output.send([0x90 + channel, pitch, velocity]);
-            console.log(device.output.name, "Note On", pitch);
-        } else {
-            console.log("Midi output not available for device: " + device.output.name);
+            midiMsgArray.forEach(msg => {
+                device.output.send(msg);
+            });
         }
     }));
 });
-
-app.ports.sendNoteOff.subscribe(function (midiMsg) {
-    midiDevices.forEach(((device, _) => {
-        if (device.output != null) {
-            let {channel, pitch, velocity} = midiMsg;
-            device.output.send([0x80 + channel, pitch, velocity]);
-            console.log(device.output.name, "Note Off", pitch);
-        } else {
-            console.log("Midi output not available for device: " + device.output.name);
-        }
-    }));
-});
-
-app.ports.sendCC.subscribe(function (midiMsg) {
-    midiDevices.forEach(((device) => {
-        if (device.output != null) {
-            let {channel, controller, value} = midiMsg;
-            device.output.send([0xB0 + channel, controller, value]);
-            console.log(device.output.name, "CC", channel, value);
-        } else {
-            console.log("Midi output not available for device: " + device.output.name);
-        }
-    }));
-});
-
 
 // Taken from MDN
 function storageAvailable(type) {

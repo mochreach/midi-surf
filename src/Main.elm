@@ -2,6 +2,8 @@ module Main exposing (..)
 
 import Array exposing (Array)
 import Browser
+import Browser.Dom
+import Browser.Events
 import Codec exposing (Codec, Value)
 import Controller as C exposing (Controller(..), FaderStatus(..), controllerCodec, setChannel)
 import Dict exposing (Dict)
@@ -19,15 +21,21 @@ import Html exposing (Html)
 import Html.Attributes as HAtt
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
-import Midi exposing (MidiMsg(..), Status(..))
+import Midi exposing (EditMidiButtonMsg(..), MidiMsg(..), Status(..))
 import Ports
 import Style exposing (..)
+import Task
 import Utils
 
 
 version : String
 version =
-    "0.1.0"
+    "0.2.0"
+
+
+date : String
+date =
+    "2023-01-22"
 
 
 
@@ -44,6 +52,7 @@ type alias Model =
     , menuOpen : Bool
     , popup : Maybe PopUp
     , midiLog : List String
+    , screen : Maybe Screen
     }
 
 
@@ -59,6 +68,21 @@ modelCodec =
         |> Codec.field "menuOpen" .menuOpen (Codec.constant True)
         |> Codec.field "popup" .popup (Codec.constant Nothing)
         |> Codec.field "midiLog" .midiLog (Codec.constant [])
+        |> Codec.maybeField "screen" .screen screenCodec
+        |> Codec.buildObject
+
+
+type alias Screen =
+    { width : Int
+    , height : Int
+    }
+
+
+screenCodec : Codec Screen
+screenCodec =
+    Codec.object Screen
+        |> Codec.field "width" .width Codec.int
+        |> Codec.field "height" .height Codec.int
         |> Codec.buildObject
 
 
@@ -181,9 +205,20 @@ type alias Flags =
 
 init : Flags -> ( Model, Cmd Msg )
 init { mInitialState } =
+    let
+        defaultCmds =
+            [ Task.perform
+                (\viewport ->
+                    PageResized
+                        (floor viewport.scene.width)
+                        (floor viewport.scene.height)
+                )
+                Browser.Dom.getViewport
+            ]
+    in
     case Codec.decodeValue (Codec.maybe modelCodec) mInitialState of
         Ok (Just model) ->
-            ( model, Cmd.none )
+            ( model, Cmd.batch defaultCmds )
 
         _ ->
             ( { midiStatus = Midi.Initialising
@@ -195,8 +230,9 @@ init { mInitialState } =
               , menuOpen = True
               , popup = Just <| InfoPanel
               , midiLog = []
+              , screen = Nothing
               }
-            , Cmd.none
+            , Cmd.batch defaultCmds
             )
 
 
@@ -256,7 +292,7 @@ makeIsomorphicRow channel velocity noteRange offset rowLength rowNumber =
         |> List.map Tuple.second
         |> List.map
             (\i ->
-                C.newNote "" (Style.pitchToAppColour i) channel i velocity
+                C.newNote "" Medium (Style.pitchToAppColour i) channel i velocity
             )
         |> C.Row
 
@@ -281,51 +317,52 @@ synthWideController =
     C.Row
         [ C.Column
             [ C.Row
-                [ C.Fader
+                [ C.XYFader
                     { status = C.Set
                     , label = "P1"
-                    , colour = Green
-                    , channel = Midi.Ch6
-                    , ccNumber = 1
-                    , valuePercent = 50
-                    , valueMin = 0
-                    , valueMax = 0
+                    , labelSize = Just Medium
+                    , colour = White
+                    , channel1 = Midi.Ch6
+                    , ccNumber1 = 1
+                    , valuePercent1 = 50
+                    , valueMin1 = 0
+                    , valueMax1 = 0
+                    , channel2 = Midi.Ch6
+                    , ccNumber2 = 2
+                    , valuePercent2 = 50
+                    , valueMin2 = 0
+                    , valueMax2 = 0
                     }
-                , C.Fader
-                    { status = C.Set
-                    , label = "P2"
-                    , colour = Blue
-                    , channel = Midi.Ch6
-                    , ccNumber = 2
-                    , valuePercent = 50
-                    , valueMin = 0
-                    , valueMax = 0
-                    }
-                , C.Fader
+                , C.XYFader
                     { status = C.Set
                     , label = "Fil"
-                    , colour = Yellow
-                    , channel = Midi.Ch6
-                    , ccNumber = 3
-                    , valuePercent = 50
-                    , valueMin = 0
-                    , valueMax = 0
+                    , labelSize = Just Medium
+                    , colour = White
+                    , channel1 = Midi.Ch6
+                    , ccNumber1 = 3
+                    , valuePercent1 = 50
+                    , valueMin1 = 0
+                    , valueMax1 = 0
+                    , channel2 = Midi.Ch6
+                    , ccNumber2 = 4
+                    , valuePercent2 = 50
+                    , valueMin2 = 0
+                    , valueMax2 = 0
                     }
-                , C.Fader
+                , C.PitchBend
                     { status = C.Set
-                    , label = "Res"
-                    , colour = Red
+                    , label = "Ch6 Bend"
+                    , labelSize = Just Medium
+                    , colour = DarkGrey
                     , channel = Midi.Ch6
-                    , ccNumber = 4
-                    , valuePercent = 50
-                    , valueMin = 0
-                    , valueMax = 0
+                    , bendValue = 8192
                     }
                 ]
             , C.Row
                 [ C.Fader
                     { status = C.Set
                     , label = "Att"
+                    , labelSize = Just Medium
                     , colour = Green
                     , channel = Midi.Ch6
                     , ccNumber = 5
@@ -336,6 +373,7 @@ synthWideController =
                 , C.Fader
                     { status = C.Set
                     , label = "Dec"
+                    , labelSize = Just Medium
                     , colour = Blue
                     , channel = Midi.Ch6
                     , ccNumber = 6
@@ -346,6 +384,7 @@ synthWideController =
                 , C.Fader
                     { status = C.Set
                     , label = "Sus"
+                    , labelSize = Just Medium
                     , colour = Yellow
                     , channel = Midi.Ch6
                     , ccNumber = 7
@@ -356,6 +395,7 @@ synthWideController =
                 , C.Fader
                     { status = C.Set
                     , label = "Rel"
+                    , labelSize = Just Medium
                     , colour = Red
                     , channel = Midi.Ch6
                     , ccNumber = 8
@@ -396,6 +436,7 @@ drumsController =
                 [ C.CCValue
                     { status = C.Off
                     , label = "Unmute\nKick"
+                    , labelSize = Just Medium
                     , colour = LightGrey
                     , channel = Midi.Ch1
                     , controller = 53
@@ -404,6 +445,7 @@ drumsController =
                 , C.CCValue
                     { status = C.Off
                     , label = "Unmute\nSnare"
+                    , labelSize = Just Medium
                     , colour = LightGrey
                     , channel = Midi.Ch2
                     , controller = 53
@@ -412,6 +454,7 @@ drumsController =
                 , C.CCValue
                     { status = C.Off
                     , label = "Unmute\nHat"
+                    , labelSize = Just Medium
                     , colour = LightGrey
                     , channel = Midi.Ch3
                     , controller = 53
@@ -422,6 +465,7 @@ drumsController =
                 [ C.CCValue
                     { status = C.Off
                     , label = "Mute\nKick"
+                    , labelSize = Just Medium
                     , colour = DarkGrey
                     , channel = Midi.Ch1
                     , controller = 53
@@ -430,6 +474,7 @@ drumsController =
                 , C.CCValue
                     { status = C.Off
                     , label = "Mute\nSnare"
+                    , labelSize = Just Medium
                     , colour = DarkGrey
                     , channel = Midi.Ch2
                     , controller = 53
@@ -438,10 +483,45 @@ drumsController =
                 , C.CCValue
                     { status = C.Off
                     , label = "Mute\nHat"
+                    , labelSize = Just Medium
                     , colour = DarkGrey
                     , channel = Midi.Ch3
                     , controller = 53
                     , value = 1
+                    }
+                ]
+            , C.Row
+                [ C.Command
+                    { status = C.Off
+                    , label = "Hold for\nReverse Snare"
+                    , labelSize = Just Medium
+                    , colour = Yellow
+                    , onPressMsgs =
+                        [ Midi.ControllerChange
+                            { channel = 1
+                            , controller = 2
+                            , value = 127
+                            }
+                        ]
+                    , onReleaseMsgs =
+                        [ Midi.ControllerChange
+                            { channel = 1
+                            , controller = 2
+                            , value = 0
+                            }
+                        ]
+                    }
+                , C.Sequence
+                    { status = C.Off
+                    , label = "Play/Stop"
+                    , labelSize = Just Medium
+                    , colour = White
+                    , midiMsgs =
+                        Array.fromList
+                            [ Midi.StartSong
+                            , Midi.StopSong
+                            ]
+                    , index = 0
                     }
                 ]
             ]
@@ -449,6 +529,7 @@ drumsController =
             [ C.Note
                 { status = C.Off
                 , label = "Snare"
+                , labelSize = Just Medium
                 , colour = Green
                 , channel = Midi.Ch2
                 , pitch = 53
@@ -457,6 +538,7 @@ drumsController =
             , C.Note
                 { status = C.Off
                 , label = "Hat 50"
+                , labelSize = Just Medium
                 , colour = Blue
                 , channel = Midi.Ch3
                 , pitch = 53
@@ -467,6 +549,7 @@ drumsController =
             [ C.Note
                 { status = C.Off
                 , label = "Kick"
+                , labelSize = Just Medium
                 , colour = Red
                 , channel = Midi.Ch1
                 , pitch = 53
@@ -475,6 +558,7 @@ drumsController =
             , C.Note
                 { status = C.Off
                 , label = "Hat 100"
+                , labelSize = Just Medium
                 , colour = Blue
                 , channel = Midi.Ch3
                 , pitch = 53
@@ -531,8 +615,9 @@ type Msg
     | FaderChanging String Touch.Event
     | FaderChangingMouse String Mouse.Event
     | FaderSet String
-    | ClosePopUp
     | IncomingMidi { deviceName : String, midiData : Array Int }
+    | PageResized Int Int
+    | ClosePopUp
     | NoOp
 
 
@@ -939,8 +1024,9 @@ update msg model =
                                 { id = id, updateFn = always updatedNote }
                                 model.pages
                       }
-                    , List.map Ports.midiMsgToCmd midiMsgs
-                        |> Cmd.batch
+                    , List.map Midi.midiMsgToIntArray midiMsgs
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
                     )
 
                 Just ((C.Chord _) as chord) ->
@@ -955,8 +1041,9 @@ update msg model =
                                 { id = id, updateFn = always updatedChord }
                                 model.pages
                       }
-                    , List.map Ports.midiMsgToCmd midiMsgs
-                        |> Cmd.batch
+                    , List.map Midi.midiMsgToIntArray midiMsgs
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
                     )
 
                 Just ((C.CCValue _) as ccValue) ->
@@ -971,11 +1058,52 @@ update msg model =
                                 { id = id, updateFn = always updatedCCValue }
                                 model.pages
                       }
-                    , List.map Ports.midiMsgToCmd midiMsgs
-                        |> Cmd.batch
+                    , List.map Midi.midiMsgToIntArray midiMsgs
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
+                    )
+
+                Just ((C.Command _) as command) ->
+                    let
+                        ( updatedCommand, midiMsgs ) =
+                            C.buttonOn command
+                    in
+                    ( { model
+                        | pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = id, updateFn = always updatedCommand }
+                                model.pages
+                      }
+                    , List.map Midi.midiMsgToIntArray midiMsgs
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
+                    )
+
+                Just ((C.Sequence _) as sequence) ->
+                    let
+                        ( updatedSequence, midiMsgs ) =
+                            C.buttonOn sequence
+                    in
+                    ( { model
+                        | pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = id, updateFn = always updatedSequence }
+                                model.pages
+                      }
+                    , List.map Midi.midiMsgToIntArray midiMsgs
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
                     )
 
                 Just (C.Fader _) ->
+                    ( model, Cmd.none )
+
+                Just (C.XYFader _) ->
+                    ( model, Cmd.none )
+
+                Just (C.PitchBend _) ->
                     ( model, Cmd.none )
 
                 Just C.MidiLog ->
@@ -1010,8 +1138,9 @@ update msg model =
                                 { id = id, updateFn = always updatedNote }
                                 model.pages
                       }
-                    , List.map Ports.midiMsgToCmd midiMsgs
-                        |> Cmd.batch
+                    , List.map Midi.midiMsgToIntArray midiMsgs
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
                     )
 
                 Just ((C.Chord _) as chord) ->
@@ -1026,8 +1155,9 @@ update msg model =
                                 { id = id, updateFn = always updatedChord }
                                 model.pages
                       }
-                    , List.map Ports.midiMsgToCmd midiMsgs
-                        |> Cmd.batch
+                    , List.map Midi.midiMsgToIntArray midiMsgs
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
                     )
 
                 Just ((C.CCValue _) as ccValue) ->
@@ -1045,7 +1175,47 @@ update msg model =
                     , Cmd.none
                     )
 
+                Just ((C.Command _) as command) ->
+                    let
+                        ( updatedCommand, midiMsgs ) =
+                            C.buttonOff command
+                    in
+                    ( { model
+                        | pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = id, updateFn = always updatedCommand }
+                                model.pages
+                      }
+                    , List.map Midi.midiMsgToIntArray midiMsgs
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
+                    )
+
+                Just ((C.Sequence _) as sequence) ->
+                    let
+                        ( updatedSequence, midiMsgs ) =
+                            C.buttonOff sequence
+                    in
+                    ( { model
+                        | pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = id, updateFn = always updatedSequence }
+                                model.pages
+                      }
+                    , List.map Midi.midiMsgToIntArray midiMsgs
+                        |> Array.fromList
+                        |> Ports.outgoingMidi
+                    )
+
                 Just (C.Fader _) ->
+                    ( model, Cmd.none )
+
+                Just (C.XYFader _) ->
+                    ( model, Cmd.none )
+
+                Just (C.PitchBend _) ->
                     ( model, Cmd.none )
 
                 Just C.MidiLog ->
@@ -1075,6 +1245,7 @@ update msg model =
                             (C.Fader
                                 { status = C.Set
                                 , label = "ERROR"
+                                , labelSize = Just Medium
                                 , colour = LightGrey
                                 , channel = Midi.Ch1
                                 , ccNumber = 1
@@ -1084,7 +1255,7 @@ update msg model =
                                 }
                             )
 
-                ( newFader, midiMsg ) =
+                ( newFader, midiMsgs ) =
                     C.faderChanging identifier touchCoordinates fader
             in
             ( { model
@@ -1094,12 +1265,9 @@ update msg model =
                         { id = id, updateFn = always newFader }
                         model.pages
               }
-            , case midiMsg of
-                Just (Midi.ControllerChange data) ->
-                    Ports.sendCC data
-
-                _ ->
-                    Cmd.none
+            , List.map Midi.midiMsgToIntArray midiMsgs
+                |> Array.fromList
+                |> Ports.outgoingMidi
             )
 
         FaderChangingMouse id mouseEvent ->
@@ -1110,6 +1278,7 @@ update msg model =
                             (C.Fader
                                 { status = C.Set
                                 , label = "ERROR"
+                                , labelSize = Just Medium
                                 , colour = LightGrey
                                 , channel = Midi.Ch1
                                 , ccNumber = 1
@@ -1119,7 +1288,7 @@ update msg model =
                                 }
                             )
 
-                ( newFader, midiMsg ) =
+                ( newFader, midiMsgs ) =
                     C.faderChanging -1 mouseEvent.clientPos fader
             in
             ( { model
@@ -1129,27 +1298,53 @@ update msg model =
                         { id = id, updateFn = always newFader }
                         model.pages
               }
-            , case midiMsg of
-                Just (Midi.ControllerChange data) ->
-                    Ports.sendCC data
-
-                _ ->
-                    Cmd.none
+            , List.map Midi.midiMsgToIntArray midiMsgs
+                |> Array.fromList
+                |> Ports.outgoingMidi
             )
 
         FaderSet id ->
+            let
+                fader =
+                    getControllerFromActivePage id model.activePage model.pages
+                        |> Maybe.withDefault
+                            (C.Fader
+                                { status = C.Set
+                                , label = "ERROR"
+                                , labelSize = Just Medium
+                                , colour = LightGrey
+                                , channel = Midi.Ch1
+                                , ccNumber = 1
+                                , valuePercent = 50
+                                , valueMin = 0
+                                , valueMax = 127
+                                }
+                            )
+
+                ( newFader, midiMsgs ) =
+                    C.faderSet fader
+            in
             ( { model
                 | pages =
                     updateControllerOnActivePage
                         model.activePage
-                        { id = id, updateFn = C.faderSet }
+                        { id = id, updateFn = always newFader }
                         model.pages
+              }
+            , List.map Midi.midiMsgToIntArray midiMsgs
+                |> Array.fromList
+                |> Ports.outgoingMidi
+            )
+
+        PageResized width height ->
+            ( { model
+                | screen = Just { width = width, height = height }
               }
             , Cmd.none
             )
 
         ClosePopUp ->
-            ( { model | popup = Nothing }
+            ( { model | popup = Nothing, mode = resetMode model.mode }
             , Cmd.none
             )
 
@@ -1199,18 +1394,20 @@ convertToEditable control =
         C.Column subControls ->
             EditColumn subControls
 
-        C.Note { label, colour, pitch, channel, velocity } ->
+        C.Note { label, labelSize, colour, pitch, channel, velocity } ->
             EditNote
                 { label = label
+                , labelSize = Maybe.withDefault Medium labelSize
                 , colour = colour
                 , pitch = String.fromInt pitch
                 , channel = Midi.channelToString channel
                 , velocity = String.fromInt velocity
                 }
 
-        C.Chord { label, colour, velocity, notes } ->
+        C.Chord { label, labelSize, colour, velocity, notes } ->
             EditChord
                 { label = label
+                , labelSize = Maybe.withDefault Medium labelSize
                 , colour = colour
                 , velocity = String.fromInt velocity
                 , notes =
@@ -1226,23 +1423,69 @@ convertToEditable control =
                         |> Dict.fromList
                 }
 
-        C.CCValue { label, colour, channel, controller, value } ->
+        C.CCValue { label, labelSize, colour, channel, controller, value } ->
             EditCCValue
                 { label = label
+                , labelSize = Maybe.withDefault Medium labelSize
                 , colour = colour
                 , channel = Midi.channelToString channel
                 , controller = String.fromInt controller
                 , value = String.fromInt value
                 }
 
+        C.Command { label, labelSize, colour, onPressMsgs, onReleaseMsgs } ->
+            EditCommand
+                { label = label
+                , labelSize = Maybe.withDefault Medium labelSize
+                , colour = colour
+                , editMode = EController.OnPressMsgs
+                , onPressMsgs = onPressMsgs
+                , onReleaseMsgs = onReleaseMsgs
+                , newMsg = Nothing
+                }
+
+        C.Sequence { label, labelSize, colour, midiMsgs } ->
+            EditSequence
+                { label = label
+                , labelSize = Maybe.withDefault Medium labelSize
+                , colour = colour
+                , midiMsgs = midiMsgs
+                , newMsg = Nothing
+                }
+
         C.Fader state ->
             EditFader
                 { label = state.label
+                , labelSize = Maybe.withDefault Medium state.labelSize
                 , colour = state.colour
                 , channel = Midi.channelToString state.channel
                 , ccNumber = String.fromInt state.ccNumber
                 , valueMin = String.fromInt state.valueMin
                 , valueMax = String.fromInt state.valueMax
+                }
+
+        C.XYFader state ->
+            EditXYFader
+                { label = state.label
+                , labelSize = Maybe.withDefault Medium state.labelSize
+                , colour = state.colour
+                , active = EController.Params1
+                , channel1 = Midi.channelToString state.channel1
+                , ccNumber1 = String.fromInt state.ccNumber1
+                , valueMin1 = String.fromInt state.valueMin1
+                , valueMax1 = String.fromInt state.valueMax1
+                , channel2 = Midi.channelToString state.channel2
+                , ccNumber2 = String.fromInt state.ccNumber2
+                , valueMin2 = String.fromInt state.valueMin2
+                , valueMax2 = String.fromInt state.valueMax2
+                }
+
+        C.PitchBend state ->
+            EditPitchBend
+                { label = state.label
+                , labelSize = Maybe.withDefault Medium state.labelSize
+                , colour = state.colour
+                , channel = Midi.channelToString state.channel
                 }
 
         C.MidiLog ->
@@ -1263,9 +1506,15 @@ view model =
         ((case model.popup of
             Just popup ->
                 (inFront <|
-                    renderPopup model.midiStatus model.savedPages model.savedModules popup
+                    renderPopup model.screen model.midiStatus model.savedPages model.savedModules popup
                 )
-                    :: fillSpace
+                    :: (case model.screen of
+                            Just screen ->
+                                [ width <| px screen.width, height <| px screen.height ]
+
+                            Nothing ->
+                                fillSpace
+                       )
 
             Nothing ->
                 fillSpace
@@ -1280,7 +1529,13 @@ view model =
                ]
         )
         (column
-            fillSpace
+            (case model.screen of
+                Just screen ->
+                    [ width <| px screen.width, height <| px screen.height ]
+
+                Nothing ->
+                    fillSpace
+            )
             [ titleBar model.mode model.menuOpen model.activePage model.pages
             , case Array.get model.activePage model.pages of
                 Just page ->
@@ -1307,7 +1562,7 @@ titleBar mode menuOpen activePage pages =
         , width fill
         , padding 4
         , spacing 4
-        , scrollbars
+        , scrollbarX
         , Border.widthEach { bottom = 4, top = 0, left = 0, right = 0 }
         ]
         [ column
@@ -1381,6 +1636,18 @@ menuRow mode menuOpen =
                             { onPress = Just OpenInfoPanel
                             , label =
                                 Icons.info
+                                    |> Icons.withSize 28
+                                    |> Icons.toHtml []
+                                    |> html
+                            }
+                        , newTabLink
+                            [ padding 10
+                            , Border.width 4
+                            , backgroundColour White
+                            ]
+                            { url = "https://ko-fi.com/mochreach"
+                            , label =
+                                Icons.coffee
                                     |> Icons.withSize 28
                                     |> Icons.toHtml []
                                     |> html
@@ -1498,15 +1765,24 @@ newPageButton =
 
 
 renderPopup :
-    Midi.Status
+    Maybe Screen
+    -> Midi.Status
     -> Dict String Page
     -> Dict String Controller
     -> PopUp
     -> Element Msg
-renderPopup midiStatus savedPages savedModules popup =
+renderPopup screen midiStatus savedPages savedModules popup =
     el
-        ([ padding 5, Background.color (rgba 0.5 0.5 0.5 0.8) ]
-            ++ fillSpace
+        ([ padding 5, scrollbars, Background.color (rgba 0.5 0.5 0.5 0.8) ]
+            ++ (case screen of
+                    Just s ->
+                        [ width <| px s.width
+                        , height <| px s.height
+                        ]
+
+                    Nothing ->
+                        fillSpace
+               )
         )
         (case popup of
             InfoPanel ->
@@ -1564,9 +1840,10 @@ infoPanel =
                     , text "Surf"
                     ]
                 , paragraph []
-                    [ text "Version "
+                    [ text "Ver. "
                     , text version
-                    , text " ("
+                    , text <|
+                        (" (" ++ date ++ ", ")
                     , newTabLink
                         linkStyle
                         { url = "https://github.com/mochreach/midi-surf"
@@ -1575,7 +1852,8 @@ infoPanel =
                     , text ")"
                     ]
                 , Html.iframe
-                    [ HAtt.height 400
+                    [ HAtt.height 300
+                    , HAtt.width 500
                     , HAtt.src "https://www.youtube.com/embed/c5BpeMxs5ZU"
                     , HAtt.title "YouTube video player"
                     , HAtt.attribute "frameborder" "0"
@@ -1586,7 +1864,8 @@ infoPanel =
                     ]
                     []
                     |> html
-                    |> el [ centerX, width <| maximum 700 <| fill ]
+                    |> el [ centerX ]
+                    |> el [ width fill ]
                 , paragraph []
                     [ """ Please consider supporting the development of this
                     app if you enjoy using it, I'd really appreciate it if you
@@ -1613,6 +1892,14 @@ infoPanel =
                     , """ for more videos about MIDI Surf and other music
                       technology topics.
                       """ |> text
+                    ]
+                , paragraph []
+                    [ text <|
+                        """By using this application, you agree to data on your usage being
+                        collected by Google Analytics. I collect the minimum amount of data
+                        possible so that I can improve the app, but if you're not keen on
+                        this, feel free to block it.
+                        """
                     ]
                 , paragraph []
                     [ text "Copyright: "
@@ -1772,6 +2059,7 @@ saveMenu ({ pages, mSelectedPage, modules, mSelectedModule, mode } as state) =
                 )
             , acceptOrCloseButtons
                 "Save"
+                ClosePopUp
                 (case ( mode, mSelectedPage, mSelectedModule ) of
                     ( SavePage, Just index, _ ) ->
                         Array.get index pages
@@ -1793,18 +2081,27 @@ saveMenu ({ pages, mSelectedPage, modules, mSelectedModule, mode } as state) =
 -- {{{ Edit Menu
 
 
+editPanelWidth : Element.Attribute msg
+editPanelWidth =
+    width <| minimum 320 <| maximum 540 <| fill
+
+
 editMenu : Dict String Controller -> EditableController -> Element Msg
 editMenu savedModules menuType =
-    row [ spacing 4, width fill, height fill ]
-        [ el
+    wrappedRow
+        [ spacing 4
+        , width fill
+        , height fill
+        ]
+        [ wrappedRow
             [ alignTop
             , padding 10
             , spacing 10
+            , editPanelWidth
             , backgroundColour White
             , Border.width 4
             ]
-          <|
-            Input.radio
+            [ Input.radio
                 [ spacing 10 ]
                 { onChange = SetEditType
                 , selected = Just menuType
@@ -1853,6 +2150,24 @@ editMenu savedModules menuType =
                         (text "CC Value")
                     , Input.option
                         (case menuType of
+                            EditCommand _ ->
+                                menuType
+
+                            _ ->
+                                EditCommand EController.defaultEditCommandState
+                        )
+                        (text "Command")
+                    , Input.option
+                        (case menuType of
+                            EditSequence _ ->
+                                menuType
+
+                            _ ->
+                                EditSequence EController.defaultEditSequenceState
+                        )
+                        (text "Sequence")
+                    , Input.option
+                        (case menuType of
                             EditFader _ ->
                                 menuType
 
@@ -1860,10 +2175,39 @@ editMenu savedModules menuType =
                                 EditFader EController.defaultEditFaderState
                         )
                         (text "Fader")
+                    , Input.option
+                        (case menuType of
+                            EditXYFader _ ->
+                                menuType
+
+                            _ ->
+                                EditXYFader EController.defaultEditXYFaderState
+                        )
+                        (text "XY Fader")
+                    , Input.option
+                        (case menuType of
+                            EditPitchBend _ ->
+                                menuType
+
+                            _ ->
+                                EditPitchBend EController.defaultEditPitchBendState
+                        )
+                        (text "Pitch Bend")
                     , Input.option EditMidiLog (text "MIDI Log")
                     , Input.option EditSpace (text "Space")
                     ]
                 }
+            , paragraph
+                [ alignTop
+                , height fill
+                , padding 10
+                , Border.width 2
+                , Border.dashed
+                , Font.size 14
+                , Font.alignLeft
+                ]
+                [ text <| EController.description menuType ]
+            ]
         , case menuType of
             EditModule state ->
                 editModulePane savedModules state
@@ -1886,8 +2230,20 @@ editMenu savedModules menuType =
             EditCCValue state ->
                 editCCValuePane state
 
+            EditCommand state ->
+                editCommandPane state
+
+            EditSequence state ->
+                editSequencePane state
+
             EditFader state ->
                 editFaderPane state
+
+            EditXYFader state ->
+                editXYFaderPane state
+
+            EditPitchBend state ->
+                editPitchBendPane state
 
             EditMidiLog ->
                 el
@@ -1899,6 +2255,7 @@ editMenu savedModules menuType =
                 <|
                     acceptOrCloseButtons
                         "Ok"
+                        ClosePopUp
                         (Just <| FinishedEdit <| C.MidiLog)
 
             EditSpace ->
@@ -1911,6 +2268,7 @@ editMenu savedModules menuType =
                 <|
                     acceptOrCloseButtons
                         "Ok"
+                        ClosePopUp
                         (Just <| FinishedEdit <| C.Space)
         ]
 
@@ -1921,6 +2279,7 @@ editModulePane savedModules state =
         [ alignTop
         , padding 10
         , spacing 10
+        , editPanelWidth
         , backgroundColour White
         , Border.width 4
         ]
@@ -1953,7 +2312,7 @@ editModulePane savedModules state =
                     )
 
             EController.Load ->
-                column [ spacing 10 ]
+                column [ spacing 10, width fill ]
                     [ case state.selectedModule of
                         Just index ->
                             Input.button
@@ -1995,6 +2354,7 @@ editModulePane savedModules state =
                     ]
         , acceptOrCloseButtons
             "Ok"
+            ClosePopUp
             (case state.createMode of
                 EController.New ->
                     Just <| FinishedEdit <| C.Module state.label state.controller
@@ -2018,6 +2378,7 @@ editIsomorphicPane state =
         [ alignTop
         , padding 10
         , spacing 10
+        , editPanelWidth
         , backgroundColour White
         , Border.width 4
         ]
@@ -2089,6 +2450,7 @@ editIsomorphicPane state =
             )
         , acceptOrCloseButtons
             "Ok"
+            ClosePopUp
             (Maybe.map
                 (\i -> FinishedEdit (isomorphicKeyboard i))
                 (EController.toIsomorphicInput state)
@@ -2102,6 +2464,7 @@ editRowPane subControls =
         [ alignTop
         , padding 10
         , spacing 10
+        , editPanelWidth
         , backgroundColour White
         , Border.width 4
         ]
@@ -2151,6 +2514,7 @@ editRowPane subControls =
             )
         , acceptOrCloseButtons
             "Ok"
+            ClosePopUp
             (Just <| FinishedEdit <| C.Row subControls)
         ]
 
@@ -2161,6 +2525,7 @@ editColumnPane subControls =
         [ alignTop
         , padding 10
         , spacing 10
+        , editPanelWidth
         , backgroundColour White
         , Border.width 4
         ]
@@ -2210,6 +2575,7 @@ editColumnPane subControls =
             )
         , acceptOrCloseButtons
             "Ok"
+            ClosePopUp
             (Just <| FinishedEdit <| C.Column subControls)
         ]
 
@@ -2220,6 +2586,7 @@ editNotePane state =
         [ alignTop
         , padding 10
         , spacing 10
+        , editPanelWidth
         , backgroundColour White
         , Border.width 4
         ]
@@ -2231,6 +2598,13 @@ editNotePane state =
             "text"
             (\newLabel ->
                 { state | label = newLabel }
+                    |> EditNote
+                    |> UpdateControllerState
+            )
+        , labelSizeRadio
+            state.labelSize
+            (\newLabelSize ->
+                { state | labelSize = newLabelSize }
                     |> EditNote
                     |> UpdateControllerState
             )
@@ -2276,6 +2650,7 @@ editNotePane state =
             )
         , acceptOrCloseButtons
             "Ok"
+            ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
                 (EController.editStateToNote state)
@@ -2289,6 +2664,7 @@ editChordPane state =
         [ alignTop
         , padding 10
         , spacing 10
+        , editPanelWidth
         , backgroundColour White
         , Border.width 4
         ]
@@ -2300,6 +2676,13 @@ editChordPane state =
             "text"
             (\newLabel ->
                 { state | label = newLabel }
+                    |> EditChord
+                    |> UpdateControllerState
+            )
+        , labelSizeRadio
+            state.labelSize
+            (\newLabelSize ->
+                { state | labelSize = newLabelSize }
                     |> EditChord
                     |> UpdateControllerState
             )
@@ -2322,19 +2705,20 @@ editChordPane state =
                     |> UpdateControllerState
             )
         , column
-            [ padding 2
-            , spacing 4
+            [ width fill
             , Border.width 2
             , Border.dashed
             ]
-            [ row [ spacing 4 ]
+            [ row [ padding 4, spacing 4, width fill, backgroundColour LightGrey ]
                 [ text "Notes"
                 , Input.button
-                    [ padding 5
+                    [ alignRight
+                    , padding 5
                     , spacing 2
                     , Border.width 2
                     , Border.solid
                     , borderColour Black
+                    , Font.size 14
                     ]
                     { onPress =
                         { state | notes = Dict.empty }
@@ -2345,9 +2729,10 @@ editChordPane state =
                     }
                 ]
             , column
-                [ height (px 90)
-                , padding 2
-                , spacing 1
+                [ height (px 96)
+                , padding 4
+                , spacing 2
+                , width fill
                 , scrollbarY
                 ]
                 (List.map
@@ -2363,6 +2748,7 @@ editChordPane state =
             ]
         , acceptOrCloseButtons
             "Ok"
+            ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
                 (EController.editStateToChord state)
@@ -2376,6 +2762,7 @@ editCCValuePane state =
         [ alignTop
         , padding 10
         , spacing 10
+        , editPanelWidth
         , backgroundColour White
         , Border.width 4
         ]
@@ -2387,6 +2774,13 @@ editCCValuePane state =
             "text"
             (\newLabel ->
                 { state | label = newLabel }
+                    |> EditCCValue
+                    |> UpdateControllerState
+            )
+        , labelSizeRadio
+            state.labelSize
+            (\newLabelSize ->
+                { state | labelSize = newLabelSize }
                     |> EditCCValue
                     |> UpdateControllerState
             )
@@ -2432,6 +2826,7 @@ editCCValuePane state =
             )
         , acceptOrCloseButtons
             "Ok"
+            ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
                 (EController.editStateToCCValue state)
@@ -2439,12 +2834,13 @@ editCCValuePane state =
         ]
 
 
-editFaderPane : EController.EditFaderState -> Element Msg
-editFaderPane state =
+editCommandPane : EController.EditCommandState -> Element Msg
+editCommandPane state =
     column
         [ alignTop
         , padding 10
         , spacing 10
+        , editPanelWidth
         , backgroundColour White
         , Border.width 4
         ]
@@ -2456,6 +2852,398 @@ editFaderPane state =
             "text"
             (\newLabel ->
                 { state | label = newLabel }
+                    |> EditCommand
+                    |> UpdateControllerState
+            )
+        , labelSizeRadio
+            state.labelSize
+            (\newLabelSize ->
+                { state | labelSize = newLabelSize }
+                    |> EditCommand
+                    |> UpdateControllerState
+            )
+        , colourRadio
+            state.colour
+            (\newColour ->
+                { state | colour = newColour }
+                    |> EditCommand
+                    |> UpdateControllerState
+            )
+        , Input.radio
+            [ spacing 10 ]
+            { onChange =
+                \newEditMode ->
+                    { state | editMode = newEditMode }
+                        |> EditCommand
+                        |> UpdateControllerState
+            , selected = Just state.editMode
+            , label = Input.labelHidden "On Event Type"
+            , options =
+                [ Input.option EController.OnPressMsgs (text "Button Press")
+                , Input.option EController.OnReleaseMsgs (text "Button Release")
+                ]
+            }
+        , case state.newMsg of
+            Just newMsg ->
+                newCommandMidiMsgView newMsg state
+
+            Nothing ->
+                column [ spacing 4, width fill ]
+                    [ column
+                        [ height (px 300)
+                        , width fill
+                        , spacing 4
+                        , scrollbarY
+                        , Border.width 2
+                        , Border.dashed
+                        ]
+                        [ column
+                            [ spacing 6
+                            , width fill
+                            ]
+                            (row [ padding 4, spacing 4, width fill, backgroundColour LightGrey ]
+                                [ text "Messages"
+                                , Input.button
+                                    [ alignRight
+                                    , padding 5
+                                    , Border.width 2
+                                    , Border.solid
+                                    , borderColour Black
+                                    , Font.size 14
+                                    ]
+                                    { onPress =
+                                        Just
+                                            ({ state
+                                                | newMsg =
+                                                    Just <|
+                                                        Midi.ENoteOn
+                                                            { channel = ""
+                                                            , pitch = ""
+                                                            , velocity = ""
+                                                            }
+                                             }
+                                                |> EditCommand
+                                                |> UpdateControllerState
+                                            )
+                                    , label = text "Add Msg"
+                                    }
+                                , Input.button
+                                    [ alignRight
+                                    , padding 5
+                                    , spacing 2
+                                    , Border.width 2
+                                    , Border.solid
+                                    , borderColour Black
+                                    , Font.size 14
+                                    ]
+                                    { onPress =
+                                        (case state.editMode of
+                                            EController.OnPressMsgs ->
+                                                { state | onPressMsgs = [] }
+
+                                            EController.OnReleaseMsgs ->
+                                                { state | onReleaseMsgs = [] }
+                                        )
+                                            |> EditCommand
+                                            |> UpdateControllerState
+                                            |> Just
+                                    , label = text "Clear"
+                                    }
+                                ]
+                                :: ((case state.editMode of
+                                        EController.OnPressMsgs ->
+                                            state.onPressMsgs
+
+                                        EController.OnReleaseMsgs ->
+                                            state.onReleaseMsgs
+                                    )
+                                        |> List.map
+                                            (\midiMsg ->
+                                                paragraph []
+                                                    [ text <|
+                                                        Midi.midiMsgToString midiMsg
+                                                    ]
+                                            )
+                                   )
+                            )
+                        ]
+                    ]
+        , acceptOrCloseButtons
+            "Ok"
+            ClosePopUp
+            (Maybe.map
+                (\c -> FinishedEdit c)
+                (EController.editStateToCommand state)
+            )
+        ]
+
+
+newCommandMidiMsgView : Midi.EditMidiButtonMsg -> EController.EditCommandState -> Element Msg
+newCommandMidiMsgView newMsg state =
+    column
+        [ padding 4
+        , spacing 4
+        , width fill
+        , Border.dashed
+        , Border.width 2
+        ]
+        [ Midi.editMidiButtonSelector
+            (\msgType ->
+                { state
+                    | newMsg =
+                        Just <|
+                            msgType
+                }
+                    |> EditCommand
+                    |> UpdateControllerState
+            )
+            newMsg
+        , Midi.editMidiButtonMsgView
+            (\updatedMidi ->
+                { state
+                    | newMsg =
+                        Just <|
+                            updatedMidi
+                }
+                    |> EditCommand
+                    |> UpdateControllerState
+            )
+            newMsg
+        , el [ centerX ] <|
+            acceptOrCloseButtons
+                "Add"
+                ({ state
+                    | newMsg = Nothing
+                 }
+                    |> EditCommand
+                    |> UpdateControllerState
+                )
+                (Midi.editMidiButtonToMidiMsg newMsg
+                    |> Maybe.map
+                        (\completeMsg ->
+                            case state.editMode of
+                                EController.OnPressMsgs ->
+                                    { state
+                                        | onPressMsgs =
+                                            List.append state.onPressMsgs [ completeMsg ]
+                                        , newMsg = Nothing
+                                    }
+                                        |> EditCommand
+                                        |> UpdateControllerState
+
+                                EController.OnReleaseMsgs ->
+                                    { state
+                                        | onReleaseMsgs =
+                                            List.append state.onReleaseMsgs [ completeMsg ]
+                                        , newMsg = Nothing
+                                    }
+                                        |> EditCommand
+                                        |> UpdateControllerState
+                        )
+                )
+        ]
+
+
+editSequencePane : EController.EditSequenceState -> Element Msg
+editSequencePane state =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , editPanelWidth
+        , backgroundColour White
+        , Border.width 4
+        ]
+        [ editTextBox
+            { placeholder = "label"
+            , label = "Label"
+            , current = state.label
+            }
+            "text"
+            (\newLabel ->
+                { state | label = newLabel }
+                    |> EditSequence
+                    |> UpdateControllerState
+            )
+        , labelSizeRadio
+            state.labelSize
+            (\newLabelSize ->
+                { state | labelSize = newLabelSize }
+                    |> EditSequence
+                    |> UpdateControllerState
+            )
+        , colourRadio
+            state.colour
+            (\newColour ->
+                { state | colour = newColour }
+                    |> EditSequence
+                    |> UpdateControllerState
+            )
+        , case state.newMsg of
+            Just newMsg ->
+                newSequenceMidiMsgView newMsg state
+
+            Nothing ->
+                column [ spacing 4, width fill ]
+                    [ column
+                        [ height (px 300)
+                        , width fill
+                        , spacing 4
+                        , scrollbarY
+                        , Border.width 2
+                        , Border.dashed
+                        ]
+                        [ column
+                            [ spacing 6
+                            , width fill
+                            ]
+                            (row [ padding 4, spacing 4, width fill, backgroundColour LightGrey ]
+                                [ text "Messages"
+                                , Input.button
+                                    [ alignRight
+                                    , padding 5
+                                    , Border.width 2
+                                    , Border.solid
+                                    , borderColour Black
+                                    , Font.size 14
+                                    ]
+                                    { onPress =
+                                        Just
+                                            ({ state
+                                                | newMsg =
+                                                    Just <|
+                                                        Midi.ENoteOn
+                                                            { channel = ""
+                                                            , pitch = ""
+                                                            , velocity = ""
+                                                            }
+                                             }
+                                                |> EditSequence
+                                                |> UpdateControllerState
+                                            )
+                                    , label = text "Add Msg"
+                                    }
+                                , Input.button
+                                    [ alignRight
+                                    , padding 5
+                                    , spacing 2
+                                    , Border.width 2
+                                    , Border.solid
+                                    , borderColour Black
+                                    , Font.size 14
+                                    ]
+                                    { onPress =
+                                        { state | midiMsgs = Array.empty }
+                                            |> EditSequence
+                                            |> UpdateControllerState
+                                            |> Just
+                                    , label = text "Clear"
+                                    }
+                                ]
+                                :: (state.midiMsgs
+                                        |> Array.map
+                                            (\midiMsg ->
+                                                paragraph []
+                                                    [ text <|
+                                                        Midi.midiMsgToString midiMsg
+                                                    ]
+                                            )
+                                        |> Array.toList
+                                   )
+                            )
+                        ]
+                    ]
+        , acceptOrCloseButtons
+            "Ok"
+            ClosePopUp
+            (Maybe.map
+                (\c -> FinishedEdit c)
+                (EController.editStateToSequence state)
+            )
+        ]
+
+
+newSequenceMidiMsgView : Midi.EditMidiButtonMsg -> EController.EditSequenceState -> Element Msg
+newSequenceMidiMsgView newMsg state =
+    column
+        [ padding 4
+        , spacing 4
+        , width fill
+        , Border.dashed
+        , Border.width 2
+        ]
+        [ Midi.editMidiButtonSelector
+            (\msgType ->
+                { state
+                    | newMsg =
+                        Just <|
+                            msgType
+                }
+                    |> EditSequence
+                    |> UpdateControllerState
+            )
+            newMsg
+        , Midi.editMidiButtonMsgView
+            (\updatedMidi ->
+                { state
+                    | newMsg =
+                        Just <|
+                            updatedMidi
+                }
+                    |> EditSequence
+                    |> UpdateControllerState
+            )
+            newMsg
+        , el [ centerX ] <|
+            acceptOrCloseButtons
+                "Add"
+                ({ state
+                    | newMsg = Nothing
+                 }
+                    |> EditSequence
+                    |> UpdateControllerState
+                )
+                (Midi.editMidiButtonToMidiMsg newMsg
+                    |> Maybe.map
+                        (\completeMsg ->
+                            { state
+                                | midiMsgs =
+                                    Array.append state.midiMsgs <|
+                                        Array.fromList [ completeMsg ]
+                                , newMsg = Nothing
+                            }
+                                |> EditSequence
+                                |> UpdateControllerState
+                        )
+                )
+        ]
+
+
+editFaderPane : EController.EditFaderState -> Element Msg
+editFaderPane state =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , editPanelWidth
+        , backgroundColour White
+        , Border.width 4
+        ]
+        [ editTextBox
+            { placeholder = "label"
+            , label = "Label"
+            , current = state.label
+            }
+            "text"
+            (\newLabel ->
+                { state | label = newLabel }
+                    |> EditFader
+                    |> UpdateControllerState
+            )
+        , labelSizeRadio
+            state.labelSize
+            (\newLabelSize ->
+                { state | labelSize = newLabelSize }
                     |> EditFader
                     |> UpdateControllerState
             )
@@ -2512,6 +3300,7 @@ editFaderPane state =
             )
         , acceptOrCloseButtons
             "Ok"
+            ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
                 (EController.editStateToFader state)
@@ -2519,95 +3308,214 @@ editFaderPane state =
         ]
 
 
-editTextBox :
-    { placeholder : String
-    , label : String
-    , current : String
-    }
-    -> String
-    -> (String -> Msg)
-    -> Element Msg
-editTextBox { placeholder, label, current } type_ msg =
-    Input.text
-        [ width fill
-        , Border.width 2
-        , Border.rounded 0
-        , borderColour Black
-        , htmlAttribute <| HAtt.type_ type_
-        ]
-        { onChange = msg
-        , text = current
-        , placeholder = Just <| Input.placeholder [] (text placeholder)
-        , label = Input.labelAbove [] (text label)
-        }
-
-
-colourRadio : AppColour -> (AppColour -> Msg) -> Element Msg
-colourRadio colour msg =
-    Input.radio
-        [ padding 2
-        , spacing 10
-        , height (px 100)
-        , width fill
-        , scrollbarY
-        , Border.width 2
-        , Border.dashed
-        ]
-        { onChange = msg
-        , selected = Just colour
-        , label =
-            Input.labelAbove
-                [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
-                ]
-                (text "Colour")
-        , options =
-            [ Input.option Green (text "Green")
-            , Input.option Blue (text "Blue")
-            , Input.option Yellow (text "Yellow")
-            , Input.option Red (text "Red")
-            , Input.option White (text "White")
-            , Input.option LightGrey (text "Light Grey")
-            , Input.option DarkGrey (text "Dark Grey")
-            , Input.option Black (text "Black")
-            ]
-        }
-
-
-acceptOrCloseButtons : String -> Maybe Msg -> Element Msg
-acceptOrCloseButtons acceptString acceptMsg =
-    row
+editXYFaderPane : EController.EditXYFaderState -> Element Msg
+editXYFaderPane state =
+    column
         [ alignTop
-        , spacing 4
+        , padding 10
+        , spacing 10
+        , editPanelWidth
         , backgroundColour White
+        , Border.width 4
         ]
-        [ Input.button
-            ([ padding 5
-             , Border.width 2
-             , Border.solid
-             , borderColour Black
-             ]
-                ++ (case acceptMsg of
-                        Just _ ->
-                            [ fontColour Black
-                            , borderColour Black
-                            ]
-
-                        _ ->
-                            [ fontColour LightGrey
-                            , borderColour LightGrey
-                            ]
-                   )
-            )
-            { onPress = acceptMsg
-            , label = text acceptString
+        [ editTextBox
+            { placeholder = "label"
+            , label = "Label"
+            , current = state.label
             }
-        , Input.button
-            [ padding 5
-            , Border.width 2
-            , Border.solid
-            , borderColour Black
-            ]
-            { onPress = Just ClosePopUp, label = text "Cancel" }
+            "text"
+            (\newLabel ->
+                { state | label = newLabel }
+                    |> EditXYFader
+                    |> UpdateControllerState
+            )
+        , labelSizeRadio
+            state.labelSize
+            (\newLabelSize ->
+                { state | labelSize = newLabelSize }
+                    |> EditXYFader
+                    |> UpdateControllerState
+            )
+        , colourRadio
+            state.colour
+            (\newColour ->
+                { state | colour = newColour }
+                    |> EditXYFader
+                    |> UpdateControllerState
+            )
+        , Input.radio
+            [ spacing 10 ]
+            { onChange =
+                \newActive ->
+                    { state | active = newActive }
+                        |> EditXYFader
+                        |> UpdateControllerState
+            , selected = Just state.active
+            , label = Input.labelHidden "Param Select"
+            , options =
+                [ Input.option EController.Params1 (text "Params X")
+                , Input.option EController.Params2 (text "Params Y")
+                ]
+            }
+        , case state.active of
+            EController.Params1 ->
+                column [ padding 5, Border.width 2, Border.dashed ]
+                    [ editTextBox
+                        { placeholder = "channel x#"
+                        , label = "Channel X"
+                        , current = state.channel1
+                        }
+                        "number"
+                        (\newChannel ->
+                            { state | channel1 = newChannel }
+                                |> EditXYFader
+                                |> UpdateControllerState
+                        )
+                    , editTextBox
+                        { placeholder = "cc x #"
+                        , label = "CC X Number"
+                        , current = state.ccNumber1
+                        }
+                        "number"
+                        (\newCCNumber ->
+                            { state | ccNumber1 = newCCNumber }
+                                |> EditXYFader
+                                |> UpdateControllerState
+                        )
+                    , editTextBox
+                        { placeholder = "x min value"
+                        , label = "X Min Value"
+                        , current = state.valueMin1
+                        }
+                        "number"
+                        (\newMinValue ->
+                            { state | valueMin1 = newMinValue }
+                                |> EditXYFader
+                                |> UpdateControllerState
+                        )
+                    , editTextBox
+                        { placeholder = "x max value"
+                        , label = "X Max Value"
+                        , current = state.valueMax1
+                        }
+                        "number"
+                        (\newMaxValue ->
+                            { state | valueMax1 = newMaxValue }
+                                |> EditXYFader
+                                |> UpdateControllerState
+                        )
+                    ]
+
+            EController.Params2 ->
+                column [ padding 5, Border.width 2, Border.dashed ]
+                    [ editTextBox
+                        { placeholder = "channel y#"
+                        , label = "Channel Y"
+                        , current = state.channel2
+                        }
+                        "number"
+                        (\newChannel ->
+                            { state | channel2 = newChannel }
+                                |> EditXYFader
+                                |> UpdateControllerState
+                        )
+                    , editTextBox
+                        { placeholder = "cc y #"
+                        , label = "CC Y Number"
+                        , current = state.ccNumber2
+                        }
+                        "number"
+                        (\newCCNumber ->
+                            { state | ccNumber2 = newCCNumber }
+                                |> EditXYFader
+                                |> UpdateControllerState
+                        )
+                    , editTextBox
+                        { placeholder = "y min value"
+                        , label = "Y Min Value"
+                        , current = state.valueMin2
+                        }
+                        "number"
+                        (\newMinValue ->
+                            { state | valueMin2 = newMinValue }
+                                |> EditXYFader
+                                |> UpdateControllerState
+                        )
+                    , editTextBox
+                        { placeholder = "y max value"
+                        , label = "Y Max Value"
+                        , current = state.valueMax2
+                        }
+                        "number"
+                        (\newMaxValue ->
+                            { state | valueMax2 = newMaxValue }
+                                |> EditXYFader
+                                |> UpdateControllerState
+                        )
+                    ]
+        , acceptOrCloseButtons
+            "Ok"
+            ClosePopUp
+            (Maybe.map
+                (\c -> FinishedEdit c)
+                (EController.editStateToXYFader state)
+            )
+        ]
+
+
+editPitchBendPane : EController.EditPitchBendState -> Element Msg
+editPitchBendPane state =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , editPanelWidth
+        , backgroundColour White
+        , Border.width 4
+        ]
+        [ editTextBox
+            { placeholder = "label"
+            , label = "Label"
+            , current = state.label
+            }
+            "text"
+            (\newLabel ->
+                { state | label = newLabel }
+                    |> EditPitchBend
+                    |> UpdateControllerState
+            )
+        , labelSizeRadio
+            state.labelSize
+            (\newLabelSize ->
+                { state | labelSize = newLabelSize }
+                    |> EditPitchBend
+                    |> UpdateControllerState
+            )
+        , colourRadio
+            state.colour
+            (\newColour ->
+                { state | colour = newColour }
+                    |> EditPitchBend
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "channel#"
+            , label = "Channel"
+            , current = state.channel
+            }
+            "number"
+            (\newChannel ->
+                { state | channel = newChannel }
+                    |> EditPitchBend
+                    |> UpdateControllerState
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            ClosePopUp
+            (Maybe.map
+                (\c -> FinishedEdit c)
+                (EController.editStateToPitchBend state)
+            )
         ]
 
 
@@ -2725,6 +3633,7 @@ newPageMenu savedPages state =
                         ]
             , acceptOrCloseButtons
                 "Add Page"
+                ClosePopUp
                 (case state.mode of
                     NewPage ->
                         if String.isEmpty state.label then
@@ -3032,8 +3941,48 @@ renderController mode midiLog config idParts controller id =
                     |> String.join "_"
                 )
 
+        C.Command state ->
+            renderCommand
+                config
+                mode
+                state
+                (updatedParts
+                    |> List.reverse
+                    |> String.join "_"
+                )
+
+        C.Sequence state ->
+            renderSequence
+                config
+                mode
+                state
+                (updatedParts
+                    |> List.reverse
+                    |> String.join "_"
+                )
+
         C.Fader state ->
             renderFader
+                config
+                mode
+                state
+                (updatedParts
+                    |> List.reverse
+                    |> String.join "_"
+                )
+
+        C.XYFader state ->
+            renderXYFader
+                config
+                mode
+                state
+                (updatedParts
+                    |> List.reverse
+                    |> String.join "_"
+                )
+
+        C.PitchBend state ->
+            renderPitchBend
                 config
                 mode
                 state
@@ -3178,7 +4127,7 @@ renderNote config mode state id =
                     |> el
                         [ centerX
                         , centerY
-                        , Font.size 14
+                        , labelSizeToFontSize <| Maybe.withDefault Medium state.labelSize
                         ]
                 )
 
@@ -3244,7 +4193,7 @@ renderChord config mode state id =
                     |> el
                         [ centerX
                         , centerY
-                        , Font.size 14
+                        , labelSizeToFontSize <| Maybe.withDefault Medium state.labelSize
                         ]
                 )
 
@@ -3321,7 +4270,141 @@ renderCCValue config mode state id =
                     |> el
                         [ centerX
                         , centerY
-                        , Font.size 14
+                        , labelSizeToFontSize <| Maybe.withDefault Medium state.labelSize
+                        ]
+                )
+
+        Edit _ ->
+            Input.button
+                ([ padding config.gapSize
+                 , spacing config.gapSize
+                 , Border.width 2
+                 , Border.dashed
+                 , Font.size 14
+                 , backgroundColour state.colour
+                 ]
+                    ++ Style.noSelect
+                    ++ fillSpace
+                )
+                { onPress = Just <| OpenEditController id
+                , label =
+                    state.label
+                        |> text
+                }
+
+
+renderCommand : PageConfig -> Mode -> C.CommandState -> String -> Element Msg
+renderCommand config mode state id =
+    case mode of
+        Normal ->
+            el
+                ([ padding 0
+                 , spacing 0
+                 , Border.width 4
+                 , case state.status of
+                    C.Off ->
+                        backgroundColour state.colour
+
+                    C.On ->
+                        Border.dashed
+                 , htmlAttribute <|
+                    Touch.onStart
+                        (\_ ->
+                            ButtonDown id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onDown
+                        (\_ ->
+                            ButtonDown id
+                        )
+                 , htmlAttribute <|
+                    Touch.onEnd
+                        (\_ ->
+                            ButtonUp id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onUp
+                        (\_ ->
+                            ButtonUp id
+                        )
+                 ]
+                    ++ Style.noSelect
+                    ++ fillSpace
+                )
+                (state.label
+                    |> text
+                    |> el
+                        [ centerX
+                        , centerY
+                        , labelSizeToFontSize <| Maybe.withDefault Medium state.labelSize
+                        ]
+                )
+
+        Edit _ ->
+            Input.button
+                ([ padding config.gapSize
+                 , spacing config.gapSize
+                 , Border.width 2
+                 , Border.dashed
+                 , Font.size 14
+                 , backgroundColour state.colour
+                 ]
+                    ++ Style.noSelect
+                    ++ fillSpace
+                )
+                { onPress = Just <| OpenEditController id
+                , label =
+                    state.label
+                        |> text
+                }
+
+
+renderSequence : PageConfig -> Mode -> C.SequenceState -> String -> Element Msg
+renderSequence config mode state id =
+    case mode of
+        Normal ->
+            el
+                ([ padding 0
+                 , spacing 0
+                 , Border.width 4
+                 , case state.status of
+                    C.Off ->
+                        backgroundColour state.colour
+
+                    C.On ->
+                        Border.dashed
+                 , htmlAttribute <|
+                    Touch.onStart
+                        (\_ ->
+                            ButtonDown id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onDown
+                        (\_ ->
+                            ButtonDown id
+                        )
+                 , htmlAttribute <|
+                    Touch.onEnd
+                        (\_ ->
+                            ButtonUp id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onUp
+                        (\_ ->
+                            ButtonUp id
+                        )
+                 ]
+                    ++ Style.noSelect
+                    ++ fillSpace
+                )
+                (state.label
+                    ++ "\n"
+                    ++ String.fromInt (state.index + 1)
+                    |> text
+                    |> el
+                        [ centerX
+                        , centerY
+                        , labelSizeToFontSize <| Maybe.withDefault Medium state.labelSize
                         ]
                 )
 
@@ -3419,7 +4502,246 @@ renderFader config mode state id =
                             ]
                             none
                         ]
-                    , el [ centerX, padding 10, Font.size 14 ] <| text state.label
+                    , el
+                        [ centerX
+                        , padding 10
+                        , labelSizeToFontSize <| Maybe.withDefault Medium state.labelSize
+                        ]
+                      <|
+                        text state.label
+                    ]
+                )
+
+        Edit _ ->
+            Input.button
+                ([ padding config.gapSize
+                 , spacing config.gapSize
+                 , Border.width 2
+                 , Border.dashed
+                 , Font.size 14
+                 , backgroundColour state.colour
+                 ]
+                    ++ Style.noSelect
+                    ++ fillSpace
+                )
+                { onPress = Just <| OpenEditController id
+                , label =
+                    state.label
+                        |> text
+                }
+
+
+renderXYFader : PageConfig -> Mode -> C.XYFaderState -> String -> Element Msg
+renderXYFader config mode state id =
+    case mode of
+        Normal ->
+            el
+                ([ padding 0
+                 , spacing 0
+                 , Border.width 4
+                 , case state.status of
+                    C.Set ->
+                        Border.solid
+
+                    C.Changing _ _ ->
+                        Border.dashed
+                 , htmlAttribute <|
+                    Touch.onStart
+                        (\event ->
+                            FaderChanging id event
+                        )
+                 , htmlAttribute <|
+                    Mouse.onDown
+                        (\event ->
+                            FaderChangingMouse id event
+                        )
+                 , htmlAttribute <|
+                    Touch.onMove
+                        (\event ->
+                            FaderChanging id event
+                        )
+                 , htmlAttribute <|
+                    Touch.onEnd
+                        (\_ ->
+                            FaderSet id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onUp
+                        (\_ ->
+                            FaderSet id
+                        )
+                 ]
+                    ++ (case state.status of
+                            Changing _ _ ->
+                                [ htmlAttribute <|
+                                    Mouse.onMove
+                                        (\event ->
+                                            FaderChangingMouse id event
+                                        )
+                                ]
+
+                            Set ->
+                                []
+                       )
+                    ++ Style.noSelect
+                    ++ fillSpace
+                )
+                (column
+                    (backgroundColour White :: fillSpace)
+                    [ el [ centerX, padding 10, Font.size 14 ] <|
+                        text
+                            ("X "
+                                ++ String.fromInt state.valuePercent1
+                                ++ "%, "
+                                ++ "Y "
+                                ++ String.fromInt state.valuePercent2
+                                ++ "%"
+                            )
+                    , column
+                        ([ inFront <|
+                            row
+                                fillSpace
+                                [ el
+                                    [ height fill
+                                    , width <| fillPortion state.valuePercent1
+                                    ]
+                                    none
+                                , el
+                                    [ height fill
+                                    , width <| fillPortion (100 - state.valuePercent1)
+                                    , Border.widthEach { bottom = 0, top = 0, left = 8, right = 0 }
+                                    ]
+                                    none
+                                ]
+                         , backgroundColour state.colour
+                         ]
+                            ++ fillSpace
+                        )
+                        [ el
+                            [ height <| fillPortion (100 - state.valuePercent2)
+                            , width fill
+                            ]
+                            none
+                        , el
+                            [ height <| fillPortion state.valuePercent2
+                            , width fill
+                            , Border.widthEach { bottom = 0, top = 8, left = 0, right = 0 }
+                            ]
+                            none
+                        ]
+                    , el
+                        [ centerX
+                        , padding 10
+                        , labelSizeToFontSize <| Maybe.withDefault Medium state.labelSize
+                        ]
+                      <|
+                        text state.label
+                    ]
+                )
+
+        Edit _ ->
+            Input.button
+                ([ padding config.gapSize
+                 , spacing config.gapSize
+                 , Border.width 2
+                 , Border.dashed
+                 , Font.size 14
+                 , backgroundColour state.colour
+                 ]
+                    ++ Style.noSelect
+                    ++ fillSpace
+                )
+                { onPress = Just <| OpenEditController id
+                , label =
+                    state.label
+                        |> text
+                }
+
+
+renderPitchBend : PageConfig -> Mode -> C.PitchBendState -> String -> Element Msg
+renderPitchBend config mode state id =
+    let
+        fillFraction =
+            round <| 100 * (toFloat state.bendValue / 16383)
+    in
+    case mode of
+        Normal ->
+            el
+                ([ padding 0
+                 , spacing 0
+                 , Border.width 4
+                 , case state.status of
+                    C.Set ->
+                        Border.solid
+
+                    C.Changing _ _ ->
+                        Border.dashed
+                 , htmlAttribute <|
+                    Touch.onStart
+                        (\event ->
+                            FaderChanging id event
+                        )
+                 , htmlAttribute <|
+                    Mouse.onDown
+                        (\event ->
+                            FaderChangingMouse id event
+                        )
+                 , htmlAttribute <|
+                    Touch.onMove
+                        (\event ->
+                            FaderChanging id event
+                        )
+                 , htmlAttribute <|
+                    Touch.onEnd
+                        (\_ ->
+                            FaderSet id
+                        )
+                 , htmlAttribute <|
+                    Mouse.onUp
+                        (\_ ->
+                            FaderSet id
+                        )
+                 ]
+                    ++ (case state.status of
+                            Changing _ _ ->
+                                [ htmlAttribute <|
+                                    Mouse.onMove
+                                        (\event ->
+                                            FaderChangingMouse id event
+                                        )
+                                ]
+
+                            Set ->
+                                []
+                       )
+                    ++ Style.noSelect
+                    ++ fillSpace
+                )
+                (column
+                    (backgroundColour White :: fillSpace)
+                    [ column
+                        fillSpace
+                        [ el
+                            [ height <| fillPortion (100 - fillFraction)
+                            , width fill
+                            , backgroundColour state.colour
+                            ]
+                            none
+                        , el
+                            [ height <| fillPortion fillFraction
+                            , width fill
+                            , backgroundColour state.colour
+                            , Border.widthEach { bottom = 0, top = 8, left = 0, right = 0 }
+                            ]
+                            none
+                        ]
+                    , el
+                        [ centerX
+                        , padding 10
+                        , labelSizeToFontSize <| Maybe.withDefault Medium state.labelSize
+                        ]
+                      <|
+                        text state.label
                     ]
                 )
 
@@ -3512,6 +4834,7 @@ subscriptions _ =
     Sub.batch
         [ Ports.midiDevices MidiDevicesChanged
         , Ports.incomingMidi IncomingMidi
+        , Browser.Events.onResize PageResized
         ]
 
 
