@@ -218,7 +218,7 @@ init { mInitialState } =
     in
     case Codec.decodeValue (Codec.maybe modelCodec) mInitialState of
         Ok (Just model) ->
-            ( model, Cmd.batch defaultCmds )
+            ( { model | popup = Just <| InfoPanel }, Cmd.batch defaultCmds )
 
         _ ->
             ( { midiStatus = Midi.Initialising
@@ -1851,6 +1851,10 @@ infoPanel =
                         }
                     , text ")"
                     ]
+                , paragraph []
+                    [ text <|
+                        "The \"Hands On Update\" is here, scroll down for details."
+                    ]
                 , Html.iframe
                     [ HAtt.height 300
                     , HAtt.width 500
@@ -1866,6 +1870,7 @@ infoPanel =
                     |> html
                     |> el [ centerX ]
                     |> el [ width fill ]
+                , paragraph [ Font.bold ] [ text "Supporting Development" ]
                 , paragraph []
                     [ """ Please consider supporting the development of this
                     app if you enjoy using it, I'd really appreciate it if you
@@ -1893,6 +1898,29 @@ infoPanel =
                       technology topics.
                       """ |> text
                     ]
+                , paragraph [ Font.bold ] [ text "Version History" ]
+                , paragraph []
+                    [ el [ Font.italic ] <| text "The Hands On Update (2022-01-22): "
+                    , text <|
+                        """Adds a range of new controller types (commands, sequences,
+                        XY faders, pitch bend) as well as overhauling the edit menu to
+                        make it better utilise screen space and adding information about
+                        the controllers. I've made an effort to enable old controllers
+                        to be backwards compatible, so hopefully everything should work as
+                        normal.
+                        """
+                    ]
+                , paragraph []
+                    [ el [ Font.italic ] <| text "The Initial Release (2022-01-06): "
+                    , text <|
+                        """Hurray, I've launched the first version of the app! We have
+                        basic control types like notes, chords, CC values and faders.
+                        There are some obvious ommisions, but the app is useful enough to
+                        be released. Please either comment on GitHub or YouTube if you have
+                        any feedback!
+                        """
+                    ]
+                , paragraph [ Font.bold ] [ text "Analytics" ]
                 , paragraph []
                     [ text <|
                         """By using this application, you agree to data on your usage being
