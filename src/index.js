@@ -54,7 +54,6 @@ function initialiseDevices(midiAccess) {
             midiDevices.set(output.name, {input: null, output: output});
         }
     }));
-    console.log(midiDevices);
 
     let devices = Array.from(midiDevices.entries()).map(makeMidiStatusFromDevice);
     app.ports.midiDevices.send(devices);
@@ -87,11 +86,8 @@ app.ports.outgoingMidi.subscribe(function (midiMsgArray) {
     midiDevices.forEach(((device) => {
         if (device.output != null) {
             midiMsgArray.forEach(msg => {
-                console.log(msg);
                 device.output.send(msg);
             });
-        } else {
-            console.log("Midi output not available for device: " + device.output.name);
         }
     }));
 });

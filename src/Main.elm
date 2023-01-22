@@ -30,7 +30,12 @@ import Utils
 
 version : String
 version =
-    "0.1.0"
+    "0.2.0"
+
+
+date : String
+date =
+    "2023-01-22"
 
 
 
@@ -312,56 +317,52 @@ synthWideController =
     C.Row
         [ C.Column
             [ C.Row
-                [ C.Fader
+                [ C.XYFader
                     { status = C.Set
                     , label = "P1"
-                    , labelSize = Medium
-                    , colour = Green
-                    , channel = Midi.Ch6
-                    , ccNumber = 1
-                    , valuePercent = 50
-                    , valueMin = 0
-                    , valueMax = 0
+                    , labelSize = Just Medium
+                    , colour = White
+                    , channel1 = Midi.Ch6
+                    , ccNumber1 = 1
+                    , valuePercent1 = 50
+                    , valueMin1 = 0
+                    , valueMax1 = 0
+                    , channel2 = Midi.Ch6
+                    , ccNumber2 = 2
+                    , valuePercent2 = 50
+                    , valueMin2 = 0
+                    , valueMax2 = 0
                     }
-                , C.Fader
-                    { status = C.Set
-                    , label = "P2"
-                    , labelSize = Medium
-                    , colour = Blue
-                    , channel = Midi.Ch6
-                    , ccNumber = 2
-                    , valuePercent = 50
-                    , valueMin = 0
-                    , valueMax = 0
-                    }
-                , C.Fader
+                , C.XYFader
                     { status = C.Set
                     , label = "Fil"
-                    , labelSize = Medium
-                    , colour = Yellow
-                    , channel = Midi.Ch6
-                    , ccNumber = 3
-                    , valuePercent = 50
-                    , valueMin = 0
-                    , valueMax = 0
+                    , labelSize = Just Medium
+                    , colour = White
+                    , channel1 = Midi.Ch6
+                    , ccNumber1 = 3
+                    , valuePercent1 = 50
+                    , valueMin1 = 0
+                    , valueMax1 = 0
+                    , channel2 = Midi.Ch6
+                    , ccNumber2 = 4
+                    , valuePercent2 = 50
+                    , valueMin2 = 0
+                    , valueMax2 = 0
                     }
-                , C.Fader
+                , C.PitchBend
                     { status = C.Set
-                    , label = "Res"
-                    , labelSize = Medium
-                    , colour = Red
+                    , label = "Ch6 Bend"
+                    , labelSize = Just Medium
+                    , colour = DarkGrey
                     , channel = Midi.Ch6
-                    , ccNumber = 4
-                    , valuePercent = 50
-                    , valueMin = 0
-                    , valueMax = 0
+                    , bendValue = 8192
                     }
                 ]
             , C.Row
                 [ C.Fader
                     { status = C.Set
                     , label = "Att"
-                    , labelSize = Medium
+                    , labelSize = Just Medium
                     , colour = Green
                     , channel = Midi.Ch6
                     , ccNumber = 5
@@ -372,7 +373,7 @@ synthWideController =
                 , C.Fader
                     { status = C.Set
                     , label = "Dec"
-                    , labelSize = Medium
+                    , labelSize = Just Medium
                     , colour = Blue
                     , channel = Midi.Ch6
                     , ccNumber = 6
@@ -383,7 +384,7 @@ synthWideController =
                 , C.Fader
                     { status = C.Set
                     , label = "Sus"
-                    , labelSize = Medium
+                    , labelSize = Just Medium
                     , colour = Yellow
                     , channel = Midi.Ch6
                     , ccNumber = 7
@@ -394,7 +395,7 @@ synthWideController =
                 , C.Fader
                     { status = C.Set
                     , label = "Rel"
-                    , labelSize = Medium
+                    , labelSize = Just Medium
                     , colour = Red
                     , channel = Midi.Ch6
                     , ccNumber = 8
@@ -435,7 +436,7 @@ drumsController =
                 [ C.CCValue
                     { status = C.Off
                     , label = "Unmute\nKick"
-                    , labelSize = Medium
+                    , labelSize = Just Medium
                     , colour = LightGrey
                     , channel = Midi.Ch1
                     , controller = 53
@@ -444,7 +445,7 @@ drumsController =
                 , C.CCValue
                     { status = C.Off
                     , label = "Unmute\nSnare"
-                    , labelSize = Medium
+                    , labelSize = Just Medium
                     , colour = LightGrey
                     , channel = Midi.Ch2
                     , controller = 53
@@ -453,7 +454,7 @@ drumsController =
                 , C.CCValue
                     { status = C.Off
                     , label = "Unmute\nHat"
-                    , labelSize = Medium
+                    , labelSize = Just Medium
                     , colour = LightGrey
                     , channel = Midi.Ch3
                     , controller = 53
@@ -464,7 +465,7 @@ drumsController =
                 [ C.CCValue
                     { status = C.Off
                     , label = "Mute\nKick"
-                    , labelSize = Medium
+                    , labelSize = Just Medium
                     , colour = DarkGrey
                     , channel = Midi.Ch1
                     , controller = 53
@@ -473,7 +474,7 @@ drumsController =
                 , C.CCValue
                     { status = C.Off
                     , label = "Mute\nSnare"
-                    , labelSize = Medium
+                    , labelSize = Just Medium
                     , colour = DarkGrey
                     , channel = Midi.Ch2
                     , controller = 53
@@ -482,11 +483,45 @@ drumsController =
                 , C.CCValue
                     { status = C.Off
                     , label = "Mute\nHat"
-                    , labelSize = Medium
+                    , labelSize = Just Medium
                     , colour = DarkGrey
                     , channel = Midi.Ch3
                     , controller = 53
                     , value = 1
+                    }
+                ]
+            , C.Row
+                [ C.Command
+                    { status = C.Off
+                    , label = "Hold for\nReverse Snare"
+                    , labelSize = Just Medium
+                    , colour = Yellow
+                    , onPressMsgs =
+                        [ Midi.ControllerChange
+                            { channel = 1
+                            , controller = 2
+                            , value = 127
+                            }
+                        ]
+                    , onReleaseMsgs =
+                        [ Midi.ControllerChange
+                            { channel = 1
+                            , controller = 2
+                            , value = 0
+                            }
+                        ]
+                    }
+                , C.Sequence
+                    { status = C.Off
+                    , label = "Play/Stop"
+                    , labelSize = Just Medium
+                    , colour = White
+                    , midiMsgs =
+                        Array.fromList
+                            [ Midi.StartSong
+                            , Midi.StopSong
+                            ]
+                    , index = 0
                     }
                 ]
             ]
@@ -494,7 +529,7 @@ drumsController =
             [ C.Note
                 { status = C.Off
                 , label = "Snare"
-                , labelSize = Medium
+                , labelSize = Just Medium
                 , colour = Green
                 , channel = Midi.Ch2
                 , pitch = 53
@@ -503,7 +538,7 @@ drumsController =
             , C.Note
                 { status = C.Off
                 , label = "Hat 50"
-                , labelSize = Medium
+                , labelSize = Just Medium
                 , colour = Blue
                 , channel = Midi.Ch3
                 , pitch = 53
@@ -514,7 +549,7 @@ drumsController =
             [ C.Note
                 { status = C.Off
                 , label = "Kick"
-                , labelSize = Medium
+                , labelSize = Just Medium
                 , colour = Red
                 , channel = Midi.Ch1
                 , pitch = 53
@@ -523,7 +558,7 @@ drumsController =
             , C.Note
                 { status = C.Off
                 , label = "Hat 100"
-                , labelSize = Medium
+                , labelSize = Just Medium
                 , colour = Blue
                 , channel = Midi.Ch3
                 , pitch = 53
@@ -1210,7 +1245,7 @@ update msg model =
                             (C.Fader
                                 { status = C.Set
                                 , label = "ERROR"
-                                , labelSize = Medium
+                                , labelSize = Just Medium
                                 , colour = LightGrey
                                 , channel = Midi.Ch1
                                 , ccNumber = 1
@@ -1243,7 +1278,7 @@ update msg model =
                             (C.Fader
                                 { status = C.Set
                                 , label = "ERROR"
-                                , labelSize = Medium
+                                , labelSize = Just Medium
                                 , colour = LightGrey
                                 , channel = Midi.Ch1
                                 , ccNumber = 1
@@ -1276,7 +1311,7 @@ update msg model =
                             (C.Fader
                                 { status = C.Set
                                 , label = "ERROR"
-                                , labelSize = Medium
+                                , labelSize = Just Medium
                                 , colour = LightGrey
                                 , channel = Midi.Ch1
                                 , ccNumber = 1
@@ -1362,7 +1397,7 @@ convertToEditable control =
         C.Note { label, labelSize, colour, pitch, channel, velocity } ->
             EditNote
                 { label = label
-                , labelSize = labelSize
+                , labelSize = Maybe.withDefault Medium labelSize
                 , colour = colour
                 , pitch = String.fromInt pitch
                 , channel = Midi.channelToString channel
@@ -1372,7 +1407,7 @@ convertToEditable control =
         C.Chord { label, labelSize, colour, velocity, notes } ->
             EditChord
                 { label = label
-                , labelSize = labelSize
+                , labelSize = Maybe.withDefault Medium labelSize
                 , colour = colour
                 , velocity = String.fromInt velocity
                 , notes =
@@ -1391,7 +1426,7 @@ convertToEditable control =
         C.CCValue { label, labelSize, colour, channel, controller, value } ->
             EditCCValue
                 { label = label
-                , labelSize = labelSize
+                , labelSize = Maybe.withDefault Medium labelSize
                 , colour = colour
                 , channel = Midi.channelToString channel
                 , controller = String.fromInt controller
@@ -1401,7 +1436,7 @@ convertToEditable control =
         C.Command { label, labelSize, colour, onPressMsgs, onReleaseMsgs } ->
             EditCommand
                 { label = label
-                , labelSize = labelSize
+                , labelSize = Maybe.withDefault Medium labelSize
                 , colour = colour
                 , editMode = EController.OnPressMsgs
                 , onPressMsgs = onPressMsgs
@@ -1412,7 +1447,7 @@ convertToEditable control =
         C.Sequence { label, labelSize, colour, midiMsgs } ->
             EditSequence
                 { label = label
-                , labelSize = labelSize
+                , labelSize = Maybe.withDefault Medium labelSize
                 , colour = colour
                 , midiMsgs = midiMsgs
                 , newMsg = Nothing
@@ -1421,7 +1456,7 @@ convertToEditable control =
         C.Fader state ->
             EditFader
                 { label = state.label
-                , labelSize = state.labelSize
+                , labelSize = Maybe.withDefault Medium state.labelSize
                 , colour = state.colour
                 , channel = Midi.channelToString state.channel
                 , ccNumber = String.fromInt state.ccNumber
@@ -1432,7 +1467,7 @@ convertToEditable control =
         C.XYFader state ->
             EditXYFader
                 { label = state.label
-                , labelSize = state.labelSize
+                , labelSize = Maybe.withDefault Medium state.labelSize
                 , colour = state.colour
                 , active = EController.Params1
                 , channel1 = Midi.channelToString state.channel1
@@ -1448,7 +1483,7 @@ convertToEditable control =
         C.PitchBend state ->
             EditPitchBend
                 { label = state.label
-                , labelSize = state.labelSize
+                , labelSize = Maybe.withDefault Medium state.labelSize
                 , colour = state.colour
                 , channel = Midi.channelToString state.channel
                 }
@@ -1805,9 +1840,10 @@ infoPanel =
                     , text "Surf"
                     ]
                 , paragraph []
-                    [ text "Version "
+                    [ text "Ver. "
                     , text version
-                    , text " ("
+                    , text <|
+                        (" (" ++ date ++ ", ")
                     , newTabLink
                         linkStyle
                         { url = "https://github.com/mochreach/midi-surf"
@@ -1816,7 +1852,8 @@ infoPanel =
                     , text ")"
                     ]
                 , Html.iframe
-                    [ HAtt.height 400
+                    [ HAtt.height 300
+                    , HAtt.width 500
                     , HAtt.src "https://www.youtube.com/embed/c5BpeMxs5ZU"
                     , HAtt.title "YouTube video player"
                     , HAtt.attribute "frameborder" "0"
@@ -1827,7 +1864,8 @@ infoPanel =
                     ]
                     []
                     |> html
-                    |> el [ centerX, width <| maximum 700 <| fill ]
+                    |> el [ centerX ]
+                    |> el [ width fill ]
                 , paragraph []
                     [ """ Please consider supporting the development of this
                     app if you enjoy using it, I'd really appreciate it if you
@@ -1854,6 +1892,14 @@ infoPanel =
                     , """ for more videos about MIDI Surf and other music
                       technology topics.
                       """ |> text
+                    ]
+                , paragraph []
+                    [ text <|
+                        """By using this application, you agree to data on your usage being
+                        collected by Google Analytics. I collect the minimum amount of data
+                        possible so that I can improve the app, but if you're not keen on
+                        this, feel free to block it.
+                        """
                     ]
                 , paragraph []
                     [ text "Copyright: "
@@ -4081,7 +4127,7 @@ renderNote config mode state id =
                     |> el
                         [ centerX
                         , centerY
-                        , labelSizeToFontSize state.labelSize
+                        , labelSizeToFontSize <| Maybe.withDefault Medium state.labelSize
                         ]
                 )
 
@@ -4147,7 +4193,7 @@ renderChord config mode state id =
                     |> el
                         [ centerX
                         , centerY
-                        , labelSizeToFontSize state.labelSize
+                        , labelSizeToFontSize <| Maybe.withDefault Medium state.labelSize
                         ]
                 )
 
@@ -4224,7 +4270,7 @@ renderCCValue config mode state id =
                     |> el
                         [ centerX
                         , centerY
-                        , labelSizeToFontSize state.labelSize
+                        , labelSizeToFontSize <| Maybe.withDefault Medium state.labelSize
                         ]
                 )
 
@@ -4290,7 +4336,7 @@ renderCommand config mode state id =
                     |> el
                         [ centerX
                         , centerY
-                        , labelSizeToFontSize state.labelSize
+                        , labelSizeToFontSize <| Maybe.withDefault Medium state.labelSize
                         ]
                 )
 
@@ -4352,13 +4398,13 @@ renderSequence config mode state id =
                     ++ fillSpace
                 )
                 (state.label
-                    ++ "\n\n"
+                    ++ "\n"
                     ++ String.fromInt (state.index + 1)
                     |> text
                     |> el
                         [ centerX
                         , centerY
-                        , labelSizeToFontSize state.labelSize
+                        , labelSizeToFontSize <| Maybe.withDefault Medium state.labelSize
                         ]
                 )
 
@@ -4459,7 +4505,7 @@ renderFader config mode state id =
                     , el
                         [ centerX
                         , padding 10
-                        , labelSizeToFontSize state.labelSize
+                        , labelSizeToFontSize <| Maybe.withDefault Medium state.labelSize
                         ]
                       <|
                         text state.label
@@ -4586,7 +4632,7 @@ renderXYFader config mode state id =
                     , el
                         [ centerX
                         , padding 10
-                        , labelSizeToFontSize state.labelSize
+                        , labelSizeToFontSize <| Maybe.withDefault Medium state.labelSize
                         ]
                       <|
                         text state.label
@@ -4692,7 +4738,7 @@ renderPitchBend config mode state id =
                     , el
                         [ centerX
                         , padding 10
-                        , labelSizeToFontSize state.labelSize
+                        , labelSizeToFontSize <| Maybe.withDefault Medium state.labelSize
                         ]
                       <|
                         text state.label

@@ -480,7 +480,7 @@ editStateToFader { label, labelSize, colour, channel, ccNumber, valueMin, valueM
                     Controller.Fader
                         { status = Controller.Set
                         , label = label
-                        , labelSize = labelSize
+                        , labelSize = Just labelSize
                         , colour = colour
                         , channel = ch
                         , ccNumber = cc
@@ -575,7 +575,7 @@ editStateToXYFader state =
                     Controller.XYFader
                         { status = Controller.Set
                         , label = state.label
-                        , labelSize = state.labelSize
+                        , labelSize = Just state.labelSize
                         , colour = state.colour
                         , channel1 = ch1
                         , ccNumber1 = cc1
@@ -652,7 +652,7 @@ editStateToPitchBend state =
             Controller.PitchBend
                 { status = Controller.Set
                 , label = state.label
-                , labelSize = state.labelSize
+                , labelSize = Just state.labelSize
                 , colour = state.colour
                 , channel = ch
                 , bendValue = 8192
@@ -712,7 +712,7 @@ updateWithMidiMsg midiMsg state =
                         [ Controller.Fader
                             { status = Controller.Set
                             , label = label
-                            , labelSize = Medium
+                            , labelSize = Just Medium
                             , colour = Yellow
                             , channel = ch
                             , ccNumber = controller
@@ -768,7 +768,7 @@ updateWithMidiMsg midiMsg state =
                         [ Controller.Fader
                             { status = Controller.Set
                             , label = label
-                            , labelSize = Medium
+                            , labelSize = Just Medium
                             , colour = Yellow
                             , channel = ch
                             , ccNumber = controller
