@@ -17,10 +17,14 @@ import Element.Input as Input
 import Element.Lazy as Lazy
 import Element.Region as Region
 import FeatherIcons as Icons
+import File exposing (File)
+import File.Download as Download
+import File.Select as Select
 import Html exposing (Html)
 import Html.Attributes as HAtt
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
+import Json.Decode as Jde
 import Midi exposing (EditMidiButtonMsg(..), MidiMsg(..), Status(..))
 import Ports
 import Style exposing (..)
@@ -117,6 +121,8 @@ type alias PageMenuState =
     { label : String
     , mode : PageMenuMode
     , mSelectedPage : Maybe Int
+    , mImportedPage : Maybe Page
+    , mImportError : Maybe String
     , bulkEditChannel : Maybe String
     }
 
@@ -124,6 +130,7 @@ type alias PageMenuState =
 type PageMenuMode
     = NewPage
     | LoadPage
+    | ImportPage
 
 
 type alias SaveMenuState =
@@ -594,12 +601,16 @@ type Msg
     | UpdateSaveMenuState SaveMenuState
     | SaveSelectedPage Page
     | SaveSelectedModule Controller
+    | ExportSelectedPage Page
     | ToggleNormalEdit
     | OpenEditPageMenu Int
     | DeletePage Int
     | OpenNewPageMenu
     | UpdatePageMenuState PageMenuState
     | DeleteSavedPage String
+    | ImportPageRequested
+    | ReceivedPage File
+    | PageImported String
     | AddPage Page
     | UpdatePage Int PageMenuState
     | AddSpace String
@@ -743,6 +754,14 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
+        ExportSelectedPage page ->
+            ( { model | popup = Nothing }
+            , Download.string
+                "midisurf.json"
+                "text/json"
+                (Codec.encodeToString 0 pageCodec page)
+            )
+
         ToggleNormalEdit ->
             ( { model
                 | mode =
@@ -773,6 +792,8 @@ update msg model =
                                     { label = page.label
                                     , mode = NewPage
                                     , mSelectedPage = Nothing
+                                    , mImportedPage = Nothing
+                                    , mImportError = Nothing
                                     , bulkEditChannel = Nothing
                                     }
                       }
@@ -808,6 +829,8 @@ update msg model =
                             { label = ""
                             , mode = NewPage
                             , mSelectedPage = Nothing
+                            , mImportedPage = Nothing
+                            , mImportError = Nothing
                             , bulkEditChannel = Nothing
                             }
               }
@@ -876,6 +899,43 @@ update msg model =
 
         DeleteSavedPage key ->
             ( { model | savedPages = Dict.remove key model.savedPages }
+            , Cmd.none
+            )
+
+        ImportPageRequested ->
+            ( model
+            , Select.file [ "text/json" ] ReceivedPage
+            )
+
+        ReceivedPage file ->
+            ( model
+            , Task.perform PageImported (File.toString file)
+            )
+
+        PageImported string ->
+            ( case model.popup of
+                Just (NewPageMenu state) ->
+                    { model
+                        | popup =
+                            Just <|
+                                NewPageMenu
+                                    (case Codec.decodeString pageCodec string of
+                                        Ok page ->
+                                            { state
+                                                | mImportedPage = Just page
+                                                , mImportError = Nothing
+                                            }
+
+                                        Err error ->
+                                            { state
+                                                | mImportedPage = Nothing
+                                                , mImportError = Just <| Jde.errorToString error
+                                            }
+                                    )
+                    }
+
+                _ ->
+                    model
             , Cmd.none
             )
 
@@ -2052,39 +2112,68 @@ saveMenu ({ pages, mSelectedPage, modules, mSelectedModule, mode } as state) =
                     , Input.option SaveModule (text "Module")
                     ]
                 }
-            , column
-                [ height (px 200)
-                , width fill
-                , scrollbarY
-                , Border.width 2
-                , Border.dashed
-                ]
-                (case mode of
-                    SavePage ->
-                        Array.map .label pages
-                            |> Array.toList
-                            |> List.indexedMap
-                                (\i l -> String.fromInt i ++ ": " ++ l)
-                            |> List.indexedMap
-                                (selectableOption
-                                    (\newSelected ->
-                                        { state | mSelectedPage = Just newSelected }
-                                            |> UpdateSaveMenuState
+            , case mode of
+                SavePage ->
+                    column
+                        [ spacing 5, width fill ]
+                        [ column
+                            [ height (px 200)
+                            , width fill
+                            , scrollbarY
+                            , Border.width 2
+                            , Border.dashed
+                            ]
+                            (Array.map .label pages
+                                |> Array.toList
+                                |> List.indexedMap
+                                    (\i l -> String.fromInt i ++ ": " ++ l)
+                                |> List.indexedMap
+                                    (selectableOption
+                                        (\newSelected ->
+                                            { state | mSelectedPage = Just newSelected }
+                                                |> UpdateSaveMenuState
+                                        )
+                                        mSelectedPage
                                     )
-                                    mSelectedPage
-                                )
+                            )
+                        , case mSelectedPage of
+                            Just index ->
+                                Input.button
+                                    [ padding 5
+                                    , Border.width 2
+                                    , Border.solid
+                                    ]
+                                    { onPress =
+                                        Array.get index pages
+                                            |> Maybe.map (\p -> ExportSelectedPage p)
+                                    , label = text "Export to File"
+                                    }
 
-                    SaveModule ->
-                        List.map C.controllerToString modules
-                            |> List.indexedMap
-                                (selectableOption
-                                    (\newSelected ->
-                                        { state | mSelectedModule = Just newSelected }
-                                            |> UpdateSaveMenuState
+                            Nothing ->
+                                none
+                        ]
+
+                SaveModule ->
+                    column
+                        [ spacing 5, width fill ]
+                        [ column
+                            [ height (px 200)
+                            , width fill
+                            , scrollbarY
+                            , Border.width 2
+                            , Border.dashed
+                            ]
+                            (List.map C.controllerToString modules
+                                |> List.indexedMap
+                                    (selectableOption
+                                        (\newSelected ->
+                                            { state | mSelectedModule = Just newSelected }
+                                                |> UpdateSaveMenuState
+                                        )
+                                        mSelectedModule
                                     )
-                                    mSelectedModule
-                                )
-                )
+                            )
+                        ]
             , acceptOrCloseButtons
                 "Save"
                 ClosePopUp
@@ -3574,6 +3663,7 @@ newPageMenu savedPages state =
                     , options =
                         [ Input.option NewPage (text "New")
                         , Input.option LoadPage (text "Load")
+                        , Input.option ImportPage (text "Import")
                         ]
                     }
             , case state.mode of
@@ -3659,6 +3749,28 @@ newPageMenu savedPages state =
                                 , label = Input.labelAbove [] (text "Set Channel (Optional)")
                                 }
                         ]
+
+                ImportPage ->
+                    column
+                        [ spacing 10 ]
+                        [ Input.button
+                            [ padding 5
+                            , Border.width 2
+                            , Border.solid
+                            ]
+                            { onPress = Just ImportPageRequested
+                            , label = text "Import Page"
+                            }
+                        , case ( state.mImportedPage, state.mImportError ) of
+                            ( Just _, Nothing ) ->
+                                paragraph [] [ text <| "Import Sucessful" ]
+
+                            ( Nothing, Just error ) ->
+                                paragraph [] [ text <| "Failed to import: " ++ error ]
+
+                            _ ->
+                                none
+                        ]
             , acceptOrCloseButtons
                 "Add Page"
                 ClosePopUp
@@ -3703,6 +3815,11 @@ newPageMenu savedPages state =
                                                         AddPage p
                                             )
                                 )
+
+                    ImportPage ->
+                        Maybe.map
+                            (\p -> AddPage p)
+                            state.mImportedPage
                 )
             ]
 
