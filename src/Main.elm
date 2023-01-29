@@ -2293,16 +2293,6 @@ shareMenu mPage =
                                 |> Base64.fromBytes
                                 |> Maybe.withDefault ""
 
-                        decompressedPage =
-                            compressedPage
-                                |> Base64.toBytes
-                                |> Maybe.andThen Flate.inflateGZip
-                                |> Maybe.andThen
-                                    (\bytes ->
-                                        Decode.decode (Decode.string (Bytes.width bytes)) bytes
-                                    )
-                                |> Maybe.withDefault ""
-
                         pageUrl =
                             Builder.crossOrigin
                                 "https://midisurf.app"
