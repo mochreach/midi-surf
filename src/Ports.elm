@@ -15,3 +15,6 @@ port outgoingMidi : Array (Array Int) -> Cmd msg
 
 
 port saveState : Value -> Cmd msg
+
+
+port copyToClipboard : String -> Cmd msg

@@ -1,9 +1,13 @@
 module Main exposing (..)
 
 import Array exposing (Array)
+import Base64
 import Browser
 import Browser.Dom
 import Browser.Events
+import Bytes
+import Bytes.Decode as Decode
+import Bytes.Encode as Encode
 import Codec exposing (Codec, Value)
 import Controller as C exposing (Controller(..), FaderStatus(..), controllerCodec, setChannel)
 import Dict exposing (Dict)
@@ -20,6 +24,7 @@ import FeatherIcons as Icons
 import File exposing (File)
 import File.Download as Download
 import File.Select as Select
+import Flate
 import Html exposing (Html)
 import Html.Attributes as HAtt
 import Html.Events.Extra.Mouse as Mouse
@@ -112,6 +117,7 @@ type PopUp
     = InfoPanel
     | MidiMenu
     | SaveMenu SaveMenuState
+    | ShareMenu (Maybe Page)
     | EditMenu String EditableController
     | NewPageMenu PageMenuState
     | EditPageMenu Int PageMenuState
@@ -602,6 +608,7 @@ type Msg
     | SaveSelectedPage Page
     | SaveSelectedModule Controller
     | ExportSelectedPage Page
+    | OpenShareMenu
     | ToggleNormalEdit
     | OpenEditPageMenu Int
     | DeletePage Int
@@ -628,6 +635,7 @@ type Msg
     | FaderSet String
     | IncomingMidi { deviceName : String, midiData : Array Int }
     | PageResized Int Int
+    | CopyToClipboard String
     | ClosePopUp
     | NoOp
 
@@ -760,6 +768,16 @@ update msg model =
                 "midisurf.json"
                 "text/json"
                 (Codec.encodeToString 0 pageCodec page)
+            )
+
+        OpenShareMenu ->
+            ( { model
+                | popup =
+                    Array.get model.activePage model.pages
+                        |> ShareMenu
+                        |> Just
+              }
+            , Cmd.none
             )
 
         ToggleNormalEdit ->
@@ -1403,6 +1421,11 @@ update msg model =
             , Cmd.none
             )
 
+        CopyToClipboard string ->
+            ( model
+            , Ports.copyToClipboard string
+            )
+
         ClosePopUp ->
             ( { model | popup = Nothing, mode = resetMode model.mode }
             , Cmd.none
@@ -1739,6 +1762,18 @@ menuRow mode menuOpen =
                         , Input.button
                             [ padding 10
                             , Border.width 4
+                            , backgroundColour White
+                            ]
+                            { onPress = Just OpenShareMenu
+                            , label =
+                                Icons.share2
+                                    |> Icons.withSize 28
+                                    |> Icons.toHtml []
+                                    |> html
+                            }
+                        , Input.button
+                            [ padding 10
+                            , Border.width 4
                             , case mode of
                                 Normal ->
                                     backgroundColour White
@@ -1858,6 +1893,9 @@ renderPopup screen midiStatus savedPages savedModules popup =
 
             SaveMenu state ->
                 saveMenu state
+
+            ShareMenu mPage ->
+                shareMenu mPage
 
             EditMenu _ state ->
                 editMenu savedModules state
@@ -2190,6 +2228,85 @@ saveMenu ({ pages, mSelectedPage, modules, mSelectedModule, mode } as state) =
                     _ ->
                         Nothing
                 )
+            ]
+
+
+
+-- }}}
+-- {{{ Share Menu
+
+
+shareMenu : Maybe Page -> Element Msg
+shareMenu mPage =
+    el [ centerX, centerY ] <|
+        column
+            [ padding 10
+            , spacing 10
+            , backgroundColour White
+            , Border.width 4
+            ]
+            [ paragraph [ Font.bold ] [ text "Share Current Page" ]
+            , case mPage of
+                Just page ->
+                    let
+                        encodedPage =
+                            Codec.encodeToString 0 pageCodec page
+
+                        compressedPage =
+                            encodedPage
+                                |> Encode.string
+                                |> Encode.encode
+                                |> Flate.deflateGZip
+                                |> Base64.fromBytes
+                                |> Maybe.withDefault ""
+
+                        pageUrl =
+                            "https://midisurf.app/?page=" ++ compressedPage
+
+                        decompressedPage =
+                            compressedPage
+                                |> Base64.toBytes
+                                |> Maybe.andThen Flate.inflateGZip
+                                |> Maybe.andThen
+                                    (\bytes ->
+                                        Decode.decode (Decode.string (Bytes.width bytes)) bytes
+                                    )
+                                |> Maybe.withDefault ""
+                    in
+                    row
+                        [ spacing 10 ]
+                        [ el
+                            [ height <| px 40
+                            , width <| px 280
+                            , scrollbarX
+                            ]
+                            (text pageUrl)
+                        , Input.button
+                            [ padding 4
+                            , Border.width 2
+                            ]
+                            { onPress = Just <| CopyToClipboard pageUrl
+                            , label =
+                                Icons.copy
+                                    |> Icons.withSize 20
+                                    |> Icons.toHtml []
+                                    |> html
+                            }
+                        ]
+
+                Nothing ->
+                    paragraph
+                        [ width <| px 300 ]
+                        [ text "No page selected."
+                        ]
+            , Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                ]
+                { onPress = Just ClosePopUp
+                , label = text "Close"
+                }
             ]
 
 

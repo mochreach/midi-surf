@@ -128,6 +128,18 @@ app.ports.saveState.subscribe(function (state) {
   }
 });
 
+app.ports.copyToClipboard.subscribe(function (string) {
+  let promise;
+  if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+    promise = navigator.clipboard.writeText(string);
+  } else {
+    promise = Promise.reject("The Clipboard API is not available.");
+  }
+  promise.then(function () {
+    console.log("copied to clipboard");
+  });
+});
+
 // If you want your app to work offline and load faster, you can change
 // unregister() to register() below. Note this comes with some pitfalls.
 // Learn more about service workers: https://bit.ly/CRA-PWA
