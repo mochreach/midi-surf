@@ -44,12 +44,12 @@ import Utils
 
 version : String
 version =
-    "0.2.0"
+    "0.3.0"
 
 
 date : String
 date =
-    "2023-01-22"
+    "2023-01-30"
 
 
 
@@ -1984,7 +1984,9 @@ infoPanel =
                     ]
                 , paragraph []
                     [ text <|
-                        "The \"Hands On Update\" is here, scroll down for details."
+                        """The "No Wasted Effort" is here, you can now share your 
+                        presets with a URL! Scroll down for details.
+                        """
                     ]
                 , Html.iframe
                     [ HAtt.height 300
@@ -2003,7 +2005,7 @@ infoPanel =
                     |> el [ width fill ]
                 , paragraph [ Font.bold ] [ text "Supporting Development" ]
                 , paragraph []
-                    [ """ Please consider supporting the development of this
+                    [ """Please consider supporting the development of this
                     app if you enjoy using it, I'd really appreciate it if you
                     did! You can join our community on """ |> text
                     , newTabLink
@@ -2030,6 +2032,15 @@ infoPanel =
                       """ |> text
                     ]
                 , paragraph [ Font.bold ] [ text "Version History" ]
+                , paragraph []
+                    [ el [ Font.italic ] <| text "The No Wasted Effort Update (2022-01-30): "
+                    , text <|
+                        """This update is all about saving and sharing your presets. You can
+                        share your presets with a URL, and the cool thing
+                        is that all the data for the preset is encoded in the link! You can also
+                        export your pages to files to back them up or move them to another device.
+                        """
+                    ]
                 , paragraph []
                     [ el [ Font.italic ] <| text "The Hands On Update (2022-01-22): "
                     , text <|
