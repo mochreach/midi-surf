@@ -5,6 +5,7 @@ import Base64
 import Browser
 import Browser.Dom
 import Browser.Events
+import Browser.Navigation as Navigation
 import Bytes
 import Bytes.Decode as Decode
 import Bytes.Encode as Encode
@@ -25,7 +26,7 @@ import File exposing (File)
 import File.Download as Download
 import File.Select as Select
 import Flate
-import Html exposing (Html)
+import Html
 import Html.Attributes as HAtt
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
@@ -34,6 +35,10 @@ import Midi exposing (EditMidiButtonMsg(..), MidiMsg(..), Status(..))
 import Ports
 import Style exposing (..)
 import Task
+import Url exposing (Url)
+import Url.Builder as Builder
+import Url.Parser as UParser exposing ((<?>))
+import Url.Parser.Query as QParser
 import Utils
 
 
@@ -120,6 +125,7 @@ type PopUp
     | ShareMenu (Maybe Page)
     | EditMenu String EditableController
     | NewPageMenu PageMenuState
+    | ImportPageFromUrl String
     | EditPageMenu Int PageMenuState
 
 
@@ -216,8 +222,8 @@ type alias Flags =
     { mInitialState : Value }
 
 
-init : Flags -> ( Model, Cmd Msg )
-init { mInitialState } =
+init : Flags -> Url -> Navigation.Key -> ( Model, Cmd Msg )
+init { mInitialState } url _ =
     let
         defaultCmds =
             [ Task.perform
@@ -228,10 +234,25 @@ init { mInitialState } =
                 )
                 Browser.Dom.getViewport
             ]
+
+        mPageString =
+            Maybe.map
+                identity
+                (UParser.parse (UParser.query <| QParser.string "page") url)
     in
     case Codec.decodeValue (Codec.maybe modelCodec) mInitialState of
         Ok (Just model) ->
-            ( { model | popup = Just <| InfoPanel }, Cmd.batch defaultCmds )
+            ( { model
+                | popup =
+                    case mPageString of
+                        Just (Just pageString) ->
+                            Just <| ImportPageFromUrl pageString
+
+                        _ ->
+                            Just InfoPanel
+              }
+            , Cmd.batch defaultCmds
+            )
 
         _ ->
             ( { midiStatus = Midi.Initialising
@@ -1583,55 +1604,64 @@ convertToEditable control =
 -- {{{ VIEW
 
 
-view : Model -> Html Msg
+view : Model -> Browser.Document Msg
 view model =
-    layout
-        ((case model.popup of
-            Just popup ->
-                (inFront <|
-                    renderPopup model.screen model.midiStatus model.savedPages model.savedModules popup
+    { title = "MIDI Surf"
+    , body =
+        List.singleton <|
+            layout
+                ((case model.popup of
+                    Just popup ->
+                        (inFront <|
+                            renderPopup
+                                model.screen
+                                model.midiStatus
+                                model.savedPages
+                                model.savedModules
+                                popup
+                        )
+                            :: (case model.screen of
+                                    Just screen ->
+                                        [ width <| px screen.width, height <| px screen.height ]
+
+                                    Nothing ->
+                                        fillSpace
+                               )
+
+                    Nothing ->
+                        fillSpace
+                 )
+                    ++ [ Font.family
+                            [ Font.external
+                                { name = "Space Mono"
+                                , url = "https://fonts.googleapis.com/css?family=Space+Mono"
+                                }
+                            , Font.monospace
+                            ]
+                       ]
                 )
-                    :: (case model.screen of
-                            Just screen ->
-                                [ width <| px screen.width, height <| px screen.height ]
+                (column
+                    (case model.screen of
+                        Just screen ->
+                            [ width <| px screen.width, height <| px screen.height ]
 
-                            Nothing ->
-                                fillSpace
-                       )
+                        Nothing ->
+                            fillSpace
+                    )
+                    [ titleBar model.mode model.menuOpen model.activePage model.pages
+                    , case Array.get model.activePage model.pages of
+                        Just page ->
+                            Lazy.lazy2
+                                el
+                                ([ padding 2, scrollbars ] ++ fillSpace)
+                                (renderPage model.mode model.midiLog page)
 
-            Nothing ->
-                fillSpace
-         )
-            ++ [ Font.family
-                    [ Font.external
-                        { name = "Space Mono"
-                        , url = "https://fonts.googleapis.com/css?family=Space+Mono"
-                        }
-                    , Font.monospace
+                        Nothing ->
+                            el fillSpace <|
+                                el [ centerX, centerY ] (text "No page selected.")
                     ]
-               ]
-        )
-        (column
-            (case model.screen of
-                Just screen ->
-                    [ width <| px screen.width, height <| px screen.height ]
-
-                Nothing ->
-                    fillSpace
-            )
-            [ titleBar model.mode model.menuOpen model.activePage model.pages
-            , case Array.get model.activePage model.pages of
-                Just page ->
-                    Lazy.lazy2
-                        el
-                        ([ padding 2, scrollbars ] ++ fillSpace)
-                        (renderPage model.mode model.midiLog page)
-
-                Nothing ->
-                    el fillSpace <|
-                        el [ centerX, centerY ] (text "No page selected.")
-            ]
-        )
+                )
+    }
 
 
 
@@ -1902,6 +1932,9 @@ renderPopup screen midiStatus savedPages savedModules popup =
 
             NewPageMenu state ->
                 newPageMenu savedPages state
+
+            ImportPageFromUrl pageString ->
+                importPageFromUrlMenu pageString
 
             EditPageMenu index state ->
                 editPageMenu index state
@@ -2260,9 +2293,6 @@ shareMenu mPage =
                                 |> Base64.fromBytes
                                 |> Maybe.withDefault ""
 
-                        pageUrl =
-                            "https://midisurf.app/?page=" ++ compressedPage
-
                         decompressedPage =
                             compressedPage
                                 |> Base64.toBytes
@@ -2272,6 +2302,12 @@ shareMenu mPage =
                                         Decode.decode (Decode.string (Bytes.width bytes)) bytes
                                     )
                                 |> Maybe.withDefault ""
+
+                        pageUrl =
+                            Builder.crossOrigin
+                                "https://midisurf.app"
+                                []
+                                [ Builder.string "page" compressedPage ]
                     in
                     row
                         [ spacing 10 ]
@@ -3941,6 +3977,54 @@ newPageMenu savedPages state =
             ]
 
 
+importPageFromUrlMenu : String -> Element Msg
+importPageFromUrlMenu pageString =
+    let
+        mDecompressedPage =
+            pageString
+                |> Base64.toBytes
+                |> Maybe.andThen Flate.inflateGZip
+                |> Maybe.andThen
+                    (\bytes ->
+                        Decode.decode (Decode.string (Bytes.width bytes)) bytes
+                    )
+                |> Maybe.withDefault ""
+                |> Codec.decodeString pageCodec
+                |> Result.toMaybe
+    in
+    el [ centerX, centerY ] <|
+        column
+            [ padding 10
+            , spacing 10
+            , width <| px 300
+            , backgroundColour White
+            , Border.width 4
+            ]
+            [ paragraph [ Font.bold ] [ text "Import Page From URL" ]
+            , case mDecompressedPage of
+                Just page ->
+                    paragraph
+                        []
+                        [ text <|
+                            "Do you want to import \""
+                                ++ page.label
+                                ++ "\" to your pages?"
+                        ]
+
+                Nothing ->
+                    paragraph []
+                        [ """Could not decompress page in URL, 
+                          make sure you have copied it correctly.
+                          """
+                            |> text
+                        ]
+            , acceptOrCloseButtons
+                "Add Page"
+                ClosePopUp
+                (Maybe.map AddPage mDecompressedPage)
+            ]
+
+
 editPageMenu : Int -> PageMenuState -> Element Msg
 editPageMenu index state =
     el [ centerX, centerY ] <|
@@ -5083,11 +5167,13 @@ renderEditButton config editOperation parentId =
 
 main : Program Flags Model Msg
 main =
-    Browser.element
-        { view = view
-        , init = init
+    Browser.application
+        { init = init
+        , view = view
         , update = update
         , subscriptions = subscriptions
+        , onUrlRequest = \_ -> NoOp
+        , onUrlChange = \_ -> NoOp
         }
 
 
