@@ -262,7 +262,13 @@ init { mInitialState } url _ =
               , savedPages = Dict.empty
               , savedModules = Dict.empty
               , menuOpen = True
-              , popup = Just <| InfoPanel
+              , popup =
+                    case mPageString of
+                        Just (Just pageString) ->
+                            Just <| ImportPageFromUrl pageString
+
+                        _ ->
+                            Just InfoPanel
               , midiLog = []
               , screen = Nothing
               }
