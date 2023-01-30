@@ -1,9 +1,14 @@
 module Main exposing (..)
 
 import Array exposing (Array)
+import Base64
 import Browser
 import Browser.Dom
 import Browser.Events
+import Browser.Navigation as Navigation
+import Bytes
+import Bytes.Decode as Decode
+import Bytes.Encode as Encode
 import Codec exposing (Codec, Value)
 import Controller as C exposing (Controller(..), FaderStatus(..), controllerCodec, setChannel)
 import Dict exposing (Dict)
@@ -17,25 +22,34 @@ import Element.Input as Input
 import Element.Lazy as Lazy
 import Element.Region as Region
 import FeatherIcons as Icons
-import Html exposing (Html)
+import File exposing (File)
+import File.Download as Download
+import File.Select as Select
+import Flate
+import Html
 import Html.Attributes as HAtt
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
+import Json.Decode as Jde
 import Midi exposing (EditMidiButtonMsg(..), MidiMsg(..), Status(..))
 import Ports
 import Style exposing (..)
 import Task
+import Url exposing (Url)
+import Url.Builder as Builder
+import Url.Parser as UParser exposing ((<?>))
+import Url.Parser.Query as QParser
 import Utils
 
 
 version : String
 version =
-    "0.2.0"
+    "0.3.0"
 
 
 date : String
 date =
-    "2023-01-22"
+    "2023-01-30"
 
 
 
@@ -108,8 +122,10 @@ type PopUp
     = InfoPanel
     | MidiMenu
     | SaveMenu SaveMenuState
+    | ShareMenu (Maybe Page)
     | EditMenu String EditableController
     | NewPageMenu PageMenuState
+    | ImportPageFromUrl String
     | EditPageMenu Int PageMenuState
 
 
@@ -117,6 +133,8 @@ type alias PageMenuState =
     { label : String
     , mode : PageMenuMode
     , mSelectedPage : Maybe Int
+    , mImportedPage : Maybe Page
+    , mImportError : Maybe String
     , bulkEditChannel : Maybe String
     }
 
@@ -124,6 +142,7 @@ type alias PageMenuState =
 type PageMenuMode
     = NewPage
     | LoadPage
+    | ImportPage
 
 
 type alias SaveMenuState =
@@ -203,8 +222,8 @@ type alias Flags =
     { mInitialState : Value }
 
 
-init : Flags -> ( Model, Cmd Msg )
-init { mInitialState } =
+init : Flags -> Url -> Navigation.Key -> ( Model, Cmd Msg )
+init { mInitialState } url _ =
     let
         defaultCmds =
             [ Task.perform
@@ -215,10 +234,25 @@ init { mInitialState } =
                 )
                 Browser.Dom.getViewport
             ]
+
+        mPageString =
+            Maybe.map
+                identity
+                (UParser.parse (UParser.query <| QParser.string "page") url)
     in
     case Codec.decodeValue (Codec.maybe modelCodec) mInitialState of
         Ok (Just model) ->
-            ( { model | popup = Just <| InfoPanel }, Cmd.batch defaultCmds )
+            ( { model
+                | popup =
+                    case mPageString of
+                        Just (Just pageString) ->
+                            Just <| ImportPageFromUrl pageString
+
+                        _ ->
+                            Just InfoPanel
+              }
+            , Cmd.batch defaultCmds
+            )
 
         _ ->
             ( { midiStatus = Midi.Initialising
@@ -594,12 +628,17 @@ type Msg
     | UpdateSaveMenuState SaveMenuState
     | SaveSelectedPage Page
     | SaveSelectedModule Controller
+    | ExportSelectedPage Page
+    | OpenShareMenu
     | ToggleNormalEdit
     | OpenEditPageMenu Int
     | DeletePage Int
     | OpenNewPageMenu
     | UpdatePageMenuState PageMenuState
     | DeleteSavedPage String
+    | ImportPageRequested
+    | ReceivedPage File
+    | PageImported String
     | AddPage Page
     | UpdatePage Int PageMenuState
     | AddSpace String
@@ -617,6 +656,7 @@ type Msg
     | FaderSet String
     | IncomingMidi { deviceName : String, midiData : Array Int }
     | PageResized Int Int
+    | CopyToClipboard String
     | ClosePopUp
     | NoOp
 
@@ -743,6 +783,24 @@ update msg model =
                 _ ->
                     ( model, Cmd.none )
 
+        ExportSelectedPage page ->
+            ( { model | popup = Nothing }
+            , Download.string
+                "midisurf.json"
+                "text/json"
+                (Codec.encodeToString 0 pageCodec page)
+            )
+
+        OpenShareMenu ->
+            ( { model
+                | popup =
+                    Array.get model.activePage model.pages
+                        |> ShareMenu
+                        |> Just
+              }
+            , Cmd.none
+            )
+
         ToggleNormalEdit ->
             ( { model
                 | mode =
@@ -773,6 +831,8 @@ update msg model =
                                     { label = page.label
                                     , mode = NewPage
                                     , mSelectedPage = Nothing
+                                    , mImportedPage = Nothing
+                                    , mImportError = Nothing
                                     , bulkEditChannel = Nothing
                                     }
                       }
@@ -808,6 +868,8 @@ update msg model =
                             { label = ""
                             , mode = NewPage
                             , mSelectedPage = Nothing
+                            , mImportedPage = Nothing
+                            , mImportError = Nothing
                             , bulkEditChannel = Nothing
                             }
               }
@@ -876,6 +938,43 @@ update msg model =
 
         DeleteSavedPage key ->
             ( { model | savedPages = Dict.remove key model.savedPages }
+            , Cmd.none
+            )
+
+        ImportPageRequested ->
+            ( model
+            , Select.file [ "text/json" ] ReceivedPage
+            )
+
+        ReceivedPage file ->
+            ( model
+            , Task.perform PageImported (File.toString file)
+            )
+
+        PageImported string ->
+            ( case model.popup of
+                Just (NewPageMenu state) ->
+                    { model
+                        | popup =
+                            Just <|
+                                NewPageMenu
+                                    (case Codec.decodeString pageCodec string of
+                                        Ok page ->
+                                            { state
+                                                | mImportedPage = Just page
+                                                , mImportError = Nothing
+                                            }
+
+                                        Err error ->
+                                            { state
+                                                | mImportedPage = Nothing
+                                                , mImportError = Just <| Jde.errorToString error
+                                            }
+                                    )
+                    }
+
+                _ ->
+                    model
             , Cmd.none
             )
 
@@ -1343,6 +1442,11 @@ update msg model =
             , Cmd.none
             )
 
+        CopyToClipboard string ->
+            ( model
+            , Ports.copyToClipboard string
+            )
+
         ClosePopUp ->
             ( { model | popup = Nothing, mode = resetMode model.mode }
             , Cmd.none
@@ -1500,55 +1604,64 @@ convertToEditable control =
 -- {{{ VIEW
 
 
-view : Model -> Html Msg
+view : Model -> Browser.Document Msg
 view model =
-    layout
-        ((case model.popup of
-            Just popup ->
-                (inFront <|
-                    renderPopup model.screen model.midiStatus model.savedPages model.savedModules popup
+    { title = "MIDI Surf"
+    , body =
+        List.singleton <|
+            layout
+                ((case model.popup of
+                    Just popup ->
+                        (inFront <|
+                            renderPopup
+                                model.screen
+                                model.midiStatus
+                                model.savedPages
+                                model.savedModules
+                                popup
+                        )
+                            :: (case model.screen of
+                                    Just screen ->
+                                        [ width <| px screen.width, height <| px screen.height ]
+
+                                    Nothing ->
+                                        fillSpace
+                               )
+
+                    Nothing ->
+                        fillSpace
+                 )
+                    ++ [ Font.family
+                            [ Font.external
+                                { name = "Space Mono"
+                                , url = "https://fonts.googleapis.com/css?family=Space+Mono"
+                                }
+                            , Font.monospace
+                            ]
+                       ]
                 )
-                    :: (case model.screen of
-                            Just screen ->
-                                [ width <| px screen.width, height <| px screen.height ]
+                (column
+                    (case model.screen of
+                        Just screen ->
+                            [ width <| px screen.width, height <| px screen.height ]
 
-                            Nothing ->
-                                fillSpace
-                       )
+                        Nothing ->
+                            fillSpace
+                    )
+                    [ titleBar model.mode model.menuOpen model.activePage model.pages
+                    , case Array.get model.activePage model.pages of
+                        Just page ->
+                            Lazy.lazy2
+                                el
+                                ([ padding 2, scrollbars ] ++ fillSpace)
+                                (renderPage model.mode model.midiLog page)
 
-            Nothing ->
-                fillSpace
-         )
-            ++ [ Font.family
-                    [ Font.external
-                        { name = "Space Mono"
-                        , url = "https://fonts.googleapis.com/css?family=Space+Mono"
-                        }
-                    , Font.monospace
+                        Nothing ->
+                            el fillSpace <|
+                                el [ centerX, centerY ] (text "No page selected.")
                     ]
-               ]
-        )
-        (column
-            (case model.screen of
-                Just screen ->
-                    [ width <| px screen.width, height <| px screen.height ]
-
-                Nothing ->
-                    fillSpace
-            )
-            [ titleBar model.mode model.menuOpen model.activePage model.pages
-            , case Array.get model.activePage model.pages of
-                Just page ->
-                    Lazy.lazy2
-                        el
-                        ([ padding 2, scrollbars ] ++ fillSpace)
-                        (renderPage model.mode model.midiLog page)
-
-                Nothing ->
-                    el fillSpace <|
-                        el [ centerX, centerY ] (text "No page selected.")
-            ]
-        )
+                )
+    }
 
 
 
@@ -1679,6 +1792,18 @@ menuRow mode menuOpen =
                         , Input.button
                             [ padding 10
                             , Border.width 4
+                            , backgroundColour White
+                            ]
+                            { onPress = Just OpenShareMenu
+                            , label =
+                                Icons.share2
+                                    |> Icons.withSize 28
+                                    |> Icons.toHtml []
+                                    |> html
+                            }
+                        , Input.button
+                            [ padding 10
+                            , Border.width 4
                             , case mode of
                                 Normal ->
                                     backgroundColour White
@@ -1799,11 +1924,17 @@ renderPopup screen midiStatus savedPages savedModules popup =
             SaveMenu state ->
                 saveMenu state
 
+            ShareMenu mPage ->
+                shareMenu mPage
+
             EditMenu _ state ->
                 editMenu savedModules state
 
             NewPageMenu state ->
                 newPageMenu savedPages state
+
+            ImportPageFromUrl pageString ->
+                importPageFromUrlMenu pageString
 
             EditPageMenu index state ->
                 editPageMenu index state
@@ -1853,7 +1984,9 @@ infoPanel =
                     ]
                 , paragraph []
                     [ text <|
-                        "The \"Hands On Update\" is here, scroll down for details."
+                        """The "No Wasted Effort" is here, you can now share your 
+                        presets with a URL! Scroll down for details.
+                        """
                     ]
                 , Html.iframe
                     [ HAtt.height 300
@@ -1872,7 +2005,7 @@ infoPanel =
                     |> el [ width fill ]
                 , paragraph [ Font.bold ] [ text "Supporting Development" ]
                 , paragraph []
-                    [ """ Please consider supporting the development of this
+                    [ """Please consider supporting the development of this
                     app if you enjoy using it, I'd really appreciate it if you
                     did! You can join our community on """ |> text
                     , newTabLink
@@ -1899,6 +2032,15 @@ infoPanel =
                       """ |> text
                     ]
                 , paragraph [ Font.bold ] [ text "Version History" ]
+                , paragraph []
+                    [ el [ Font.italic ] <| text "The No Wasted Effort Update (2022-01-30): "
+                    , text <|
+                        """This update is all about saving and sharing your presets. You can
+                        share your presets with a URL, and the cool thing
+                        is that all the data for the preset is encoded in the link! You can also
+                        export your pages to files to back them up or move them to another device.
+                        """
+                    ]
                 , paragraph []
                     [ el [ Font.italic ] <| text "The Hands On Update (2022-01-22): "
                     , text <|
@@ -2052,39 +2194,68 @@ saveMenu ({ pages, mSelectedPage, modules, mSelectedModule, mode } as state) =
                     , Input.option SaveModule (text "Module")
                     ]
                 }
-            , column
-                [ height (px 200)
-                , width fill
-                , scrollbarY
-                , Border.width 2
-                , Border.dashed
-                ]
-                (case mode of
-                    SavePage ->
-                        Array.map .label pages
-                            |> Array.toList
-                            |> List.indexedMap
-                                (\i l -> String.fromInt i ++ ": " ++ l)
-                            |> List.indexedMap
-                                (selectableOption
-                                    (\newSelected ->
-                                        { state | mSelectedPage = Just newSelected }
-                                            |> UpdateSaveMenuState
+            , case mode of
+                SavePage ->
+                    column
+                        [ spacing 5, width fill ]
+                        [ column
+                            [ height (px 200)
+                            , width fill
+                            , scrollbarY
+                            , Border.width 2
+                            , Border.dashed
+                            ]
+                            (Array.map .label pages
+                                |> Array.toList
+                                |> List.indexedMap
+                                    (\i l -> String.fromInt i ++ ": " ++ l)
+                                |> List.indexedMap
+                                    (selectableOption
+                                        (\newSelected ->
+                                            { state | mSelectedPage = Just newSelected }
+                                                |> UpdateSaveMenuState
+                                        )
+                                        mSelectedPage
                                     )
-                                    mSelectedPage
-                                )
+                            )
+                        , case mSelectedPage of
+                            Just index ->
+                                Input.button
+                                    [ padding 5
+                                    , Border.width 2
+                                    , Border.solid
+                                    ]
+                                    { onPress =
+                                        Array.get index pages
+                                            |> Maybe.map (\p -> ExportSelectedPage p)
+                                    , label = text "Export to File"
+                                    }
 
-                    SaveModule ->
-                        List.map C.controllerToString modules
-                            |> List.indexedMap
-                                (selectableOption
-                                    (\newSelected ->
-                                        { state | mSelectedModule = Just newSelected }
-                                            |> UpdateSaveMenuState
+                            Nothing ->
+                                none
+                        ]
+
+                SaveModule ->
+                    column
+                        [ spacing 5, width fill ]
+                        [ column
+                            [ height (px 200)
+                            , width fill
+                            , scrollbarY
+                            , Border.width 2
+                            , Border.dashed
+                            ]
+                            (List.map C.controllerToString modules
+                                |> List.indexedMap
+                                    (selectableOption
+                                        (\newSelected ->
+                                            { state | mSelectedModule = Just newSelected }
+                                                |> UpdateSaveMenuState
+                                        )
+                                        mSelectedModule
                                     )
-                                    mSelectedModule
-                                )
-                )
+                            )
+                        ]
             , acceptOrCloseButtons
                 "Save"
                 ClosePopUp
@@ -2101,6 +2272,78 @@ saveMenu ({ pages, mSelectedPage, modules, mSelectedModule, mode } as state) =
                     _ ->
                         Nothing
                 )
+            ]
+
+
+
+-- }}}
+-- {{{ Share Menu
+
+
+shareMenu : Maybe Page -> Element Msg
+shareMenu mPage =
+    el [ centerX, centerY ] <|
+        column
+            [ padding 10
+            , spacing 10
+            , backgroundColour White
+            , Border.width 4
+            ]
+            [ paragraph [ Font.bold ] [ text "Share Current Page" ]
+            , case mPage of
+                Just page ->
+                    let
+                        encodedPage =
+                            Codec.encodeToString 0 pageCodec page
+
+                        compressedPage =
+                            encodedPage
+                                |> Encode.string
+                                |> Encode.encode
+                                |> Flate.deflateGZip
+                                |> Base64.fromBytes
+                                |> Maybe.withDefault ""
+
+                        pageUrl =
+                            Builder.crossOrigin
+                                "https://midisurf.app"
+                                []
+                                [ Builder.string "page" compressedPage ]
+                    in
+                    row
+                        [ spacing 10 ]
+                        [ el
+                            [ height <| px 40
+                            , width <| px 280
+                            , scrollbarX
+                            ]
+                            (text pageUrl)
+                        , Input.button
+                            [ padding 4
+                            , Border.width 2
+                            ]
+                            { onPress = Just <| CopyToClipboard pageUrl
+                            , label =
+                                Icons.copy
+                                    |> Icons.withSize 20
+                                    |> Icons.toHtml []
+                                    |> html
+                            }
+                        ]
+
+                Nothing ->
+                    paragraph
+                        [ width <| px 300 ]
+                        [ text "No page selected."
+                        ]
+            , Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                ]
+                { onPress = Just ClosePopUp
+                , label = text "Close"
+                }
             ]
 
 
@@ -3574,6 +3817,7 @@ newPageMenu savedPages state =
                     , options =
                         [ Input.option NewPage (text "New")
                         , Input.option LoadPage (text "Load")
+                        , Input.option ImportPage (text "Import")
                         ]
                     }
             , case state.mode of
@@ -3659,6 +3903,28 @@ newPageMenu savedPages state =
                                 , label = Input.labelAbove [] (text "Set Channel (Optional)")
                                 }
                         ]
+
+                ImportPage ->
+                    column
+                        [ spacing 10 ]
+                        [ Input.button
+                            [ padding 5
+                            , Border.width 2
+                            , Border.solid
+                            ]
+                            { onPress = Just ImportPageRequested
+                            , label = text "Import Page"
+                            }
+                        , case ( state.mImportedPage, state.mImportError ) of
+                            ( Just _, Nothing ) ->
+                                paragraph [] [ text <| "Import Sucessful" ]
+
+                            ( Nothing, Just error ) ->
+                                paragraph [] [ text <| "Failed to import: " ++ error ]
+
+                            _ ->
+                                none
+                        ]
             , acceptOrCloseButtons
                 "Add Page"
                 ClosePopUp
@@ -3703,7 +3969,60 @@ newPageMenu savedPages state =
                                                         AddPage p
                                             )
                                 )
+
+                    ImportPage ->
+                        Maybe.map
+                            (\p -> AddPage p)
+                            state.mImportedPage
                 )
+            ]
+
+
+importPageFromUrlMenu : String -> Element Msg
+importPageFromUrlMenu pageString =
+    let
+        mDecompressedPage =
+            pageString
+                |> Base64.toBytes
+                |> Maybe.andThen Flate.inflateGZip
+                |> Maybe.andThen
+                    (\bytes ->
+                        Decode.decode (Decode.string (Bytes.width bytes)) bytes
+                    )
+                |> Maybe.withDefault ""
+                |> Codec.decodeString pageCodec
+                |> Result.toMaybe
+    in
+    el [ centerX, centerY ] <|
+        column
+            [ padding 10
+            , spacing 10
+            , width <| px 300
+            , backgroundColour White
+            , Border.width 4
+            ]
+            [ paragraph [ Font.bold ] [ text "Import Page From URL" ]
+            , case mDecompressedPage of
+                Just page ->
+                    paragraph
+                        []
+                        [ text <|
+                            "Do you want to import \""
+                                ++ page.label
+                                ++ "\" to your pages?"
+                        ]
+
+                Nothing ->
+                    paragraph []
+                        [ """Could not decompress page in URL, 
+                          make sure you have copied it correctly.
+                          """
+                            |> text
+                        ]
+            , acceptOrCloseButtons
+                "Add Page"
+                ClosePopUp
+                (Maybe.map AddPage mDecompressedPage)
             ]
 
 
@@ -4849,11 +5168,13 @@ renderEditButton config editOperation parentId =
 
 main : Program Flags Model Msg
 main =
-    Browser.element
-        { view = view
-        , init = init
+    Browser.application
+        { init = init
+        , view = view
         , update = update
         , subscriptions = subscriptions
+        , onUrlRequest = \_ -> NoOp
+        , onUrlChange = \_ -> NoOp
         }
 
 
