@@ -335,7 +335,8 @@ faderChanging identifier ( newX, newY ) controller =
                                     |> clamp 0 100
 
                             value =
-                                (127 // 100) * newPercent
+                                ((127 / 100) * toFloat newPercent)
+                                    |> round
                         in
                         ( Fader
                             { state
@@ -370,7 +371,8 @@ faderChanging identifier ( newX, newY ) controller =
                                     |> clamp 0 100
 
                             value1 =
-                                (127 // 100) * newPercent1
+                                ((127 / 100) * toFloat newPercent1)
+                                    |> round
 
                             valueChange2 =
                                 oldY - newY |> round
@@ -381,7 +383,8 @@ faderChanging identifier ( newX, newY ) controller =
                                     |> clamp 0 100
 
                             value2 =
-                                (127 // 100) * newPercent2
+                                ((127 / 100) * toFloat newPercent2)
+                                    |> round
                         in
                         ( XYFader
                             { state

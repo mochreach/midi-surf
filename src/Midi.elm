@@ -190,7 +190,7 @@ midiMsgToString midiMsg =
     case midiMsg of
         NoteOn { channel, pitch, velocity } ->
             "Note On: Ch "
-                ++ String.fromInt channel
+                ++ String.fromInt (channel + 1)
                 ++ ", Pit "
                 ++ String.fromInt pitch
                 ++ ", Vel "
@@ -198,7 +198,7 @@ midiMsgToString midiMsg =
 
         NoteOff { channel, pitch, velocity } ->
             "Note Off: Ch "
-                ++ String.fromInt channel
+                ++ String.fromInt (channel + 1)
                 ++ ", Pit "
                 ++ String.fromInt pitch
                 ++ ", Vel "
@@ -206,7 +206,7 @@ midiMsgToString midiMsg =
 
         KeyPressure { channel, key, pressure } ->
             "Key Pressure: Ch "
-                ++ String.fromInt channel
+                ++ String.fromInt (channel + 1)
                 ++ ", Key "
                 ++ String.fromInt key
                 ++ ", Pres "
@@ -214,7 +214,7 @@ midiMsgToString midiMsg =
 
         ControllerChange { channel, controller, value } ->
             "CC: Ch "
-                ++ String.fromInt channel
+                ++ String.fromInt (channel + 1)
                 ++ ", Con "
                 ++ String.fromInt controller
                 ++ ", Val "
@@ -222,19 +222,19 @@ midiMsgToString midiMsg =
 
         ProgramChange { channel, preset } ->
             "Program Change: Ch "
-                ++ String.fromInt channel
+                ++ String.fromInt (channel + 1)
                 ++ ", Pre "
                 ++ String.fromInt preset
 
         ChannelPressure { channel, pressure } ->
             "Channel Pressure: Ch "
-                ++ String.fromInt channel
+                ++ String.fromInt (channel + 1)
                 ++ ", Pres "
                 ++ String.fromInt pressure
 
         PitchBend { channel, bendLSB, bendMSB } ->
             "Pitch Bend: Ch "
-                ++ String.fromInt channel
+                ++ String.fromInt (channel + 1)
                 ++ ", comb "
                 ++ String.fromInt (bendLSB + Bitwise.shiftLeftBy 7 bendMSB)
 
