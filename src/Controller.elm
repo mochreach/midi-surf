@@ -334,9 +334,24 @@ faderChanging identifier ( newX, newY ) controller =
                                     + valueChange
                                     |> clamp 0 100
 
+                            protectedMax =
+                                -- This is here to unsure that the first presets that I
+                                -- made still work. I stupidly set their max value to 0.
+                                if state.valueMax == 0 then
+                                    127
+
+                                else
+                                    state.valueMax
+
+                            rangeValue =
+                                (protectedMax - state.valueMin)
+                                    |> toFloat
+
                             value =
-                                ((127 / 100) * toFloat newPercent)
+                                ((rangeValue / 100) * toFloat newPercent)
                                     |> round
+                                    |> (+) state.valueMin
+                                    |> clamp 0 127
                         in
                         ( Fader
                             { state
@@ -370,9 +385,24 @@ faderChanging identifier ( newX, newY ) controller =
                                     + valueChange1
                                     |> clamp 0 100
 
+                            protectedMax1 =
+                                -- This is here to unsure that the first presets that I
+                                -- made still work. I stupidly set their max value to 0.
+                                if state.valueMax1 == 0 then
+                                    127
+
+                                else
+                                    state.valueMax1
+
+                            rangeValue1 =
+                                (protectedMax1 - state.valueMin1)
+                                    |> toFloat
+
                             value1 =
-                                ((127 / 100) * toFloat newPercent1)
+                                ((rangeValue1 / 100) * toFloat newPercent1)
                                     |> round
+                                    |> (+) state.valueMin1
+                                    |> clamp 0 127
 
                             valueChange2 =
                                 oldY - newY |> round
@@ -382,9 +412,24 @@ faderChanging identifier ( newX, newY ) controller =
                                     + valueChange2
                                     |> clamp 0 100
 
+                            protectedMax2 =
+                                -- This is here to unsure that the first presets that I
+                                -- made still work. I stupidly set their max value to 0.
+                                if state.valueMax2 == 0 then
+                                    127
+
+                                else
+                                    state.valueMax2
+
+                            rangeValue2 =
+                                (protectedMax2 - state.valueMin2)
+                                    |> toFloat
+
                             value2 =
-                                ((127 / 100) * toFloat newPercent2)
+                                ((rangeValue2 / 100) * toFloat newPercent2)
                                     |> round
+                                    |> (+) state.valueMin2
+                                    |> clamp 0 127
                         in
                         ( XYFader
                             { state

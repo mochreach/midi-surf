@@ -367,12 +367,12 @@ synthWideController =
                     , ccNumber1 = 1
                     , valuePercent1 = 50
                     , valueMin1 = 0
-                    , valueMax1 = 0
+                    , valueMax1 = 127
                     , channel2 = Midi.Ch6
                     , ccNumber2 = 2
                     , valuePercent2 = 50
                     , valueMin2 = 0
-                    , valueMax2 = 0
+                    , valueMax2 = 127
                     }
                 , C.XYFader
                     { status = C.Set
@@ -383,12 +383,12 @@ synthWideController =
                     , ccNumber1 = 3
                     , valuePercent1 = 50
                     , valueMin1 = 0
-                    , valueMax1 = 0
+                    , valueMax1 = 127
                     , channel2 = Midi.Ch6
                     , ccNumber2 = 4
                     , valuePercent2 = 50
                     , valueMin2 = 0
-                    , valueMax2 = 0
+                    , valueMax2 = 127
                     }
                 , C.PitchBend
                     { status = C.Set
@@ -409,7 +409,7 @@ synthWideController =
                     , ccNumber = 5
                     , valuePercent = 50
                     , valueMin = 0
-                    , valueMax = 0
+                    , valueMax = 127
                     }
                 , C.Fader
                     { status = C.Set
@@ -420,7 +420,7 @@ synthWideController =
                     , ccNumber = 6
                     , valuePercent = 50
                     , valueMin = 0
-                    , valueMax = 0
+                    , valueMax = 127
                     }
                 , C.Fader
                     { status = C.Set
@@ -431,7 +431,7 @@ synthWideController =
                     , ccNumber = 7
                     , valuePercent = 50
                     , valueMin = 0
-                    , valueMax = 0
+                    , valueMax = 127
                     }
                 , C.Fader
                     { status = C.Set
@@ -442,7 +442,7 @@ synthWideController =
                     , ccNumber = 8
                     , valuePercent = 50
                     , valueMin = 0
-                    , valueMax = 0
+                    , valueMax = 127
                     }
                 ]
             ]
@@ -4143,7 +4143,6 @@ editPageMenu index state =
 
 
 
--- }}}
 -- }}}
 -- {{{ Render Page
 
