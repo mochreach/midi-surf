@@ -76,7 +76,7 @@ function makeMidiStatusFromDevice(entry) {
 }
 
 function onMIDIFailure(msg) {
-  app.ports.listenForMIDIStatus.send(false);
+  app.ports.webMidiNotAvailable.send("Not available");
   console.log("Failed to get MIDI access - " + msg);
 }
 
