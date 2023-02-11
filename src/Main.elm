@@ -44,12 +44,12 @@ import Utils
 
 version : String
 version =
-    "0.3.1"
+    "0.3.2"
 
 
 date : String
 date =
-    "2023-02-06"
+    "2023-02-11"
 
 
 
@@ -119,7 +119,8 @@ resetMode mode =
 
 
 type PopUp
-    = InfoPanel
+    = NoWebMidiPanel String
+    | InfoPanel
     | MidiMenu
     | SaveMenu SaveMenuState
     | ShareMenu (Maybe Page)
@@ -366,12 +367,12 @@ synthWideController =
                     , ccNumber1 = 1
                     , valuePercent1 = 50
                     , valueMin1 = 0
-                    , valueMax1 = 0
+                    , valueMax1 = 127
                     , channel2 = Midi.Ch6
                     , ccNumber2 = 2
                     , valuePercent2 = 50
                     , valueMin2 = 0
-                    , valueMax2 = 0
+                    , valueMax2 = 127
                     }
                 , C.XYFader
                     { status = C.Set
@@ -382,12 +383,12 @@ synthWideController =
                     , ccNumber1 = 3
                     , valuePercent1 = 50
                     , valueMin1 = 0
-                    , valueMax1 = 0
+                    , valueMax1 = 127
                     , channel2 = Midi.Ch6
                     , ccNumber2 = 4
                     , valuePercent2 = 50
                     , valueMin2 = 0
-                    , valueMax2 = 0
+                    , valueMax2 = 127
                     }
                 , C.PitchBend
                     { status = C.Set
@@ -408,7 +409,7 @@ synthWideController =
                     , ccNumber = 5
                     , valuePercent = 50
                     , valueMin = 0
-                    , valueMax = 0
+                    , valueMax = 127
                     }
                 , C.Fader
                     { status = C.Set
@@ -419,7 +420,7 @@ synthWideController =
                     , ccNumber = 6
                     , valuePercent = 50
                     , valueMin = 0
-                    , valueMax = 0
+                    , valueMax = 127
                     }
                 , C.Fader
                     { status = C.Set
@@ -430,7 +431,7 @@ synthWideController =
                     , ccNumber = 7
                     , valuePercent = 50
                     , valueMin = 0
-                    , valueMax = 0
+                    , valueMax = 127
                     }
                 , C.Fader
                     { status = C.Set
@@ -441,7 +442,7 @@ synthWideController =
                     , ccNumber = 8
                     , valuePercent = 50
                     , valueMin = 0
-                    , valueMax = 0
+                    , valueMax = 127
                     }
                 ]
             ]
@@ -626,7 +627,8 @@ blankPage =
 
 
 type Msg
-    = MidiDevicesChanged (List Midi.Device)
+    = WebMidiNotAvailable String
+    | MidiDevicesChanged (List Midi.Device)
     | ToggleMenu
     | OpenInfoPanel
     | OpenMidiMenu
@@ -670,6 +672,15 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        WebMidiNotAvailable reason ->
+            ( { model
+                | popup =
+                    Just <|
+                        NoWebMidiPanel reason
+              }
+            , Cmd.none
+            )
+
         MidiDevicesChanged devices ->
             ( { model | midiStatus = Midi.MidiAvailable devices }
             , Cmd.none
@@ -1916,6 +1927,9 @@ renderPopup screen midiStatus savedPages savedModules popup =
                )
         )
         (case popup of
+            NoWebMidiPanel reason ->
+                noWebMidiPanel reason
+
             InfoPanel ->
                 infoPanel
 
@@ -1947,14 +1961,59 @@ renderPopup screen midiStatus savedPages savedModules popup =
         )
 
 
+noWebMidiPanel : String -> Element Msg
+noWebMidiPanel _ =
+    el [ centerX, centerY ] <|
+        column
+            [ centerX
+            , padding 20
+            , spacing 20
+            , backgroundColour White
+            , Border.width 4
+            ]
+            [ textColumn
+                [ spacing 20, Font.size 16, width <| px 300 ]
+                [ paragraph [ Font.size 24, Font.bold ]
+                    [ text <|
+                        """Web MIDI API is not available!
+                        """
+                    ]
+                , paragraph []
+                    [ text <|
+                        """I can't access the Web MIDI API on your browser. You
+                        could try refreshing your page, but this is probably
+                        happening because either you need to allow access (there
+                        should have had a popup) or your browser does not
+                        support the Web MIDI API. Please check the following
+                        website to determine if your browser is compatible:
+                        """
+                    , newTabLink
+                        linkStyle
+                        { url = "https://caniuse.com/midi"
+                        , label = text "https://caniuse.com/midi"
+                        }
+                    ]
+                , Input.button
+                    [ padding 5
+                    , centerX
+                    , Border.width 2
+                    , Border.solid
+                    , borderColour Black
+                    ]
+                    { onPress = Just ClosePopUp, label = text "Close" }
+                ]
+            ]
 
+
+
+-- }}}
 -- {{{ Info Panel
 
 
 infoPanel : Element Msg
 infoPanel =
     el [ centerX, centerY, height fill ] <|
-        column
+        textColumn
             [ centerX
             , height fill
             , padding 20
@@ -4085,7 +4144,6 @@ editPageMenu index state =
 
 
 -- }}}
--- }}}
 -- {{{ Render Page
 
 
@@ -5187,7 +5245,8 @@ main =
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
-        [ Ports.midiDevices MidiDevicesChanged
+        [ Ports.webMidiNotAvailable WebMidiNotAvailable
+        , Ports.midiDevices MidiDevicesChanged
         , Ports.incomingMidi IncomingMidi
         , Browser.Events.onResize PageResized
         ]

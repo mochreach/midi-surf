@@ -5,6 +5,9 @@ import Codec exposing (Value)
 import Midi exposing (MidiMsg(..))
 
 
+port webMidiNotAvailable : (String -> msg) -> Sub msg
+
+
 port midiDevices : (List Midi.Device -> msg) -> Sub msg
 
 
