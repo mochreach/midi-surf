@@ -44,12 +44,12 @@ import Utils
 
 version : String
 version =
-    "0.3.2"
+    "0.3.3"
 
 
 date : String
 date =
-    "2023-02-11"
+    "2023-02-28"
 
 
 
@@ -2013,7 +2013,7 @@ noWebMidiPanel _ =
 infoPanel : Element Msg
 infoPanel =
     el [ centerX, centerY, height fill ] <|
-        textColumn
+        column
             [ centerX
             , height fill
             , padding 20
@@ -2055,7 +2055,7 @@ infoPanel =
                     ]
                 , Html.iframe
                     [ HAtt.height 300
-                    , HAtt.width 500
+                    , HAtt.width 360
                     , HAtt.src "https://www.youtube.com/embed/c5BpeMxs5ZU"
                     , HAtt.title "YouTube video player"
                     , HAtt.attribute "frameborder" "0"
