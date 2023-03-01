@@ -2,6 +2,8 @@
 
 **A flexible and powerful MIDI controller anywhere you have a browser!**
 
+![sketch1673045999388](https://user-images.githubusercontent.com/8362681/222118318-b104ae65-c6a9-4f98-ac1b-a7cd02effb51.png)
+
 [MIDI Surf](https://midisurf.app) is a browser-based MIDI controller that is
 optimised to work on a range of devices, including tablets and smartphones. It
 is highly customisable, enabling you to make a controller that is exactly what
