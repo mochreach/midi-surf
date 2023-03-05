@@ -719,11 +719,11 @@ editMidiButtonMsgView editMsg midiButtonMsg =
                     , editTextBox
                         { placeholder = "0-127"
                         , label = "Velocity"
-                        , current = state.pitch
+                        , current = state.velocity
                         }
                         "number"
-                        (\newPitch ->
-                            { state | pitch = newPitch }
+                        (\newVelocity ->
+                            { state | velocity = newVelocity }
                                 |> ENoteOn
                                 |> editMsg
                         )
@@ -757,11 +757,11 @@ editMidiButtonMsgView editMsg midiButtonMsg =
                     , editTextBox
                         { placeholder = "0-127"
                         , label = "Velocity"
-                        , current = state.pitch
+                        , current = state.velocity
                         }
                         "number"
-                        (\newPitch ->
-                            { state | pitch = newPitch }
+                        (\newVelocity ->
+                            { state | velocity = newVelocity }
                                 |> ENoteOff
                                 |> editMsg
                         )
