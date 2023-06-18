@@ -102,20 +102,7 @@ screenCodec =
 
 type Mode
     = Normal
-    | Edit Bool
-
-
-resetMode : Mode -> Mode
-resetMode mode =
-    case mode of
-        Normal ->
-            Normal
-
-        Edit False ->
-            Normal
-
-        Edit True ->
-            Edit True
+    | Edit ( Maybe Controller, List Controller )
 
 
 type PopUp
@@ -639,6 +626,7 @@ type Msg
     | ExportSelectedPage Page
     | OpenShareMenu
     | ToggleNormalEdit
+    | UndoEdit
     | OpenEditPageMenu Int
     | DeletePage Int
     | OpenNewPageMenu
@@ -823,14 +811,45 @@ update msg model =
                 | mode =
                     case model.mode of
                         Normal ->
-                            Edit False
+                            Edit
+                                ( Array.get model.activePage model.pages
+                                    |> Maybe.map .controller
+                                , []
+                                )
 
-                        Edit False ->
-                            Edit True
-
-                        Edit True ->
+                        Edit _ ->
                             Normal
               }
+            , Cmd.none
+            )
+
+        UndoEdit ->
+            ( case model.mode of
+                Edit ( first, next :: rest ) ->
+                    { model
+                        | pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = "0", updateFn = \_ -> next }
+                                model.pages
+                        , mode = Edit ( first, rest )
+                    }
+
+                Edit ( Just first, [] ) ->
+                    { model
+                        | pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = "0", updateFn = \_ -> first }
+                                model.pages
+                        , mode = Edit ( Just first, [] )
+                    }
+
+                Edit ( Nothing, _ ) ->
+                    model
+
+                Normal ->
+                    model
             , Cmd.none
             )
 
@@ -868,7 +887,7 @@ update msg model =
                                 |> Array.indexedMap Tuple.pair
                                 |> Array.filter (\( i, _ ) -> i /= index)
                                 |> Array.map Tuple.second
-                        , mode = resetMode model.mode
+                        , mode = Normal
                         , popup = Nothing
                     }
             in
@@ -939,7 +958,6 @@ update msg model =
                                 -- I don't need to subtract 1 for zero indexing
                                 -- as this is the old array length
                                 , activePage = index
-                                , mode = resetMode model.mode
                                 , popup = Nothing
                             }
 
@@ -1004,9 +1022,9 @@ update msg model =
 
                         -- I don't need to subtract 1 for zero indexing
                         -- as this is the old array length
+                        , mode = Edit ( Just page.controller, [] )
                         , activePage = Array.length model.pages
                         , popup = Nothing
-                        , mode = resetMode model.mode
                     }
             in
             ( newModel
@@ -1064,6 +1082,9 @@ update msg model =
             case model.popup of
                 Just (EditMenu id _) ->
                     let
+                        oldController =
+                            getControllerFromActivePage "0" model.activePage model.pages
+
                         newModel =
                             { model
                                 | popup = Nothing
@@ -1072,7 +1093,24 @@ update msg model =
                                         model.activePage
                                         { id = id, updateFn = \_ -> controller }
                                         model.pages
-                                , mode = resetMode model.mode
+                                , mode =
+                                    case model.mode of
+                                        Edit ( Just first, rest ) ->
+                                            Edit
+                                                ( Just first
+                                                , case oldController of
+                                                    Just oc ->
+                                                        oc :: rest
+
+                                                    Nothing ->
+                                                        rest
+                                                )
+
+                                        Edit ( Nothing, _ ) ->
+                                            Edit ( oldController, [] )
+
+                                        Normal ->
+                                            Normal
                             }
                     in
                     ( newModel
@@ -1465,7 +1503,7 @@ update msg model =
             )
 
         ClosePopUp ->
-            ( { model | popup = Nothing, mode = resetMode model.mode }
+            ( { model | popup = Nothing }
             , Cmd.none
             )
 
@@ -1751,100 +1789,139 @@ menuRow mode menuOpen =
                     |> html
             }
             :: (if menuOpen then
-                    [ row
-                        [ alignLeft
-                        , height fill
-                        , spacing 4
-                        , paddingXY 4 0
-                        , backgroundColour LightGrey
-                        ]
-                        [ Input.button
-                            [ padding 10
-                            , Border.width 4
-                            , backgroundColour White
-                            ]
-                            { onPress = Just OpenInfoPanel
-                            , label =
-                                Icons.info
-                                    |> Icons.withSize 28
-                                    |> Icons.toHtml []
-                                    |> html
-                            }
-                        , newTabLink
-                            [ padding 10
-                            , Border.width 4
-                            , backgroundColour White
-                            ]
-                            { url = "https://ko-fi.com/mochreach"
-                            , label =
-                                Icons.coffee
-                                    |> Icons.withSize 28
-                                    |> Icons.toHtml []
-                                    |> html
-                            }
-                        , Input.button
-                            [ padding 10
-                            , Border.width 4
-                            , backgroundColour White
-                            ]
-                            { onPress = Just OpenMidiMenu
-                            , label =
-                                Icons.gitPullRequest
-                                    |> Icons.withSize 28
-                                    |> Icons.toHtml []
-                                    |> html
-                            }
-                        , Input.button
-                            [ padding 10
-                            , Border.width 4
-                            , backgroundColour White
-                            ]
-                            { onPress = Just OpenSaveLoadMenu
-                            , label =
-                                Icons.save
-                                    |> Icons.withSize 28
-                                    |> Icons.toHtml []
-                                    |> html
-                            }
-                        , Input.button
-                            [ padding 10
-                            , Border.width 4
-                            , backgroundColour White
-                            ]
-                            { onPress = Just OpenShareMenu
-                            , label =
-                                Icons.share2
-                                    |> Icons.withSize 28
-                                    |> Icons.toHtml []
-                                    |> html
-                            }
-                        , Input.button
-                            [ padding 10
-                            , Border.width 4
-                            , case mode of
-                                Normal ->
-                                    backgroundColour White
+                    case mode of
+                        Normal ->
+                            defaultButtons
 
-                                Edit False ->
-                                    backgroundColour LightGrey
-
-                                Edit True ->
-                                    backgroundColour DarkGrey
-                            ]
-                            { onPress = Just ToggleNormalEdit
-                            , label =
-                                Icons.edit
-                                    |> Icons.withSize 28
-                                    |> Icons.toHtml []
-                                    |> html
-                            }
-                        ]
-                    ]
+                        Edit _ ->
+                            editButtons
 
                 else
                     []
                )
         )
+
+
+defaultButtons : List (Element Msg)
+defaultButtons =
+    [ row
+        [ alignLeft
+        , height fill
+        , spacing 4
+        , paddingXY 4 0
+        , backgroundColour LightGrey
+        ]
+        [ Input.button
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { onPress = Just OpenInfoPanel
+            , label =
+                Icons.info
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        , newTabLink
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { url = "https://ko-fi.com/mochreach"
+            , label =
+                Icons.coffee
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        , Input.button
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { onPress = Just OpenMidiMenu
+            , label =
+                Icons.gitPullRequest
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        , Input.button
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { onPress = Just OpenSaveLoadMenu
+            , label =
+                Icons.save
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        , Input.button
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { onPress = Just OpenShareMenu
+            , label =
+                Icons.share2
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        , Input.button
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { onPress = Just ToggleNormalEdit
+            , label =
+                Icons.edit
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        ]
+    ]
+
+
+editButtons : List (Element Msg)
+editButtons =
+    [ row
+        [ alignLeft
+        , height fill
+        , spacing 4
+        , paddingXY 4 0
+        , backgroundColour LightGrey
+        ]
+        [ Input.button
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { onPress = Just ToggleNormalEdit
+            , label =
+                Icons.x
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        , Input.button
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { onPress = Just UndoEdit
+            , label =
+                Icons.rotateCcw
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        ]
+    ]
 
 
 pageButton : Mode -> Int -> Int -> Page -> Element Msg
@@ -4485,7 +4562,7 @@ renderController mode midiLog config idParts controller id =
                             , centerY
                             ]
                          <|
-                            text "SPACE"
+                            text "SPACE\n(Click To Edit)"
                         )
 
 
