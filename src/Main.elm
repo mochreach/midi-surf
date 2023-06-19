@@ -12,7 +12,7 @@ import Bytes.Encode as Encode
 import Codec exposing (Codec, Value)
 import Controller as C exposing (Controller(..), FaderStatus(..), controllerCodec, setChannel)
 import Dict exposing (Dict)
-import EditableController as EController exposing (EditableController(..))
+import EditableController as EController exposing (EditableController(..), editableControllerToString)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -1070,8 +1070,25 @@ update msg model =
             let
                 newPopup =
                     case model.popup of
-                        Just (EditMenu id _) ->
-                            Just <| EditMenu id editType
+                        Just (EditMenu id oldController) ->
+                            (case ( oldController, editType ) of
+                                ( EditColumn items, EditRow _ ) ->
+                                    EditRow items
+
+                                ( EditColumn items, EditColumn _ ) ->
+                                    EditColumn items
+
+                                ( EditRow items, EditRow _ ) ->
+                                    EditRow items
+
+                                ( EditRow items, EditColumn _ ) ->
+                                    EditColumn items
+
+                                _ ->
+                                    editType
+                            )
+                                |> EditMenu id
+                                |> Just
 
                         _ ->
                             Nothing
@@ -2514,102 +2531,49 @@ editMenu savedModules menuType =
             , backgroundColour White
             , Border.width 4
             ]
-            [ Input.radio
-                [ spacing 10 ]
-                { onChange = SetEditType
-                , selected = Just menuType
-                , label = Input.labelHidden "Type Selector"
-                , options =
-                    [ Input.option
-                        (EditModule
-                            { label = ""
-                            , controller = C.Space
-                            , createMode = EController.New
-                            , selectedModule = Nothing
-                            }
-                        )
-                        (text "Module")
-                    , Input.option
-                        (EditIsomorphic EController.defaultEditIsomorphicState)
-                        (text "Isomorphic")
-                    , Input.option (EditColumn []) (text "Column")
-                    , Input.option (EditRow []) (text "Row")
-                    , Input.option
-                        (case menuType of
-                            EditNote _ ->
-                                menuType
-
-                            _ ->
-                                EditNote EController.defaultEditNoteState
-                        )
-                        (text "Note")
-                    , Input.option
-                        (case menuType of
-                            EditChord _ ->
-                                menuType
-
-                            _ ->
-                                EditChord EController.defaultEditChordState
-                        )
-                        (text "Chord")
-                    , Input.option
-                        (case menuType of
-                            EditCCValue _ ->
-                                menuType
-
-                            _ ->
-                                EditCCValue EController.defaultEditCCValueState
-                        )
-                        (text "CC Value")
-                    , Input.option
-                        (case menuType of
-                            EditCommand _ ->
-                                menuType
-
-                            _ ->
-                                EditCommand EController.defaultEditCommandState
-                        )
-                        (text "Command")
-                    , Input.option
-                        (case menuType of
-                            EditSequence _ ->
-                                menuType
-
-                            _ ->
-                                EditSequence EController.defaultEditSequenceState
-                        )
-                        (text "Sequence")
-                    , Input.option
-                        (case menuType of
-                            EditFader _ ->
-                                menuType
-
-                            _ ->
-                                EditFader EController.defaultEditFaderState
-                        )
-                        (text "Fader")
-                    , Input.option
-                        (case menuType of
-                            EditXYFader _ ->
-                                menuType
-
-                            _ ->
-                                EditXYFader EController.defaultEditXYFaderState
-                        )
-                        (text "XY Fader")
-                    , Input.option
-                        (case menuType of
-                            EditPitchBend _ ->
-                                menuType
-
-                            _ ->
-                                EditPitchBend EController.defaultEditPitchBendState
-                        )
-                        (text "Pitch Bend")
-                    , Input.option EditMidiLog (text "MIDI Log")
-                    , Input.option EditSpace (text "Space")
-                    ]
-                }
+            [ column
+                []
+                [ selectorOption
+                    menuType
+                    (EditModule
+                        { label = ""
+                        , controller = C.Space
+                        , createMode = EController.New
+                        , selectedModule = Nothing
+                        }
+                    )
+                , selectorOption
+                    menuType
+                    (EditIsomorphic EController.defaultEditIsomorphicState)
+                , selectorOption menuType (EditColumn [])
+                , selectorOption menuType (EditRow [])
+                , selectorOption
+                    menuType
+                    (EditNote EController.defaultEditNoteState)
+                , selectorOption
+                    menuType
+                    (EditChord EController.defaultEditChordState)
+                , selectorOption
+                    menuType
+                    (EditCCValue EController.defaultEditCCValueState)
+                , selectorOption
+                    menuType
+                    (EditCommand EController.defaultEditCommandState)
+                , selectorOption
+                    menuType
+                    (EditSequence EController.defaultEditSequenceState)
+                , selectorOption
+                    menuType
+                    (EditFader EController.defaultEditFaderState)
+                , selectorOption
+                    menuType
+                    (EditXYFader EController.defaultEditXYFaderState)
+                , selectorOption
+                    menuType
+                    (EditPitchBend EController.defaultEditPitchBendState)
+                , selectorOption menuType EditMidiLog
+                , selectorOption menuType EditSpace
+                ]
             , paragraph
                 [ alignTop
                 , height fill
@@ -2684,6 +2648,64 @@ editMenu savedModules menuType =
                         ClosePopUp
                         (Just <| FinishedEdit <| C.Space)
         ]
+
+
+selectorOption : EditableController -> EditableController -> Element Msg
+selectorOption current new =
+    el
+        (fillSpace
+            ++ [ padding 5
+               , Events.onClick <|
+                    SetEditType new
+               ]
+            ++ (case ( current, new ) of
+                    ( EditModule _, EditModule _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditIsomorphic _, EditIsomorphic _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditColumn _, EditColumn _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditRow _, EditRow _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditNote _, EditNote _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditChord _, EditChord _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditCCValue _, EditCCValue _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditCommand _, EditCommand _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditSequence _, EditSequence _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditFader _, EditFader _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditXYFader _, EditXYFader _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditPitchBend _, EditPitchBend _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditMidiLog, EditMidiLog ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditSpace, EditSpace ) ->
+                        [ backgroundColour Blue ]
+
+                    ( _, _ ) ->
+                        []
+               )
+        )
+        (text <| EController.editableControllerToString new)
 
 
 editModulePane : Dict String Controller -> EController.EditModuleState -> Element Msg

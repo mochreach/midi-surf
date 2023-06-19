@@ -25,6 +25,52 @@ type EditableController
     | EditSpace
 
 
+editableControllerToString : EditableController -> String
+editableControllerToString eController =
+    case eController of
+        EditModule _ ->
+            "Module"
+
+        EditIsomorphic _ ->
+            "Isomorphic Keyboard"
+
+        EditColumn _ ->
+            "Column"
+
+        EditRow _ ->
+            "Row"
+
+        EditNote _ ->
+            "Note"
+
+        EditChord _ ->
+            "Chord"
+
+        EditCCValue _ ->
+            "CC Value"
+
+        EditCommand _ ->
+            "Command"
+
+        EditSequence _ ->
+            "Sequence"
+
+        EditFader _ ->
+            "Fader"
+
+        EditXYFader _ ->
+            "XY Fader"
+
+        EditPitchBend _ ->
+            "Pitch Bend"
+
+        EditMidiLog ->
+            "Midi Log"
+
+        EditSpace ->
+            "Space"
+
+
 description : EditableController -> String
 description eController =
     case eController of
