@@ -12,7 +12,7 @@ import Bytes.Encode as Encode
 import Codec exposing (Codec, Value)
 import Controller as C exposing (Controller(..), FaderStatus(..), controllerCodec, setChannel)
 import Dict exposing (Dict)
-import EditableController as EController exposing (EditableController(..), editableControllerToString)
+import EditableController as EC exposing (EditableController(..), editableControllerToString)
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -32,6 +32,11 @@ import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
 import Json.Decode as Jde
 import Midi exposing (EditMidiButtonMsg(..), MidiMsg(..), Status(..))
+import Music.Interval as Interval exposing (Interval)
+import Music.Pitch as Pitch exposing (Pitch)
+import Music.PitchClass as PitchClass exposing (PitchClass)
+import Music.Scale as Scale
+import Music.ScaleType as ScaleType
 import Ports
 import Style exposing (..)
 import Task
@@ -322,6 +327,116 @@ makeIsomorphicRow channel velocity noteRange offset rowLength rowNumber =
             (\i ->
                 C.newNote "" Small (Style.pitchToAppColour i) channel i velocity
             )
+        |> C.Row
+
+
+scaleKeyboard :
+    { channel : Midi.Channel
+    , velocity : Int
+    , note : EC.Note
+    , scaleId : EC.Scale
+    , octave : Int
+    , range : Int
+    }
+    -> Controller
+scaleKeyboard { channel, velocity, note, scaleId, octave, range } =
+    let
+        pitchClass =
+            case note of
+                EC.C ->
+                    PitchClass.c
+
+                EC.Cs ->
+                    PitchClass.cSharp
+
+                EC.D ->
+                    PitchClass.d
+
+                EC.Ds ->
+                    PitchClass.dSharp
+
+                EC.Db ->
+                    PitchClass.dFlat
+
+                EC.E ->
+                    PitchClass.e
+
+                EC.Eb ->
+                    PitchClass.eFlat
+
+                EC.F ->
+                    PitchClass.f
+
+                EC.Fs ->
+                    PitchClass.fSharp
+
+                EC.G ->
+                    PitchClass.g
+
+                EC.Gs ->
+                    PitchClass.gSharp
+
+                EC.Gb ->
+                    PitchClass.gFlat
+
+                EC.A ->
+                    PitchClass.a
+
+                EC.As ->
+                    PitchClass.aSharp
+
+                EC.Ab ->
+                    PitchClass.aFlat
+
+                EC.B ->
+                    PitchClass.b
+
+                EC.Bb ->
+                    PitchClass.bFlat
+
+        scaleConstructor =
+            case scaleId of
+                EC.Major ->
+                    Scale.major
+
+                EC.NaturalMinor ->
+                    Scale.minor
+
+                EC.MajorPentatonic ->
+                    Scale.majorPentatonic
+
+                EC.MinorPentatonic ->
+                    Scale.minorPentatonic
+
+                EC.WholeTone ->
+                    Scale.wholeTone
+
+        scale =
+            scaleConstructor pitchClass
+
+        intervals =
+            Scale.scaleType scale
+                |> ScaleType.toList
+
+        octaveNumbers =
+            List.range 0 (range - 1)
+                |> List.map ((+) octave)
+    in
+    octaveNumbers
+        |> List.map (makeNotesRow channel velocity intervals pitchClass)
+        -- This is to make the octaves ascend on the app
+        |> List.reverse
+        |> C.Column
+
+
+makeNotesRow : Midi.Channel -> Int -> List Interval -> PitchClass -> Int -> Controller
+makeNotesRow channel velocity intervals root octave =
+    intervals
+        |> List.map (\i -> Pitch.transposeUp i (Pitch.fromPitchClassInOctave octave root))
+        |> List.map (\p -> ( Pitch.toString p, Pitch.toMIDINoteNumber p ))
+        |> List.filter (\( s, n ) -> List.member n (List.range 1 127))
+        |> List.map
+            (\( s, n ) -> C.newNote s Large Style.Green channel n velocity)
         |> C.Row
 
 
@@ -1533,7 +1648,7 @@ update msg model =
                 | popup =
                     case model.popup of
                         Just (EditMenu id state) ->
-                            EController.updateWithMidiMsg midiMsg state
+                            EC.updateWithMidiMsg midiMsg state
                                 |> EditMenu id
                                 |> Just
 
@@ -1560,7 +1675,7 @@ convertToEditable control =
             EditModule
                 { label = label
                 , controller = subController
-                , createMode = EController.New
+                , createMode = EC.New
                 , selectedModule = Nothing
                 }
 
@@ -1614,7 +1729,7 @@ convertToEditable control =
                 { label = label
                 , labelSize = Maybe.withDefault Small labelSize
                 , colour = colour
-                , editMode = EController.OnPressMsgs
+                , editMode = EC.OnPressMsgs
                 , onPressMsgs = onPressMsgs
                 , onReleaseMsgs = onReleaseMsgs
                 , newMsg = Nothing
@@ -1645,7 +1760,7 @@ convertToEditable control =
                 { label = state.label
                 , labelSize = Maybe.withDefault Small state.labelSize
                 , colour = state.colour
-                , active = EController.Params1
+                , active = EC.Params1
                 , channel1 = Midi.channelToString state.channel1
                 , ccNumber1 = String.fromInt state.ccNumber1
                 , valueMin1 = String.fromInt state.valueMin1
@@ -2538,39 +2653,42 @@ editMenu savedModules menuType =
                     (EditModule
                         { label = ""
                         , controller = C.Space
-                        , createMode = EController.New
+                        , createMode = EC.New
                         , selectedModule = Nothing
                         }
                     )
                 , selectorOption
                     menuType
-                    (EditIsomorphic EController.defaultEditIsomorphicState)
+                    (EditIsomorphic EC.defaultEditIsomorphicState)
+                , selectorOption
+                    menuType
+                    (EditScale EC.defaultEditScaleState)
                 , selectorOption menuType (EditColumn [])
                 , selectorOption menuType (EditRow [])
                 , selectorOption
                     menuType
-                    (EditNote EController.defaultEditNoteState)
+                    (EditNote EC.defaultEditNoteState)
                 , selectorOption
                     menuType
-                    (EditChord EController.defaultEditChordState)
+                    (EditChord EC.defaultEditChordState)
                 , selectorOption
                     menuType
-                    (EditCCValue EController.defaultEditCCValueState)
+                    (EditCCValue EC.defaultEditCCValueState)
                 , selectorOption
                     menuType
-                    (EditCommand EController.defaultEditCommandState)
+                    (EditCommand EC.defaultEditCommandState)
                 , selectorOption
                     menuType
-                    (EditSequence EController.defaultEditSequenceState)
+                    (EditSequence EC.defaultEditSequenceState)
                 , selectorOption
                     menuType
-                    (EditFader EController.defaultEditFaderState)
+                    (EditFader EC.defaultEditFaderState)
                 , selectorOption
                     menuType
-                    (EditXYFader EController.defaultEditXYFaderState)
+                    (EditXYFader EC.defaultEditXYFaderState)
                 , selectorOption
                     menuType
-                    (EditPitchBend EController.defaultEditPitchBendState)
+                    (EditPitchBend EC.defaultEditPitchBendState)
                 , selectorOption menuType EditMidiLog
                 , selectorOption menuType EditSpace
                 ]
@@ -2583,7 +2701,7 @@ editMenu savedModules menuType =
                 , Font.size 14
                 , Font.alignLeft
                 ]
-                [ text <| EController.description menuType ]
+                [ text <| EC.description menuType ]
             ]
         , case menuType of
             EditModule state ->
@@ -2591,6 +2709,9 @@ editMenu savedModules menuType =
 
             EditIsomorphic state ->
                 editIsomorphicPane state
+
+            EditScale state ->
+                editScalePane state
 
             EditRow subControls ->
                 editRowPane subControls
@@ -2665,6 +2786,9 @@ selectorOption current new =
                     ( EditIsomorphic _, EditIsomorphic _ ) ->
                         [ backgroundColour Blue ]
 
+                    ( EditScale _, EditScale _ ) ->
+                        [ backgroundColour Blue ]
+
                     ( EditColumn _, EditColumn _ ) ->
                         [ backgroundColour Blue ]
 
@@ -2705,10 +2829,10 @@ selectorOption current new =
                         []
                )
         )
-        (text <| EController.editableControllerToString new)
+        (text <| EC.editableControllerToString new)
 
 
-editModulePane : Dict String Controller -> EController.EditModuleState -> Element Msg
+editModulePane : Dict String Controller -> EC.EditModuleState -> Element Msg
 editModulePane savedModules state =
     column
         [ alignTop
@@ -2723,17 +2847,17 @@ editModulePane savedModules state =
             { onChange =
                 \newMode ->
                     { state | createMode = newMode }
-                        |> EController.EditModule
+                        |> EC.EditModule
                         |> UpdateControllerState
             , selected = Just state.createMode
             , label = Input.labelHidden "Create Mode"
             , options =
-                [ Input.option EController.New (text "New")
-                , Input.option EController.Load (text "Load")
+                [ Input.option EC.New (text "New")
+                , Input.option EC.Load (text "Load")
                 ]
             }
         , case state.createMode of
-            EController.New ->
+            EC.New ->
                 editTextBox
                     { placeholder = "label"
                     , label = "Label"
@@ -2746,7 +2870,7 @@ editModulePane savedModules state =
                             |> UpdateControllerState
                     )
 
-            EController.Load ->
+            EC.Load ->
                 column [ spacing 10, width fill ]
                     [ case state.selectedModule of
                         Just index ->
@@ -2791,10 +2915,10 @@ editModulePane savedModules state =
             "Ok"
             ClosePopUp
             (case state.createMode of
-                EController.New ->
+                EC.New ->
                     Just <| FinishedEdit <| C.Module state.label state.controller
 
-                EController.Load ->
+                EC.Load ->
                     state.selectedModule
                         |> Maybe.andThen
                             (\i ->
@@ -2807,7 +2931,7 @@ editModulePane savedModules state =
         ]
 
 
-editIsomorphicPane : EController.EditIsomorphicState -> Element Msg
+editIsomorphicPane : EC.EditIsomorphicState -> Element Msg
 editIsomorphicPane state =
     column
         [ alignTop
@@ -2888,9 +3012,155 @@ editIsomorphicPane state =
             ClosePopUp
             (Maybe.map
                 (\i -> FinishedEdit (isomorphicKeyboard i))
-                (EController.toIsomorphicInput state)
+                (EC.toIsomorphicInput state)
             )
         ]
+
+
+editScalePane : EC.EditScaleState -> Element Msg
+editScalePane state =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , editPanelWidth
+        , backgroundColour White
+        , Border.width 4
+        ]
+        [ editTextBox
+            { placeholder = "channel#"
+            , label = "Channel"
+            , current = state.channel
+            }
+            "number"
+            (\newChannel ->
+                { state | channel = newChannel }
+                    |> EditScale
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "velocity"
+            , label = "Velocity"
+            , current = state.velocity
+            }
+            "number"
+            (\newVelocity ->
+                { state | velocity = newVelocity }
+                    |> EditScale
+                    |> UpdateControllerState
+            )
+        , noteRadio
+            state.note
+            (\newNote ->
+                { state | note = newNote }
+                    |> EditScale
+                    |> UpdateControllerState
+            )
+        , scaleRadio
+            state.scale
+            (\newScale ->
+                { state | scale = newScale }
+                    |> EditScale
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "octave#"
+            , label = "Octave Number"
+            , current = state.octave
+            }
+            "number"
+            (\newOctave ->
+                { state | octave = newOctave }
+                    |> EditScale
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "# of octaves"
+            , label = "Range"
+            , current = state.range
+            }
+            "number"
+            (\newRange ->
+                { state | range = newRange }
+                    |> EditScale
+                    |> UpdateControllerState
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            ClosePopUp
+            (Maybe.map
+                (\i -> FinishedEdit (scaleKeyboard i))
+                (EC.toScaleKeyboardInput state)
+            )
+        ]
+
+
+noteRadio : EC.Note -> (EC.Note -> msg) -> Element msg
+noteRadio note msg =
+    Input.radio
+        [ padding 2
+        , spacing 10
+        , height (px 100)
+        , width fill
+        , scrollbarY
+        , Border.width 2
+        , Border.dashed
+        ]
+        { onChange = msg
+        , selected = Just note
+        , label =
+            Input.labelAbove
+                [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
+                ]
+                (text "Note")
+        , options =
+            [ Input.option EC.C (text "C")
+            , Input.option EC.Cs (text "C#")
+            , Input.option EC.D (text "D")
+            , Input.option EC.Ds (text "D#")
+            , Input.option EC.Db (text "Db")
+            , Input.option EC.E (text "E")
+            , Input.option EC.Eb (text "Eb")
+            , Input.option EC.F (text "F")
+            , Input.option EC.Fs (text "F#")
+            , Input.option EC.G (text "G")
+            , Input.option EC.Gs (text "G#")
+            , Input.option EC.Gb (text "Gb")
+            , Input.option EC.A (text "A")
+            , Input.option EC.As (text "A#")
+            , Input.option EC.Ab (text "Ab")
+            , Input.option EC.B (text "B")
+            , Input.option EC.Bb (text "Bb")
+            ]
+        }
+
+
+scaleRadio : EC.Scale -> (EC.Scale -> msg) -> Element msg
+scaleRadio scale msg =
+    Input.radio
+        [ padding 2
+        , spacing 10
+        , height (px 100)
+        , width fill
+        , scrollbarY
+        , Border.width 2
+        , Border.dashed
+        ]
+        { onChange = msg
+        , selected = Just scale
+        , label =
+            Input.labelAbove
+                [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
+                ]
+                (text "Scale")
+        , options =
+            [ Input.option EC.Major (text "Major")
+            , Input.option EC.NaturalMinor (text "Natural Minor")
+            , Input.option EC.MajorPentatonic (text "Major Pentatonic")
+            , Input.option EC.MinorPentatonic (text "Minor Pentatonic")
+            , Input.option EC.WholeTone (text "Whole Tone")
+            ]
+        }
 
 
 editRowPane : List Controller -> Element Msg
@@ -3015,7 +3285,7 @@ editColumnPane subControls =
         ]
 
 
-editNotePane : EController.EditNoteState -> Element Msg
+editNotePane : EC.EditNoteState -> Element Msg
 editNotePane state =
     column
         [ alignTop
@@ -3088,12 +3358,12 @@ editNotePane state =
             ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
-                (EController.editStateToNote state)
+                (EC.editStateToNote state)
             )
         ]
 
 
-editChordPane : EController.EditChordState -> Element Msg
+editChordPane : EC.EditChordState -> Element Msg
 editChordPane state =
     column
         [ alignTop
@@ -3186,12 +3456,12 @@ editChordPane state =
             ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
-                (EController.editStateToChord state)
+                (EC.editStateToChord state)
             )
         ]
 
 
-editCCValuePane : EController.EditCCValueState -> Element Msg
+editCCValuePane : EC.EditCCValueState -> Element Msg
 editCCValuePane state =
     column
         [ alignTop
@@ -3264,12 +3534,12 @@ editCCValuePane state =
             ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
-                (EController.editStateToCCValue state)
+                (EC.editStateToCCValue state)
             )
         ]
 
 
-editCommandPane : EController.EditCommandState -> Element Msg
+editCommandPane : EC.EditCommandState -> Element Msg
 editCommandPane state =
     column
         [ alignTop
@@ -3314,8 +3584,8 @@ editCommandPane state =
             , selected = Just state.editMode
             , label = Input.labelHidden "On Event Type"
             , options =
-                [ Input.option EController.OnPressMsgs (text "Button Press")
-                , Input.option EController.OnReleaseMsgs (text "Button Release")
+                [ Input.option EC.OnPressMsgs (text "Button Press")
+                , Input.option EC.OnReleaseMsgs (text "Button Release")
                 ]
             }
         , case state.newMsg of
@@ -3373,10 +3643,10 @@ editCommandPane state =
                                     ]
                                     { onPress =
                                         (case state.editMode of
-                                            EController.OnPressMsgs ->
+                                            EC.OnPressMsgs ->
                                                 { state | onPressMsgs = [] }
 
-                                            EController.OnReleaseMsgs ->
+                                            EC.OnReleaseMsgs ->
                                                 { state | onReleaseMsgs = [] }
                                         )
                                             |> EditCommand
@@ -3386,10 +3656,10 @@ editCommandPane state =
                                     }
                                 ]
                                 :: ((case state.editMode of
-                                        EController.OnPressMsgs ->
+                                        EC.OnPressMsgs ->
                                             state.onPressMsgs
 
-                                        EController.OnReleaseMsgs ->
+                                        EC.OnReleaseMsgs ->
                                             state.onReleaseMsgs
                                     )
                                         |> List.map
@@ -3408,12 +3678,12 @@ editCommandPane state =
             ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
-                (EController.editStateToCommand state)
+                (EC.editStateToCommand state)
             )
         ]
 
 
-newCommandMidiMsgView : Midi.EditMidiButtonMsg -> EController.EditCommandState -> Element Msg
+newCommandMidiMsgView : Midi.EditMidiButtonMsg -> EC.EditCommandState -> Element Msg
 newCommandMidiMsgView newMsg state =
     column
         [ padding 4
@@ -3457,7 +3727,7 @@ newCommandMidiMsgView newMsg state =
                     |> Maybe.map
                         (\completeMsg ->
                             case state.editMode of
-                                EController.OnPressMsgs ->
+                                EC.OnPressMsgs ->
                                     { state
                                         | onPressMsgs =
                                             List.append state.onPressMsgs [ completeMsg ]
@@ -3466,7 +3736,7 @@ newCommandMidiMsgView newMsg state =
                                         |> EditCommand
                                         |> UpdateControllerState
 
-                                EController.OnReleaseMsgs ->
+                                EC.OnReleaseMsgs ->
                                     { state
                                         | onReleaseMsgs =
                                             List.append state.onReleaseMsgs [ completeMsg ]
@@ -3479,7 +3749,7 @@ newCommandMidiMsgView newMsg state =
         ]
 
 
-editSequencePane : EController.EditSequenceState -> Element Msg
+editSequencePane : EC.EditSequenceState -> Element Msg
 editSequencePane state =
     column
         [ alignTop
@@ -3593,12 +3863,12 @@ editSequencePane state =
             ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
-                (EController.editStateToSequence state)
+                (EC.editStateToSequence state)
             )
         ]
 
 
-newSequenceMidiMsgView : Midi.EditMidiButtonMsg -> EController.EditSequenceState -> Element Msg
+newSequenceMidiMsgView : Midi.EditMidiButtonMsg -> EC.EditSequenceState -> Element Msg
 newSequenceMidiMsgView newMsg state =
     column
         [ padding 4
@@ -3654,7 +3924,7 @@ newSequenceMidiMsgView newMsg state =
         ]
 
 
-editFaderPane : EController.EditFaderState -> Element Msg
+editFaderPane : EC.EditFaderState -> Element Msg
 editFaderPane state =
     column
         [ alignTop
@@ -3738,12 +4008,12 @@ editFaderPane state =
             ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
-                (EController.editStateToFader state)
+                (EC.editStateToFader state)
             )
         ]
 
 
-editXYFaderPane : EController.EditXYFaderState -> Element Msg
+editXYFaderPane : EC.EditXYFaderState -> Element Msg
 editXYFaderPane state =
     column
         [ alignTop
@@ -3788,12 +4058,12 @@ editXYFaderPane state =
             , selected = Just state.active
             , label = Input.labelHidden "Param Select"
             , options =
-                [ Input.option EController.Params1 (text "Params X")
-                , Input.option EController.Params2 (text "Params Y")
+                [ Input.option EC.Params1 (text "Params X")
+                , Input.option EC.Params2 (text "Params Y")
                 ]
             }
         , case state.active of
-            EController.Params1 ->
+            EC.Params1 ->
                 column [ padding 5, Border.width 2, Border.dashed ]
                     [ editTextBox
                         { placeholder = "channel x#"
@@ -3841,7 +4111,7 @@ editXYFaderPane state =
                         )
                     ]
 
-            EController.Params2 ->
+            EC.Params2 ->
                 column [ padding 5, Border.width 2, Border.dashed ]
                     [ editTextBox
                         { placeholder = "channel y#"
@@ -3893,12 +4163,12 @@ editXYFaderPane state =
             ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
-                (EController.editStateToXYFader state)
+                (EC.editStateToXYFader state)
             )
         ]
 
 
-editPitchBendPane : EController.EditPitchBendState -> Element Msg
+editPitchBendPane : EC.EditPitchBendState -> Element Msg
 editPitchBendPane state =
     column
         [ alignTop
@@ -3949,7 +4219,7 @@ editPitchBendPane state =
             ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
-                (EController.editStateToPitchBend state)
+                (EC.editStateToPitchBend state)
             )
         ]
 

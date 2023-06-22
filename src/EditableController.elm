@@ -4,6 +4,7 @@ import Array exposing (Array)
 import Controller exposing (Controller)
 import Dict exposing (Dict)
 import Midi exposing (MidiMsg(..))
+import Music.PitchClass as PitchClass exposing (PitchClass)
 import Style exposing (..)
 import Utils
 
@@ -11,6 +12,7 @@ import Utils
 type EditableController
     = EditModule EditModuleState
     | EditIsomorphic EditIsomorphicState
+    | EditScale EditScaleState
     | EditColumn (List Controller)
     | EditRow (List Controller)
     | EditNote EditNoteState
@@ -33,6 +35,9 @@ editableControllerToString eController =
 
         EditIsomorphic _ ->
             "Isomorphic Keyboard"
+
+        EditScale _ ->
+            "Scale"
 
         EditColumn _ ->
             "Column"
@@ -82,6 +87,11 @@ description eController =
 
         EditIsomorphic _ ->
             """A tool to create isomorphic keyboards. Once created,
+            you can customise colours and labels of individual notes.
+            """
+
+        EditScale _ ->
+            """A tool to create a keyboards in a particular scale. Once created,
             you can customise colours and labels of individual notes.
             """
 
@@ -242,6 +252,104 @@ toIsomorphicInput state =
         mNumberOfRows
         mOffset
         mRowLength
+
+
+type alias EditScaleState =
+    { channel : String
+    , velocity : String
+    , note : Note
+    , scale : Scale
+    , octave : String
+    , range : String
+    }
+
+
+defaultEditScaleState : EditScaleState
+defaultEditScaleState =
+    { channel = ""
+    , velocity = ""
+    , note = C
+    , scale = Major
+    , octave = ""
+    , range = ""
+    }
+
+
+type Note
+    = C
+    | Cs
+    | D
+    | Ds
+    | Db
+    | E
+    | Eb
+    | F
+    | Fs
+    | G
+    | Gs
+    | Gb
+    | A
+    | As
+    | Ab
+    | B
+    | Bb
+
+
+type Scale
+    = Major
+    | NaturalMinor
+    | MajorPentatonic
+    | MinorPentatonic
+    | WholeTone
+
+
+toScaleKeyboardInput :
+    EditScaleState
+    ->
+        Maybe
+            { channel : Midi.Channel
+            , velocity : Int
+            , note : Note
+            , scaleId : Scale
+            , octave : Int
+            , range : Int
+            }
+toScaleKeyboardInput state =
+    let
+        mChannel =
+            Midi.stringToChannel state.channel
+
+        mVelocity =
+            String.toInt state.velocity
+
+        mNote =
+            Just state.note
+
+        mScale =
+            Just state.scale
+
+        mOctave =
+            String.toInt state.octave
+
+        mRange =
+            String.toInt state.range
+    in
+    Utils.mmap6
+        (\c v n s o r ->
+            { channel = c
+            , velocity = v
+            , note = n
+            , scaleId = s
+            , octave = o
+            , range = r
+            }
+        )
+        mChannel
+        mVelocity
+        mNote
+        mScale
+        mOctave
+        mRange
 
 
 type alias EditNoteState =
@@ -714,6 +822,9 @@ updateWithMidiMsg midiMsg state =
             state
 
         EditIsomorphic _ ->
+            state
+
+        EditScale _ ->
             state
 
         EditColumn subControls ->
