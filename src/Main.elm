@@ -402,14 +402,83 @@ scaleKeyboard { channel, velocity, note, scaleId, octave, range } =
                 EC.NaturalMinor ->
                     Scale.minor
 
+                EC.Ionian ->
+                    Scale.ionian
+
+                EC.Dorian ->
+                    Scale.dorian
+
+                EC.Phrygian ->
+                    Scale.phrygian
+
+                EC.Lydian ->
+                    Scale.lydian
+
+                EC.Mixolydian ->
+                    Scale.mixolydian
+
+                EC.Aeolian ->
+                    Scale.aeolian
+
+                EC.Locrian ->
+                    Scale.locrian
+
+                EC.MelodicMinor ->
+                    Scale.melodicMinor
+
+                EC.DorianFlat2 ->
+                    Scale.dorianFlat2
+
+                EC.LydianAugmented ->
+                    Scale.lydianAugmented
+
+                EC.Acoustic ->
+                    Scale.acoustic
+
+                EC.MajorMinor ->
+                    Scale.majorMinor
+
+                EC.MinorLocrian ->
+                    Scale.minorLocrian
+
+                EC.SuperLocrian ->
+                    Scale.superlocrian
+
+                EC.HarmonicMinor ->
+                    Scale.harmonicMinor
+
+                EC.LocrianNatural6 ->
+                    Scale.locrianNatural6
+
+                EC.MajorAugmented ->
+                    Scale.majorAugmented
+
+                EC.LydianDiminished ->
+                    Scale.lydianDiminished
+
+                EC.PhrygianDominant ->
+                    Scale.phrygianDominant
+
+                EC.AeolianHarmonic ->
+                    Scale.aeolianHarmonic
+
+                EC.UltraLocrian ->
+                    Scale.ultralocrian
+
+                EC.DiminishedWholeToneHalfTone ->
+                    Scale.diminishedWholeToneHalfTone
+
+                EC.DiminishedHalfToneWholeTone ->
+                    Scale.diminishedHalfToneWholeTone
+
+                EC.WholeTone ->
+                    Scale.wholeTone
+
                 EC.MajorPentatonic ->
                     Scale.majorPentatonic
 
                 EC.MinorPentatonic ->
                     Scale.minorPentatonic
-
-                EC.WholeTone ->
-                    Scale.wholeTone
 
         scale =
             scaleConstructor pitchClass
@@ -3156,9 +3225,32 @@ scaleRadio scale msg =
         , options =
             [ Input.option EC.Major (text "Major")
             , Input.option EC.NaturalMinor (text "Natural Minor")
+            , Input.option EC.Ionian (text "Ionian")
+            , Input.option EC.Dorian (text "Dorian")
+            , Input.option EC.Phrygian (text "Phrygian")
+            , Input.option EC.Lydian (text "Lydian")
+            , Input.option EC.Mixolydian (text "Mixolydian")
+            , Input.option EC.Aeolian (text "Aeolian")
+            , Input.option EC.Locrian (text "Locrian")
+            , Input.option EC.MelodicMinor (text "Melodic Minor")
+            , Input.option EC.DorianFlat2 (text "Dorian Flat2")
+            , Input.option EC.LydianAugmented (text "Lydian Augmented")
+            , Input.option EC.Acoustic (text "Acoustic")
+            , Input.option EC.MajorMinor (text "Major Minor")
+            , Input.option EC.MinorLocrian (text "Minor Locrian")
+            , Input.option EC.SuperLocrian (text "Superlocrian")
+            , Input.option EC.HarmonicMinor (text "Harmonic Minor")
+            , Input.option EC.LocrianNatural6 (text "Locrian Natural6")
+            , Input.option EC.MajorAugmented (text "Major Augmented")
+            , Input.option EC.LydianDiminished (text "Lydian Diminished")
+            , Input.option EC.PhrygianDominant (text "Phrygian Dominant")
+            , Input.option EC.AeolianHarmonic (text "Aeolian Harmonic")
+            , Input.option EC.UltraLocrian (text "Ultralocrian")
+            , Input.option EC.DiminishedWholeToneHalfTone (text "Diminished Whole Half Tone")
+            , Input.option EC.DiminishedHalfToneWholeTone (text "Diminished Half Whole Tone")
+            , Input.option EC.WholeTone (text "Whole Tone")
             , Input.option EC.MajorPentatonic (text "Major Pentatonic")
             , Input.option EC.MinorPentatonic (text "Minor Pentatonic")
-            , Input.option EC.WholeTone (text "Whole Tone")
             ]
         }
 

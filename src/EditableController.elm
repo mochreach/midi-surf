@@ -298,9 +298,37 @@ type Note
 type Scale
     = Major
     | NaturalMinor
+      -- Modes of the major scale
+    | Ionian
+    | Dorian
+    | Phrygian
+    | Lydian
+    | Mixolydian
+    | Aeolian
+    | Locrian
+      -- Modes of the melodic minor scale
+    | MelodicMinor
+    | DorianFlat2
+    | LydianAugmented
+    | Acoustic
+    | MajorMinor
+    | MinorLocrian
+    | SuperLocrian
+      -- Modes of the harmonic minor scale
+    | HarmonicMinor
+    | LocrianNatural6
+    | MajorAugmented
+    | LydianDiminished
+    | PhrygianDominant
+    | AeolianHarmonic
+    | UltraLocrian
+      -- Symmetrical scales
+    | DiminishedWholeToneHalfTone
+    | DiminishedHalfToneWholeTone
+    | WholeTone
+      -- Pentatonic scales
     | MajorPentatonic
     | MinorPentatonic
-    | WholeTone
 
 
 toScaleKeyboardInput :
