@@ -4,7 +4,6 @@ import Array exposing (Array)
 import Controller exposing (Controller)
 import Dict exposing (Dict)
 import Midi exposing (MidiMsg(..))
-import Music.PitchClass as PitchClass exposing (PitchClass)
 import Style exposing (..)
 import Utils
 
@@ -13,6 +12,7 @@ type EditableController
     = EditModule EditModuleState
     | EditIsomorphic EditIsomorphicState
     | EditScale EditScaleState
+    | EditChordBuilder EditChordBuilderState
     | EditColumn (List Controller)
     | EditRow (List Controller)
     | EditNote EditNoteState
@@ -38,6 +38,9 @@ editableControllerToString eController =
 
         EditScale _ ->
             "Scale"
+
+        EditChordBuilder _ ->
+            "Chord Keyboard"
 
         EditColumn _ ->
             "Column"
@@ -93,6 +96,11 @@ description eController =
         EditScale _ ->
             """A tool to create a keyboards in a particular scale. Once created,
             you can customise colours and labels of individual notes.
+            """
+
+        EditChordBuilder _ ->
+            """A tool for creating a palette of chords. Once created,
+            you can customise colours and labels of individual chords.
             """
 
         EditColumn _ ->
@@ -257,7 +265,7 @@ toIsomorphicInput state =
 type alias EditScaleState =
     { channel : String
     , velocity : String
-    , note : Note
+    , key : Key
     , scale : Scale
     , octave : String
     , range : String
@@ -268,14 +276,14 @@ defaultEditScaleState : EditScaleState
 defaultEditScaleState =
     { channel = ""
     , velocity = ""
-    , note = C
+    , key = C
     , scale = Major
     , octave = ""
     , range = ""
     }
 
 
-type Note
+type Key
     = C
     | Cs
     | D
@@ -337,7 +345,7 @@ toScaleKeyboardInput :
         Maybe
             { channel : Midi.Channel
             , velocity : Int
-            , note : Note
+            , key : Key
             , scaleId : Scale
             , octave : Int
             , range : Int
@@ -350,8 +358,8 @@ toScaleKeyboardInput state =
         mVelocity =
             String.toInt state.velocity
 
-        mNote =
-            Just state.note
+        mKey =
+            Just state.key
 
         mScale =
             Just state.scale
@@ -366,7 +374,7 @@ toScaleKeyboardInput state =
         (\c v n s o r ->
             { channel = c
             , velocity = v
-            , note = n
+            , key = n
             , scaleId = s
             , octave = o
             , range = r
@@ -374,7 +382,77 @@ toScaleKeyboardInput state =
         )
         mChannel
         mVelocity
-        mNote
+        mKey
+        mScale
+        mOctave
+        mRange
+
+
+type alias EditChordBuilderState =
+    { channel : String
+    , velocity : String
+    , key : Key
+    , scale : Scale
+    , octave : String
+    , range : String
+    }
+
+
+defaultEditChordBuilderState : EditChordBuilderState
+defaultEditChordBuilderState =
+    { channel = ""
+    , velocity = ""
+    , key = C
+    , scale = Major
+    , octave = ""
+    , range = ""
+    }
+
+
+toChordBuildInput :
+    EditChordBuilderState
+    ->
+        Maybe
+            { channel : Midi.Channel
+            , velocity : Int
+            , key : Key
+            , scaleId : Scale
+            , octave : Int
+            , range : Int
+            }
+toChordBuildInput state =
+    let
+        mChannel =
+            Midi.stringToChannel state.channel
+
+        mVelocity =
+            String.toInt state.velocity
+
+        mKey =
+            Just state.key
+
+        mScale =
+            Just state.scale
+
+        mOctave =
+            String.toInt state.octave
+
+        mRange =
+            String.toInt state.range
+    in
+    Utils.mmap6
+        (\c v n s o r ->
+            { channel = c
+            , velocity = v
+            , key = n
+            , scaleId = s
+            , octave = o
+            , range = r
+            }
+        )
+        mChannel
+        mVelocity
+        mKey
         mScale
         mOctave
         mRange
@@ -853,6 +931,9 @@ updateWithMidiMsg midiMsg state =
             state
 
         EditScale _ ->
+            state
+
+        EditChordBuilder _ ->
             state
 
         EditColumn subControls ->

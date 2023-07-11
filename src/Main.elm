@@ -12,7 +12,7 @@ import Bytes.Encode as Encode
 import Codec exposing (Codec, Value)
 import Controller as C exposing (Controller(..), FaderStatus(..), controllerCodec, setChannel)
 import Dict exposing (Dict)
-import EditableController as EC exposing (EditableController(..), editableControllerToString)
+import EditableController as EC exposing (EditableController(..))
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -32,11 +32,15 @@ import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
 import Json.Decode as Jde
 import Midi exposing (EditMidiButtonMsg(..), MidiMsg(..), Status(..))
+import Music.Chord as Chord
+import Music.ChordType as ChordType
 import Music.Interval as Interval exposing (Interval)
-import Music.Pitch as Pitch exposing (Pitch)
+import Music.Pitch as Pitch
 import Music.PitchClass as PitchClass exposing (PitchClass)
+import Music.Range as Range
 import Music.Scale as Scale
 import Music.ScaleType as ScaleType
+import Music.Voicing.ThreePart as ThreePart
 import Ports
 import Style exposing (..)
 import Task
@@ -330,155 +334,165 @@ makeIsomorphicRow channel velocity noteRange offset rowLength rowNumber =
         |> C.Row
 
 
+scaleToScaleConstructor : EC.Scale -> (PitchClass.PitchClass -> Scale.Scale)
+scaleToScaleConstructor scaleId =
+    case scaleId of
+        EC.Major ->
+            Scale.major
+
+        EC.NaturalMinor ->
+            Scale.minor
+
+        EC.Ionian ->
+            Scale.ionian
+
+        EC.Dorian ->
+            Scale.dorian
+
+        EC.Phrygian ->
+            Scale.phrygian
+
+        EC.Lydian ->
+            Scale.lydian
+
+        EC.Mixolydian ->
+            Scale.mixolydian
+
+        EC.Aeolian ->
+            Scale.aeolian
+
+        EC.Locrian ->
+            Scale.locrian
+
+        EC.MelodicMinor ->
+            Scale.melodicMinor
+
+        EC.DorianFlat2 ->
+            Scale.dorianFlat2
+
+        EC.LydianAugmented ->
+            Scale.lydianAugmented
+
+        EC.Acoustic ->
+            Scale.acoustic
+
+        EC.MajorMinor ->
+            Scale.majorMinor
+
+        EC.MinorLocrian ->
+            Scale.minorLocrian
+
+        EC.SuperLocrian ->
+            Scale.superlocrian
+
+        EC.HarmonicMinor ->
+            Scale.harmonicMinor
+
+        EC.LocrianNatural6 ->
+            Scale.locrianNatural6
+
+        EC.MajorAugmented ->
+            Scale.majorAugmented
+
+        EC.LydianDiminished ->
+            Scale.lydianDiminished
+
+        EC.PhrygianDominant ->
+            Scale.phrygianDominant
+
+        EC.AeolianHarmonic ->
+            Scale.aeolianHarmonic
+
+        EC.UltraLocrian ->
+            Scale.ultralocrian
+
+        EC.DiminishedWholeToneHalfTone ->
+            Scale.diminishedWholeToneHalfTone
+
+        EC.DiminishedHalfToneWholeTone ->
+            Scale.diminishedHalfToneWholeTone
+
+        EC.WholeTone ->
+            Scale.wholeTone
+
+        EC.MajorPentatonic ->
+            Scale.majorPentatonic
+
+        EC.MinorPentatonic ->
+            Scale.minorPentatonic
+
+
+keyToPitchClass : EC.Key -> PitchClass.PitchClass
+keyToPitchClass key =
+    case key of
+        EC.C ->
+            PitchClass.c
+
+        EC.Cs ->
+            PitchClass.cSharp
+
+        EC.D ->
+            PitchClass.d
+
+        EC.Ds ->
+            PitchClass.dSharp
+
+        EC.Db ->
+            PitchClass.dFlat
+
+        EC.E ->
+            PitchClass.e
+
+        EC.Eb ->
+            PitchClass.eFlat
+
+        EC.F ->
+            PitchClass.f
+
+        EC.Fs ->
+            PitchClass.fSharp
+
+        EC.G ->
+            PitchClass.g
+
+        EC.Gs ->
+            PitchClass.gSharp
+
+        EC.Gb ->
+            PitchClass.gFlat
+
+        EC.A ->
+            PitchClass.a
+
+        EC.As ->
+            PitchClass.aSharp
+
+        EC.Ab ->
+            PitchClass.aFlat
+
+        EC.B ->
+            PitchClass.b
+
+        EC.Bb ->
+            PitchClass.bFlat
+
+
 scaleKeyboard :
     { channel : Midi.Channel
     , velocity : Int
-    , note : EC.Note
+    , key : EC.Key
     , scaleId : EC.Scale
     , octave : Int
     , range : Int
     }
     -> Controller
-scaleKeyboard { channel, velocity, note, scaleId, octave, range } =
+scaleKeyboard { channel, velocity, key, scaleId, octave, range } =
     let
         pitchClass =
-            case note of
-                EC.C ->
-                    PitchClass.c
-
-                EC.Cs ->
-                    PitchClass.cSharp
-
-                EC.D ->
-                    PitchClass.d
-
-                EC.Ds ->
-                    PitchClass.dSharp
-
-                EC.Db ->
-                    PitchClass.dFlat
-
-                EC.E ->
-                    PitchClass.e
-
-                EC.Eb ->
-                    PitchClass.eFlat
-
-                EC.F ->
-                    PitchClass.f
-
-                EC.Fs ->
-                    PitchClass.fSharp
-
-                EC.G ->
-                    PitchClass.g
-
-                EC.Gs ->
-                    PitchClass.gSharp
-
-                EC.Gb ->
-                    PitchClass.gFlat
-
-                EC.A ->
-                    PitchClass.a
-
-                EC.As ->
-                    PitchClass.aSharp
-
-                EC.Ab ->
-                    PitchClass.aFlat
-
-                EC.B ->
-                    PitchClass.b
-
-                EC.Bb ->
-                    PitchClass.bFlat
+            keyToPitchClass key
 
         scaleConstructor =
-            case scaleId of
-                EC.Major ->
-                    Scale.major
-
-                EC.NaturalMinor ->
-                    Scale.minor
-
-                EC.Ionian ->
-                    Scale.ionian
-
-                EC.Dorian ->
-                    Scale.dorian
-
-                EC.Phrygian ->
-                    Scale.phrygian
-
-                EC.Lydian ->
-                    Scale.lydian
-
-                EC.Mixolydian ->
-                    Scale.mixolydian
-
-                EC.Aeolian ->
-                    Scale.aeolian
-
-                EC.Locrian ->
-                    Scale.locrian
-
-                EC.MelodicMinor ->
-                    Scale.melodicMinor
-
-                EC.DorianFlat2 ->
-                    Scale.dorianFlat2
-
-                EC.LydianAugmented ->
-                    Scale.lydianAugmented
-
-                EC.Acoustic ->
-                    Scale.acoustic
-
-                EC.MajorMinor ->
-                    Scale.majorMinor
-
-                EC.MinorLocrian ->
-                    Scale.minorLocrian
-
-                EC.SuperLocrian ->
-                    Scale.superlocrian
-
-                EC.HarmonicMinor ->
-                    Scale.harmonicMinor
-
-                EC.LocrianNatural6 ->
-                    Scale.locrianNatural6
-
-                EC.MajorAugmented ->
-                    Scale.majorAugmented
-
-                EC.LydianDiminished ->
-                    Scale.lydianDiminished
-
-                EC.PhrygianDominant ->
-                    Scale.phrygianDominant
-
-                EC.AeolianHarmonic ->
-                    Scale.aeolianHarmonic
-
-                EC.UltraLocrian ->
-                    Scale.ultralocrian
-
-                EC.DiminishedWholeToneHalfTone ->
-                    Scale.diminishedWholeToneHalfTone
-
-                EC.DiminishedHalfToneWholeTone ->
-                    Scale.diminishedHalfToneWholeTone
-
-                EC.WholeTone ->
-                    Scale.wholeTone
-
-                EC.MajorPentatonic ->
-                    Scale.majorPentatonic
-
-                EC.MinorPentatonic ->
-                    Scale.minorPentatonic
+            scaleToScaleConstructor scaleId
 
         scale =
             scaleConstructor pitchClass
@@ -503,10 +517,86 @@ makeNotesRow channel velocity intervals root octave =
     intervals
         |> List.map (\i -> Pitch.transposeUp i (Pitch.fromPitchClassInOctave octave root))
         |> List.map (\p -> ( Pitch.toString p, Pitch.toMIDINoteNumber p ))
-        |> List.filter (\( s, n ) -> List.member n (List.range 1 127))
+        |> List.filter (\( _, n ) -> List.member n (List.range 1 127))
         |> List.map
-            (\( s, n ) -> C.newNote s Large Style.Green channel n velocity)
+            (\( s, n ) -> C.newNote s Medium Style.Green channel n velocity)
         |> C.Row
+
+
+chordKeyboard :
+    { channel : Midi.Channel
+    , velocity : Int
+    , key : EC.Key
+    , scaleId : EC.Scale
+    , octave : Int
+    , range : Int
+    }
+    -> Controller
+chordKeyboard { channel, velocity, key, scaleId, octave, range } =
+    let
+        pitchClass =
+            keyToPitchClass key
+
+        scaleConstructor =
+            scaleToScaleConstructor scaleId
+
+        minPitch =
+            Pitch.fromPitchClassInOctave octave pitchClass
+
+        maxPitch =
+            Pitch.fromPitchClassInOctave (octave + range) pitchClass
+                |> Pitch.transposeUp Interval.perfectFourth
+
+        chords =
+            Scale.allChords ChordType.triads (scaleConstructor pitchClass)
+
+        chordButtons =
+            List.map (makeChordButtons channel velocity minPitch maxPitch) chords
+
+        longest =
+            List.map List.length chordButtons
+                |> List.maximum
+                |> Maybe.withDefault 1
+
+        paddedChords =
+            List.map
+                (\cs ->
+                    if List.length cs < longest then
+                        cs ++ [ C.Space ]
+
+                    else
+                        cs
+                )
+                chordButtons
+                |> List.map List.reverse
+    in
+    List.map C.Column paddedChords
+        |> C.Row
+
+
+makeChordButtons : Midi.Channel -> Int -> Pitch.Pitch -> Pitch.Pitch -> Chord.Chord -> List Controller
+makeChordButtons channel velocity minPitch maxPitch chord =
+    let
+        voicings =
+            Chord.voiceThreeParts
+                { voiceOne = Range.range minPitch maxPitch
+                , voiceTwo = Range.range minPitch maxPitch
+                , voiceThree = Range.range minPitch maxPitch
+                }
+                [ ThreePart.basic ]
+                chord
+
+        midiNumberList =
+            List.map ThreePart.toPitchList voicings
+                |> List.map (List.map Pitch.toMIDINoteNumber)
+
+        chordHelper midiNotes =
+            C.newChord (Chord.toString chord) Medium LightGrey velocity (List.map (\p -> { channel = channel, pitch = p }) midiNotes)
+
+        chordButtons =
+            List.map chordHelper midiNumberList
+    in
+    chordButtons
 
 
 
@@ -2732,6 +2822,9 @@ editMenu savedModules menuType =
                 , selectorOption
                     menuType
                     (EditScale EC.defaultEditScaleState)
+                , selectorOption
+                    menuType
+                    (EditChordBuilder EC.defaultEditChordBuilderState)
                 , selectorOption menuType (EditColumn [])
                 , selectorOption menuType (EditRow [])
                 , selectorOption
@@ -2781,6 +2874,9 @@ editMenu savedModules menuType =
 
             EditScale state ->
                 editScalePane state
+
+            EditChordBuilder state ->
+                editChordBuilderPane state
 
             EditRow subControls ->
                 editRowPane subControls
@@ -2856,6 +2952,9 @@ selectorOption current new =
                         [ backgroundColour Blue ]
 
                     ( EditScale _, EditScale _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditChordBuilder _, EditChordBuilder _ ) ->
                         [ backgroundColour Blue ]
 
                     ( EditColumn _, EditColumn _ ) ->
@@ -3119,9 +3218,9 @@ editScalePane state =
                     |> UpdateControllerState
             )
         , noteRadio
-            state.note
+            state.key
             (\newNote ->
-                { state | note = newNote }
+                { state | key = newNote }
                     |> EditScale
                     |> UpdateControllerState
             )
@@ -3164,7 +3263,85 @@ editScalePane state =
         ]
 
 
-noteRadio : EC.Note -> (EC.Note -> msg) -> Element msg
+editChordBuilderPane : EC.EditChordBuilderState -> Element Msg
+editChordBuilderPane state =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , editPanelWidth
+        , backgroundColour White
+        , Border.width 4
+        ]
+        [ editTextBox
+            { placeholder = "channel#"
+            , label = "Channel"
+            , current = state.channel
+            }
+            "number"
+            (\newChannel ->
+                { state | channel = newChannel }
+                    |> EditChordBuilder
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "velocity"
+            , label = "Velocity"
+            , current = state.velocity
+            }
+            "number"
+            (\newVelocity ->
+                { state | velocity = newVelocity }
+                    |> EditChordBuilder
+                    |> UpdateControllerState
+            )
+        , noteRadio
+            state.key
+            (\newNote ->
+                { state | key = newNote }
+                    |> EditChordBuilder
+                    |> UpdateControllerState
+            )
+        , scaleRadio
+            state.scale
+            (\newScale ->
+                { state | scale = newScale }
+                    |> EditChordBuilder
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "octave#"
+            , label = "Octave Number"
+            , current = state.octave
+            }
+            "number"
+            (\newOctave ->
+                { state | octave = newOctave }
+                    |> EditChordBuilder
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "# of octaves"
+            , label = "Range"
+            , current = state.range
+            }
+            "number"
+            (\newRange ->
+                { state | range = newRange }
+                    |> EditChordBuilder
+                    |> UpdateControllerState
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            ClosePopUp
+            (Maybe.map
+                (\i -> FinishedEdit (chordKeyboard i))
+                (EC.toChordBuildInput state)
+            )
+        ]
+
+
+noteRadio : EC.Key -> (EC.Key -> msg) -> Element msg
 noteRadio note msg =
     Input.radio
         [ padding 2
@@ -4946,7 +5123,7 @@ renderController mode midiLog config idParts controller id =
                             , centerY
                             ]
                          <|
-                            text "SPACE\n(Click To Edit)"
+                            text "SPACE"
                         )
 
 
