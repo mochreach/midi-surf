@@ -101,6 +101,8 @@ description eController =
         EditChordBuilder _ ->
             """A tool for creating a palette of chords. Once created,
             you can customise colours and labels of individual chords.
+            You can choose between triads and four note chords, which
+            contain sixth and seventh chords.
             """
 
         EditColumn _ ->
@@ -395,7 +397,13 @@ type alias EditChordBuilderState =
     , scale : Scale
     , octave : String
     , range : String
+    , chordType : ChordType
     }
+
+
+type ChordType
+    = Triad
+    | FourNote
 
 
 defaultEditChordBuilderState : EditChordBuilderState
@@ -406,6 +414,7 @@ defaultEditChordBuilderState =
     , scale = Major
     , octave = ""
     , range = ""
+    , chordType = Triad
     }
 
 
@@ -419,6 +428,7 @@ toChordBuildInput :
             , scaleId : Scale
             , octave : Int
             , range : Int
+            , chordType : ChordType
             }
 toChordBuildInput state =
     let
@@ -448,6 +458,7 @@ toChordBuildInput state =
             , scaleId = s
             , octave = o
             , range = r
+            , chordType = state.chordType
             }
         )
         mChannel

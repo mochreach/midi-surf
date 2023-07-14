@@ -40,6 +40,7 @@ import Music.PitchClass as PitchClass exposing (PitchClass)
 import Music.Range as Range
 import Music.Scale as Scale
 import Music.ScaleType as ScaleType
+import Music.Voicing.FourPart as FourPart
 import Music.Voicing.ThreePart as ThreePart
 import Ports
 import Style exposing (..)
@@ -530,9 +531,10 @@ chordKeyboard :
     , scaleId : EC.Scale
     , octave : Int
     , range : Int
+    , chordType : EC.ChordType
     }
     -> Controller
-chordKeyboard { channel, velocity, key, scaleId, octave, range } =
+chordKeyboard { channel, velocity, key, scaleId, octave, range, chordType } =
     let
         pitchClass =
             keyToPitchClass key
@@ -545,13 +547,22 @@ chordKeyboard { channel, velocity, key, scaleId, octave, range } =
 
         maxPitch =
             Pitch.fromPitchClassInOctave (octave + range) pitchClass
-                |> Pitch.transposeUp Interval.perfectFourth
 
         chords =
-            Scale.allChords ChordType.triads (scaleConstructor pitchClass)
+            case chordType of
+                EC.Triad ->
+                    Scale.allChords ChordType.triads (scaleConstructor pitchClass)
+
+                EC.FourNote ->
+                    Scale.allChords ChordType.sixthAndSeventhChords (scaleConstructor pitchClass)
 
         chordButtons =
-            List.map (makeChordButtons channel velocity minPitch maxPitch) chords
+            case chordType of
+                EC.Triad ->
+                    List.map (makeTriadChordButtons channel velocity minPitch maxPitch) chords
+
+                EC.FourNote ->
+                    List.map (makeJazzChordButtons channel velocity minPitch maxPitch) chords
 
         longest =
             List.map List.length chordButtons
@@ -574,9 +585,12 @@ chordKeyboard { channel, velocity, key, scaleId, octave, range } =
         |> C.Row
 
 
-makeChordButtons : Midi.Channel -> Int -> Pitch.Pitch -> Pitch.Pitch -> Chord.Chord -> List Controller
-makeChordButtons channel velocity minPitch maxPitch chord =
+makeTriadChordButtons : Midi.Channel -> Int -> Pitch.Pitch -> Pitch.Pitch -> Chord.Chord -> List Controller
+makeTriadChordButtons channel velocity minPitch inMaxPitch chord =
     let
+        maxPitch =
+            Pitch.transposeUp Interval.perfectFourth inMaxPitch
+
         voicings =
             Chord.voiceThreeParts
                 { voiceOne = Range.range minPitch maxPitch
@@ -591,7 +605,36 @@ makeChordButtons channel velocity minPitch maxPitch chord =
                 |> List.map (List.map Pitch.toMIDINoteNumber)
 
         chordHelper midiNotes =
-            C.newChord (Chord.toString chord) Medium LightGrey velocity (List.map (\p -> { channel = channel, pitch = p }) midiNotes)
+            C.newChord (Chord.toString chord) Small LightGrey velocity (List.map (\p -> { channel = channel, pitch = p }) midiNotes)
+
+        chordButtons =
+            List.map chordHelper midiNumberList
+    in
+    chordButtons
+
+
+makeJazzChordButtons : Midi.Channel -> Int -> Pitch.Pitch -> Pitch.Pitch -> Chord.Chord -> List Controller
+makeJazzChordButtons channel velocity minPitch inMaxPitch chord =
+    let
+        maxPitch =
+            Pitch.transposeUp Interval.majorSeventh inMaxPitch
+
+        voicings =
+            Chord.voiceFourParts
+                { voiceOne = Range.range minPitch maxPitch
+                , voiceTwo = Range.range minPitch maxPitch
+                , voiceThree = Range.range minPitch maxPitch
+                , voiceFour = Range.range minPitch maxPitch
+                }
+                [ FourPart.basic ]
+                chord
+
+        midiNumberList =
+            List.map FourPart.toPitchList voicings
+                |> List.map (List.map Pitch.toMIDINoteNumber)
+
+        chordHelper midiNotes =
+            C.newChord (Chord.toString chord) Small LightGrey velocity (List.map (\p -> { channel = channel, pitch = p }) midiNotes)
 
         chordButtons =
             List.map chordHelper midiNumberList
@@ -3309,6 +3352,13 @@ editChordBuilderPane state =
                     |> EditChordBuilder
                     |> UpdateControllerState
             )
+        , chordTypeRadio
+            state.chordType
+            (\newChordType ->
+                { state | chordType = newChordType }
+                    |> EditChordBuilder
+                    |> UpdateControllerState
+            )
         , editTextBox
             { placeholder = "octave#"
             , label = "Octave Number"
@@ -3428,6 +3478,31 @@ scaleRadio scale msg =
             , Input.option EC.WholeTone (text "Whole Tone")
             , Input.option EC.MajorPentatonic (text "Major Pentatonic")
             , Input.option EC.MinorPentatonic (text "Minor Pentatonic")
+            ]
+        }
+
+
+chordTypeRadio : EC.ChordType -> (EC.ChordType -> msg) -> Element msg
+chordTypeRadio chordType msg =
+    Input.radioRow
+        [ padding 4
+        , spacing 10
+        , height (px 36)
+        , width fill
+        , scrollbarY
+        , Border.width 2
+        , Border.dashed
+        ]
+        { onChange = msg
+        , selected = Just chordType
+        , label =
+            Input.labelAbove
+                [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
+                ]
+                (text "Chord Type")
+        , options =
+            [ Input.option EC.Triad (text "Triad")
+            , Input.option EC.FourNote (text "Four Note")
             ]
         }
 
