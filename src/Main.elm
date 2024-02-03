@@ -160,7 +160,7 @@ type SaveMode
 type alias Page =
     { label : String
     , controller : Controller
-    , config : PageConfig
+    , config : Utils.PageConfig
     }
 
 
@@ -169,21 +169,7 @@ pageCodec =
     Codec.object Page
         |> Codec.field "label" .label Codec.string
         |> Codec.field "controller" .controller C.controllerCodec
-        |> Codec.field "config" .config pageConfigCodec
-        |> Codec.buildObject
-
-
-type alias PageConfig =
-    { gapSize : Int
-    , debug : Bool
-    }
-
-
-pageConfigCodec : Codec PageConfig
-pageConfigCodec =
-    Codec.object PageConfig
-        |> Codec.field "gapSize" .gapSize Codec.int
-        |> Codec.field "debug" .debug Codec.bool
+        |> Codec.field "config" .config Utils.pageConfigCodec
         |> Codec.buildObject
 
 
@@ -5131,7 +5117,7 @@ renderPage mode midiLog page =
 renderController :
     Mode
     -> List String
-    -> PageConfig
+    -> Utils.PageConfig
     -> List String
     -> Controller
     -> Int
@@ -5140,6 +5126,11 @@ renderController mode midiLog config idParts controller id =
     let
         updatedParts =
             String.fromInt id :: idParts
+
+        parentId =
+            updatedParts
+                |> List.reverse
+                |> String.join "_"
     in
     case controller of
         C.Module label subControls ->
@@ -5175,12 +5166,14 @@ renderController mode midiLog config idParts controller id =
                                         , backgroundColour White
                                         ]
                                       <|
-                                        renderEditButton config
+                                        C.renderEditButton
+                                            { editMsg =
+                                                OpenEditController parentId
+                                            , addMsg = AddSpace parentId
+                                            , removeMsg = RemoveItem parentId
+                                            }
+                                            config
                                             C.EditContainer
-                                            (updatedParts
-                                                |> List.reverse
-                                                |> String.join "_"
-                                            )
                                     ]
                            )
                     )
@@ -5220,12 +5213,14 @@ renderController mode midiLog config idParts controller id =
                                     , backgroundColour White
                                     ]
                                   <|
-                                    renderEditButton config
+                                    C.renderEditButton
+                                        { editMsg =
+                                            OpenEditController parentId
+                                        , addMsg = AddSpace parentId
+                                        , removeMsg = RemoveItem parentId
+                                        }
+                                        config
                                         C.EditContainer
-                                        (updatedParts
-                                            |> List.reverse
-                                            |> String.join "_"
-                                        )
                                 ]
                        )
                 )
@@ -5262,12 +5257,14 @@ renderController mode midiLog config idParts controller id =
                          ]
                             ++ fillSpace
                         )
-                        [ renderEditButton config
+                        [ C.renderEditButton
+                            { editMsg =
+                                OpenEditController parentId
+                            , addMsg = AddSpace parentId
+                            , removeMsg = RemoveItem parentId
+                            }
+                            config
                             C.EditContainer
-                            (updatedParts
-                                |> List.reverse
-                                |> String.join "_"
-                            )
                         , column
                             ([ spacingXY 0 config.gapSize
                              , padding config.gapSize
@@ -5317,12 +5314,14 @@ renderController mode midiLog config idParts controller id =
                                     , backgroundColour White
                                     ]
                                   <|
-                                    renderEditButton config
+                                    C.renderEditButton
+                                        { editMsg =
+                                            OpenEditController parentId
+                                        , addMsg = AddSpace parentId
+                                        , removeMsg = RemoveItem parentId
+                                        }
+                                        config
                                         C.EditContainer
-                                        (updatedParts
-                                            |> List.reverse
-                                            |> String.join "_"
-                                        )
                                 ]
                        )
                 )
@@ -5362,12 +5361,14 @@ renderController mode midiLog config idParts controller id =
                          ]
                             ++ fillSpace
                         )
-                        [ renderEditButton config
+                        [ C.renderEditButton
+                            { editMsg =
+                                OpenEditController parentId
+                            , addMsg = AddSpace parentId
+                            , removeMsg = RemoveItem parentId
+                            }
+                            config
                             C.EditContainer
-                            (updatedParts
-                                |> List.reverse
-                                |> String.join "_"
-                            )
                         , column
                             ([ spacingXY 0 config.gapSize
                              , padding config.gapSize
@@ -5551,7 +5552,7 @@ renderController mode midiLog config idParts controller id =
                         )
 
 
-renderNote : PageConfig -> Mode -> C.NoteState -> String -> Element Msg
+renderNote : Utils.PageConfig -> Mode -> C.NoteState -> String -> Element Msg
 renderNote config mode state id =
     case mode of
         Normal ->
@@ -5623,7 +5624,7 @@ renderNote config mode state id =
                 }
 
 
-renderChord : PageConfig -> Mode -> C.ChordState -> String -> Element Msg
+renderChord : Utils.PageConfig -> Mode -> C.ChordState -> String -> Element Msg
 renderChord config mode state id =
     case mode of
         Normal ->
@@ -5689,7 +5690,7 @@ renderChord config mode state id =
                 }
 
 
-renderCCValue : PageConfig -> Mode -> C.CCValueState -> String -> Element Msg
+renderCCValue : Utils.PageConfig -> Mode -> C.CCValueState -> String -> Element Msg
 renderCCValue config mode state id =
     case mode of
         Normal ->
@@ -5766,7 +5767,7 @@ renderCCValue config mode state id =
                 }
 
 
-renderCommand : PageConfig -> Mode -> C.CommandState -> String -> Element Msg
+renderCommand : Utils.PageConfig -> Mode -> C.CommandState -> String -> Element Msg
 renderCommand config mode state id =
     case mode of
         Normal ->
@@ -5832,7 +5833,7 @@ renderCommand config mode state id =
                 }
 
 
-renderSequence : PageConfig -> Mode -> C.SequenceState -> String -> Element Msg
+renderSequence : Utils.PageConfig -> Mode -> C.SequenceState -> String -> Element Msg
 renderSequence config mode state id =
     case mode of
         Normal ->
@@ -5900,7 +5901,7 @@ renderSequence config mode state id =
                 }
 
 
-renderFader : PageConfig -> Mode -> C.FaderState -> String -> Element Msg
+renderFader : Utils.PageConfig -> Mode -> C.FaderState -> String -> Element Msg
 renderFader config mode state id =
     case mode of
         Normal ->
@@ -6004,7 +6005,7 @@ renderFader config mode state id =
                 }
 
 
-renderXYFader : PageConfig -> Mode -> C.XYFaderState -> String -> Element Msg
+renderXYFader : Utils.PageConfig -> Mode -> C.XYFaderState -> String -> Element Msg
 renderXYFader config mode state id =
     case mode of
         Normal ->
@@ -6131,7 +6132,7 @@ renderXYFader config mode state id =
                 }
 
 
-renderPitchBend : PageConfig -> Mode -> C.PitchBendState -> String -> Element Msg
+renderPitchBend : Utils.PageConfig -> Mode -> C.PitchBendState -> String -> Element Msg
 renderPitchBend config mode state id =
     let
         fillFraction =
@@ -6234,55 +6235,6 @@ renderPitchBend config mode state id =
                 , label =
                     state.label
                         |> text
-                }
-
-
-renderEditButton : PageConfig -> C.EditOperation -> String -> Element Msg
-renderEditButton config editOperation parentId =
-    case editOperation of
-        C.EditContainer ->
-            Input.button
-                [ centerX
-                , padding config.gapSize
-                , spacing config.gapSize
-                , Border.width 2
-                ]
-                { onPress = Just <| OpenEditController parentId
-                , label =
-                    Icons.edit2
-                        |> Icons.withSize 20
-                        |> Icons.toHtml []
-                        |> html
-                }
-
-        C.Add ->
-            Input.button
-                [ centerX
-                , padding config.gapSize
-                , spacing config.gapSize
-                , Border.width 2
-                ]
-                { onPress = Just <| AddSpace parentId
-                , label =
-                    Icons.plus
-                        |> Icons.withSize 20
-                        |> Icons.toHtml []
-                        |> html
-                }
-
-        C.Remove ->
-            Input.button
-                [ centerX
-                , padding config.gapSize
-                , spacing config.gapSize
-                , Border.width 2
-                ]
-                { onPress = Just <| RemoveItem parentId
-                , label =
-                    Icons.minus
-                        |> Icons.withSize 20
-                        |> Icons.toHtml []
-                        |> html
                 }
 
 

@@ -2,8 +2,18 @@ module Controller exposing (..)
 
 import Array exposing (Array)
 import Codec exposing (Codec)
+import Element exposing (..)
+import Element.Background as Background
+import Element.Border as Border
+import Element.Events as Events
+import Element.Font as Font
+import Element.Input as Input
+import Element.Lazy as Lazy
+import Element.Region as Region
+import FeatherIcons as Icons
 import Midi exposing (Channel(..), MidiMsg(..))
 import Style exposing (..)
+import Utils exposing (PageConfig)
 
 
 type Controller
@@ -1204,3 +1214,60 @@ setChannel channel controller =
 
         Space ->
             Space
+
+
+
+-- {{ Views
+
+
+renderEditButton : { editMsg : msg, addMsg : msg, removeMsg : msg } -> PageConfig -> EditOperation -> Element msg
+renderEditButton msgs config editOperation =
+    case editOperation of
+        EditContainer ->
+            Input.button
+                [ centerX
+                , padding config.gapSize
+                , spacing config.gapSize
+                , Border.width 2
+                ]
+                { onPress = Just <| msgs.editMsg
+                , label =
+                    Icons.edit2
+                        |> Icons.withSize 20
+                        |> Icons.toHtml []
+                        |> html
+                }
+
+        Add ->
+            Input.button
+                [ centerX
+                , padding config.gapSize
+                , spacing config.gapSize
+                , Border.width 2
+                ]
+                { onPress = Just <| msgs.addMsg
+                , label =
+                    Icons.plus
+                        |> Icons.withSize 20
+                        |> Icons.toHtml []
+                        |> html
+                }
+
+        Remove ->
+            Input.button
+                [ centerX
+                , padding config.gapSize
+                , spacing config.gapSize
+                , Border.width 2
+                ]
+                { onPress = Just <| msgs.removeMsg
+                , label =
+                    Icons.minus
+                        |> Icons.withSize 20
+                        |> Icons.toHtml []
+                        |> html
+                }
+
+
+
+-- }}
