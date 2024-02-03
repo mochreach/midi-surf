@@ -1500,6 +1500,12 @@ update msg model =
                 Just (C.Row _) ->
                     ( model, Cmd.none )
 
+                Just (C.SizedColumn _) ->
+                    ( model, Cmd.none )
+
+                Just (C.SizedRow _) ->
+                    ( model, Cmd.none )
+
                 Just ((C.Note _) as note) ->
                     let
                         ( updatedNote, midiMsgs ) =
@@ -1612,6 +1618,12 @@ update msg model =
                     ( model, Cmd.none )
 
                 Just (C.Row _) ->
+                    ( model, Cmd.none )
+
+                Just (C.SizedColumn _) ->
+                    ( model, Cmd.none )
+
+                Just (C.SizedRow _) ->
                     ( model, Cmd.none )
 
                 Just ((C.Note _) as note) ->
@@ -1886,6 +1898,12 @@ convertToEditable control =
 
         C.Column subControls ->
             EditColumn subControls
+
+        C.SizedRow subControls ->
+            EditSizedRow subControls
+
+        C.SizedColumn subControls ->
+            EditSizedColumn subControls
 
         C.Note { label, labelSize, colour, pitch, channel, velocity } ->
             EditNote
@@ -2868,8 +2886,8 @@ editMenu savedModules menuType =
                 , selectorOption
                     menuType
                     (EditChordBuilder EC.defaultEditChordBuilderState)
-                , selectorOption menuType (EditColumn [])
-                , selectorOption menuType (EditRow [])
+                , selectorOption menuType (EditSizedColumn [])
+                , selectorOption menuType (EditSizedRow [])
                 , selectorOption
                     menuType
                     (EditNote EC.defaultEditNoteState)
@@ -2926,6 +2944,12 @@ editMenu savedModules menuType =
 
             EditColumn subControls ->
                 editColumnPane subControls
+
+            EditSizedRow subControls ->
+                editSizedRowPane subControls
+
+            EditSizedColumn subControls ->
+                editSizedColumnPane subControls
 
             EditNote state ->
                 editNotePane state
@@ -3626,6 +3650,228 @@ editColumnPane subControls =
             "Ok"
             ClosePopUp
             (Just <| FinishedEdit <| C.Column subControls)
+        ]
+
+
+editSizedRowPane : List ( Int, Controller ) -> Element Msg
+editSizedRowPane subControls =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , editPanelWidth
+        , backgroundColour White
+        , Border.width 4
+        ]
+        [ row [ spacing 10 ]
+            [ Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , borderColour Black
+                ]
+                { onPress =
+                    List.append subControls [ ( 1, C.Space ) ]
+                        |> EditSizedRow
+                        |> UpdateControllerState
+                        |> Just
+                , label = text "Add"
+                }
+            , Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , borderColour Black
+                ]
+                { onPress =
+                    List.reverse subControls
+                        |> List.tail
+                        |> Maybe.withDefault []
+                        |> List.reverse
+                        |> EditSizedRow
+                        |> UpdateControllerState
+                        |> Just
+                , label = text "Remove"
+                }
+            ]
+        , paragraph [ Font.size 18 ] [ text "Listening for MIDI..." ]
+        , column
+            [ height (px 300)
+            , width fill
+            , padding 2
+            , spacing 4
+            , scrollbarY
+            , Border.width 2
+            , Border.dashed
+            ]
+            (List.indexedMap
+                (\i ( s, c ) ->
+                    row [ width fill ]
+                        [ el [] (C.controllerToString c |> text)
+                        , row [ alignRight, spacing 2 ]
+                            [ Input.button
+                                [ padding 5
+                                , Border.width 2
+                                , Border.solid
+                                , borderColour Black
+                                ]
+                                { onPress =
+                                    List.indexedMap
+                                        (\ci ( cs, cc ) ->
+                                            if ci == i then
+                                                ( max (cs - 1) 0, cc )
+
+                                            else
+                                                ( cs, cc )
+                                        )
+                                        subControls
+                                        |> EditSizedRow
+                                        |> UpdateControllerState
+                                        |> Just
+                                , label = text "-"
+                                }
+                            , el [ alignRight ] (String.fromInt s |> text)
+                            , Input.button
+                                [ padding 5
+                                , Border.width 2
+                                , Border.solid
+                                , borderColour Black
+                                ]
+                                { onPress =
+                                    List.indexedMap
+                                        (\ci ( cs, cc ) ->
+                                            if ci == i then
+                                                ( cs + 1, cc )
+
+                                            else
+                                                ( cs, cc )
+                                        )
+                                        subControls
+                                        |> EditSizedRow
+                                        |> UpdateControllerState
+                                        |> Just
+                                , label = text "+"
+                                }
+                            ]
+                        ]
+                )
+                subControls
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            ClosePopUp
+            (Just <| FinishedEdit <| C.SizedRow subControls)
+        ]
+
+
+editSizedColumnPane : List ( Int, Controller ) -> Element Msg
+editSizedColumnPane subControls =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , editPanelWidth
+        , backgroundColour White
+        , Border.width 4
+        ]
+        [ row [ spacing 10 ]
+            [ Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , borderColour Black
+                ]
+                { onPress =
+                    List.append subControls [ ( 1, C.Space ) ]
+                        |> EditSizedColumn
+                        |> UpdateControllerState
+                        |> Just
+                , label = text "Add"
+                }
+            , Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , borderColour Black
+                ]
+                { onPress =
+                    List.reverse subControls
+                        |> List.tail
+                        |> Maybe.withDefault []
+                        |> List.reverse
+                        |> EditSizedColumn
+                        |> UpdateControllerState
+                        |> Just
+                , label = text "Remove"
+                }
+            ]
+        , paragraph [ Font.size 18 ] [ text "Listening for MIDI..." ]
+        , column
+            [ height (px 300)
+            , width fill
+            , padding 2
+            , spacing 4
+            , scrollbarY
+            , Border.width 2
+            , Border.dashed
+            ]
+            (List.indexedMap
+                (\i ( s, c ) ->
+                    row [ width fill ]
+                        [ el [] (C.controllerToString c |> text)
+                        , row [ alignRight, spacing 2 ]
+                            [ Input.button
+                                [ padding 5
+                                , Border.width 2
+                                , Border.solid
+                                , borderColour Black
+                                ]
+                                { onPress =
+                                    List.indexedMap
+                                        (\ci ( cs, cc ) ->
+                                            if ci == i then
+                                                ( max (cs - 1) 0, cc )
+
+                                            else
+                                                ( cs, cc )
+                                        )
+                                        subControls
+                                        |> EditSizedColumn
+                                        |> UpdateControllerState
+                                        |> Just
+                                , label = text "-"
+                                }
+                            , el [ alignRight ] (String.fromInt s |> text)
+                            , Input.button
+                                [ padding 5
+                                , Border.width 2
+                                , Border.solid
+                                , borderColour Black
+                                ]
+                                { onPress =
+                                    List.indexedMap
+                                        (\ci ( cs, cc ) ->
+                                            if ci == i then
+                                                ( cs + 1, cc )
+
+                                            else
+                                                ( cs, cc )
+                                        )
+                                        subControls
+                                        |> EditSizedColumn
+                                        |> UpdateControllerState
+                                        |> Just
+                                , label = text "+"
+                                }
+                            ]
+                        ]
+                )
+                subControls
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            ClosePopUp
+            (Just <| FinishedEdit <| C.SizedColumn subControls)
         ]
 
 
@@ -5031,6 +5277,109 @@ renderController mode midiLog config idParts controller id =
                           <|
                             List.map2
                                 (renderController mode midiLog config updatedParts)
+                                subControls
+                                (List.range 0 <| List.length subControls)
+                        ]
+
+        C.SizedRow subControls ->
+            Lazy.lazy2 row
+                ([ spacingXY config.gapSize 0
+                 , Events.onClick NoOp
+                 ]
+                    ++ fillSpace
+                    ++ (case mode of
+                            Normal ->
+                                []
+
+                            Edit _ ->
+                                [ padding 2
+                                , Border.width 2
+                                , Border.dashed
+                                ]
+                       )
+                )
+            <|
+                (List.map2
+                    (\( s, c ) i ->
+                        el [ height fill, width <| fillPortion s ]
+                            (renderController mode midiLog config updatedParts c i)
+                    )
+                    subControls
+                    (List.range 0 <| List.length subControls)
+                    ++ (case mode of
+                            Normal ->
+                                []
+
+                            Edit _ ->
+                                [ el
+                                    [ alignRight
+                                    , padding 4
+                                    , backgroundColour White
+                                    ]
+                                  <|
+                                    renderEditButton config
+                                        C.EditContainer
+                                        (updatedParts
+                                            |> List.reverse
+                                            |> String.join "_"
+                                        )
+                                ]
+                       )
+                )
+
+        C.SizedColumn subControls ->
+            case mode of
+                Normal ->
+                    Lazy.lazy2 column
+                        (spacingXY 0 config.gapSize
+                            :: fillSpace
+                            ++ (case mode of
+                                    Normal ->
+                                        []
+
+                                    Edit _ ->
+                                        [ padding 2
+                                        , Border.width 2
+                                        , Border.dashed
+                                        ]
+                               )
+                        )
+                    <|
+                        List.map2
+                            (\( s, c ) i ->
+                                el [ height <| fillPortion s, width fill ]
+                                    (renderController mode midiLog config updatedParts c i)
+                            )
+                            subControls
+                            (List.range 0 <| List.length subControls)
+
+                Edit _ ->
+                    Lazy.lazy2 column
+                        ([ paddingXY 0 5
+                         , spacing 5
+                         , Border.width 2
+                         , Border.dashed
+                         ]
+                            ++ fillSpace
+                        )
+                        [ renderEditButton config
+                            C.EditContainer
+                            (updatedParts
+                                |> List.reverse
+                                |> String.join "_"
+                            )
+                        , column
+                            ([ spacingXY 0 config.gapSize
+                             , padding config.gapSize
+                             ]
+                                ++ fillSpace
+                            )
+                          <|
+                            List.map2
+                                (\( s, c ) i ->
+                                    el [ height <| fillPortion s, width fill ]
+                                        (renderController mode midiLog config updatedParts c i)
+                                )
                                 subControls
                                 (List.range 0 <| List.length subControls)
                         ]

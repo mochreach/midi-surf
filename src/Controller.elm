@@ -10,6 +10,8 @@ type Controller
     = Module String Controller
     | Row (List Controller)
     | Column (List Controller)
+    | SizedRow (List ( Int, Controller ))
+    | SizedColumn (List ( Int, Controller ))
     | Note NoteState
     | Chord ChordState
     | CCValue CCValueState
@@ -27,7 +29,7 @@ controllerCodec =
     Codec.recursive
         (\rmeta ->
             Codec.custom
-                (\mod row col note cho ccv com seq fad xy pb mid spa value ->
+                (\mod row col srw scl note cho ccv com seq fad xy pb mid spa value ->
                     case value of
                         Module l c ->
                             mod l c
@@ -37,6 +39,12 @@ controllerCodec =
 
                         Column cs ->
                             col cs
+
+                        SizedRow cs ->
+                            srw cs
+
+                        SizedColumn cs ->
+                            scl cs
 
                         Note s ->
                             note s
@@ -71,6 +79,8 @@ controllerCodec =
                 |> Codec.variant2 "Module" Module Codec.string rmeta
                 |> Codec.variant1 "Row" Row (Codec.list rmeta)
                 |> Codec.variant1 "Column" Column (Codec.list rmeta)
+                |> Codec.variant1 "SizedRow" SizedRow (Codec.list (Codec.tuple Codec.int rmeta))
+                |> Codec.variant1 "SizedColumn" SizedColumn (Codec.list (Codec.tuple Codec.int rmeta))
                 |> Codec.variant1 "Note" Note noteStateCodec
                 |> Codec.variant1 "Chord" Chord chordStateCodec
                 |> Codec.variant1 "CCValue" CCValue ccValueStateCodec
@@ -95,6 +105,12 @@ controllerToString control =
             "Row: " ++ (String.fromInt <| List.length subcontrols) ++ " items"
 
         Column subcontrols ->
+            "Column: " ++ (String.fromInt <| List.length subcontrols) ++ " items"
+
+        SizedRow subcontrols ->
+            "Row: " ++ (String.fromInt <| List.length subcontrols) ++ " items"
+
+        SizedColumn subcontrols ->
             "Column: " ++ (String.fromInt <| List.length subcontrols) ++ " items"
 
         Note { channel, pitch, velocity } ->
@@ -636,6 +652,32 @@ getWithId currentId id control =
                     |> List.filterMap identity
                     |> List.head
 
+        SizedRow controllers ->
+            if currentId == id then
+                Just control
+
+            else
+                List.indexedMap
+                    (\i ( _, c ) ->
+                        getWithId (currentId ++ "_" ++ String.fromInt i) id c
+                    )
+                    controllers
+                    |> List.filterMap identity
+                    |> List.head
+
+        SizedColumn controllers ->
+            if currentId == id then
+                Just control
+
+            else
+                List.indexedMap
+                    (\i ( _, c ) ->
+                        getWithId (currentId ++ "_" ++ String.fromInt i) id c
+                    )
+                    controllers
+                    |> List.filterMap identity
+                    |> List.head
+
         Note _ ->
             if currentId == id then
                 Just control
@@ -745,6 +787,30 @@ updateWithId currentId toUpdate updateInfo =
                     )
                     controllers
                     |> Column
+
+        SizedRow controllers ->
+            if currentId == id then
+                updateFn toUpdate
+
+            else
+                List.indexedMap
+                    (\i ( s, c ) ->
+                        ( s, updateWithId (currentId ++ "_" ++ String.fromInt i) c updateInfo )
+                    )
+                    controllers
+                    |> SizedRow
+
+        SizedColumn controllers ->
+            if currentId == id then
+                updateFn toUpdate
+
+            else
+                List.indexedMap
+                    (\i ( s, c ) ->
+                        ( s, updateWithId (currentId ++ "_" ++ String.fromInt i) c updateInfo )
+                    )
+                    controllers
+                    |> SizedColumn
 
         Note state ->
             if currentId == id then
@@ -1073,6 +1139,14 @@ setChannel channel controller =
         Column subcontrols ->
             Column <|
                 List.map (setChannel channel) subcontrols
+
+        SizedRow subcontrols ->
+            SizedRow <|
+                List.map (\( s, c ) -> ( s, setChannel channel c )) subcontrols
+
+        SizedColumn subcontrols ->
+            SizedColumn <|
+                List.map (\( s, c ) -> ( s, setChannel channel c )) subcontrols
 
         Note state ->
             Note { state | channel = channel }
