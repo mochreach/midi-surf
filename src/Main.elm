@@ -54,12 +54,12 @@ import Utils
 
 version : String
 version =
-    "0.3.4"
+    "0.4.0"
 
 
 date : String
 date =
-    "2023-03-05"
+    "2024-02-03"
 
 
 
@@ -2209,6 +2209,18 @@ defaultButtons =
                     |> Icons.toHtml []
                     |> html
             }
+        , newTabLink
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { url = "https://github.com/mochreach/midi-surf/blob/main/presets.md"
+            , label =
+                Icons.package
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
         , Input.button
             [ padding 10
             , Border.width 4
@@ -2462,12 +2474,6 @@ infoPanel =
                         }
                     , text ")"
                     ]
-                , paragraph []
-                    [ text <|
-                        """The "No Wasted Effort" is here, you can now share your 
-                        presets with a URL! Scroll down for details.
-                        """
-                    ]
                 , Html.iframe
                     [ HAtt.height 300
                     , HAtt.width 360
@@ -2513,33 +2519,30 @@ infoPanel =
                     ]
                 , paragraph [ Font.bold ] [ text "Version History" ]
                 , paragraph []
-                    [ el [ Font.italic ] <| text "The No Wasted Effort Update (2022-01-30): "
+                    [ el [ Font.italic ] <| text "The Theory Craft Update (2024-02-03): "
                     , text <|
-                        """This update is all about saving and sharing your presets. You can
-                        share your presets with a URL, and the cool thing
-                        is that all the data for the preset is encoded in the link! You can also
-                        export your pages to files to back them up or move them to another device.
+                        """Quickly add customisable keyboard with either a scale or even
+                        a banks of chords!
                         """
                     ]
                 , paragraph []
-                    [ el [ Font.italic ] <| text "The Hands On Update (2022-01-22): "
+                    [ el [ Font.italic ] <| text "The No Wasted Effort Update (2023-01-30): "
                     , text <|
-                        """Adds a range of new controller types (commands, sequences,
-                        XY faders, pitch bend) as well as overhauling the edit menu to
-                        make it better utilise screen space and adding information about
-                        the controllers. I've made an effort to enable old controllers
-                        to be backwards compatible, so hopefully everything should work as
-                        normal.
+                        """ Export your presets as a link and share them with anyone!
+                        Alternatively, you can export them to a file to keep them safe.
                         """
                     ]
                 , paragraph []
-                    [ el [ Font.italic ] <| text "The Initial Release (2022-01-06): "
+                    [ el [ Font.italic ] <| text "The Hands On Update (2023-01-22): "
+                    , text <|
+                        """More controller types such as XY faders and pitch bend.
+                        """
+                    ]
+                , paragraph []
+                    [ el [ Font.italic ] <| text "The Initial Release (2023-01-06): "
                     , text <|
                         """Hurray, I've launched the first version of the app! We have
                         basic control types like notes, chords, CC values and faders.
-                        There are some obvious ommisions, but the app is useful enough to
-                        be released. Please either comment on GitHub or YouTube if you have
-                        any feedback!
                         """
                     ]
                 , paragraph [ Font.bold ] [ text "Analytics" ]
