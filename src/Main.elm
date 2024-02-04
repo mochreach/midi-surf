@@ -12,7 +12,7 @@ import Bytes.Encode as Encode
 import Codec exposing (Codec, Value)
 import Controller as C exposing (Controller(..), FaderStatus(..), controllerCodec, setChannel)
 import Dict exposing (Dict)
-import EditableController as EController exposing (EditableController(..))
+import EditableController as EC exposing (EditableController(..))
 import Element exposing (..)
 import Element.Background as Background
 import Element.Border as Border
@@ -32,6 +32,16 @@ import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
 import Json.Decode as Jde
 import Midi exposing (EditMidiButtonMsg(..), MidiMsg(..), Status(..))
+import Music.Chord as Chord
+import Music.ChordType as ChordType
+import Music.Interval as Interval exposing (Interval)
+import Music.Pitch as Pitch
+import Music.PitchClass as PitchClass exposing (PitchClass)
+import Music.Range as Range
+import Music.Scale as Scale
+import Music.ScaleType as ScaleType
+import Music.Voicing.FourPart as FourPart
+import Music.Voicing.ThreePart as ThreePart
 import Ports
 import Style exposing (..)
 import Task
@@ -44,12 +54,12 @@ import Utils
 
 version : String
 version =
-    "0.3.4"
+    "0.4.0"
 
 
 date : String
 date =
-    "2023-03-05"
+    "2024-02-03"
 
 
 
@@ -102,20 +112,7 @@ screenCodec =
 
 type Mode
     = Normal
-    | Edit Bool
-
-
-resetMode : Mode -> Mode
-resetMode mode =
-    case mode of
-        Normal ->
-            Normal
-
-        Edit False ->
-            Normal
-
-        Edit True ->
-            Edit True
+    | Edit ( Maybe Controller, List Controller )
 
 
 type PopUp
@@ -163,7 +160,7 @@ type SaveMode
 type alias Page =
     { label : String
     , controller : Controller
-    , config : PageConfig
+    , config : Utils.PageConfig
     }
 
 
@@ -172,21 +169,7 @@ pageCodec =
     Codec.object Page
         |> Codec.field "label" .label Codec.string
         |> Codec.field "controller" .controller C.controllerCodec
-        |> Codec.field "config" .config pageConfigCodec
-        |> Codec.buildObject
-
-
-type alias PageConfig =
-    { gapSize : Int
-    , debug : Bool
-    }
-
-
-pageConfigCodec : Codec PageConfig
-pageConfigCodec =
-    Codec.object PageConfig
-        |> Codec.field "gapSize" .gapSize Codec.int
-        |> Codec.field "debug" .debug Codec.bool
+        |> Codec.field "config" .config Utils.pageConfigCodec
         |> Codec.buildObject
 
 
@@ -336,6 +319,313 @@ makeIsomorphicRow channel velocity noteRange offset rowLength rowNumber =
                 C.newNote "" Small (Style.pitchToAppColour i) channel i velocity
             )
         |> C.Row
+
+
+scaleToScaleConstructor : EC.Scale -> (PitchClass.PitchClass -> Scale.Scale)
+scaleToScaleConstructor scaleId =
+    case scaleId of
+        EC.Major ->
+            Scale.major
+
+        EC.NaturalMinor ->
+            Scale.minor
+
+        EC.Ionian ->
+            Scale.ionian
+
+        EC.Dorian ->
+            Scale.dorian
+
+        EC.Phrygian ->
+            Scale.phrygian
+
+        EC.Lydian ->
+            Scale.lydian
+
+        EC.Mixolydian ->
+            Scale.mixolydian
+
+        EC.Aeolian ->
+            Scale.aeolian
+
+        EC.Locrian ->
+            Scale.locrian
+
+        EC.MelodicMinor ->
+            Scale.melodicMinor
+
+        EC.DorianFlat2 ->
+            Scale.dorianFlat2
+
+        EC.LydianAugmented ->
+            Scale.lydianAugmented
+
+        EC.Acoustic ->
+            Scale.acoustic
+
+        EC.MajorMinor ->
+            Scale.majorMinor
+
+        EC.MinorLocrian ->
+            Scale.minorLocrian
+
+        EC.SuperLocrian ->
+            Scale.superlocrian
+
+        EC.HarmonicMinor ->
+            Scale.harmonicMinor
+
+        EC.LocrianNatural6 ->
+            Scale.locrianNatural6
+
+        EC.MajorAugmented ->
+            Scale.majorAugmented
+
+        EC.LydianDiminished ->
+            Scale.lydianDiminished
+
+        EC.PhrygianDominant ->
+            Scale.phrygianDominant
+
+        EC.AeolianHarmonic ->
+            Scale.aeolianHarmonic
+
+        EC.UltraLocrian ->
+            Scale.ultralocrian
+
+        EC.DiminishedWholeToneHalfTone ->
+            Scale.diminishedWholeToneHalfTone
+
+        EC.DiminishedHalfToneWholeTone ->
+            Scale.diminishedHalfToneWholeTone
+
+        EC.WholeTone ->
+            Scale.wholeTone
+
+        EC.MajorPentatonic ->
+            Scale.majorPentatonic
+
+        EC.MinorPentatonic ->
+            Scale.minorPentatonic
+
+
+keyToPitchClass : EC.Key -> PitchClass.PitchClass
+keyToPitchClass key =
+    case key of
+        EC.C ->
+            PitchClass.c
+
+        EC.Cs ->
+            PitchClass.cSharp
+
+        EC.D ->
+            PitchClass.d
+
+        EC.Ds ->
+            PitchClass.dSharp
+
+        EC.Db ->
+            PitchClass.dFlat
+
+        EC.E ->
+            PitchClass.e
+
+        EC.Eb ->
+            PitchClass.eFlat
+
+        EC.F ->
+            PitchClass.f
+
+        EC.Fs ->
+            PitchClass.fSharp
+
+        EC.G ->
+            PitchClass.g
+
+        EC.Gs ->
+            PitchClass.gSharp
+
+        EC.Gb ->
+            PitchClass.gFlat
+
+        EC.A ->
+            PitchClass.a
+
+        EC.As ->
+            PitchClass.aSharp
+
+        EC.Ab ->
+            PitchClass.aFlat
+
+        EC.B ->
+            PitchClass.b
+
+        EC.Bb ->
+            PitchClass.bFlat
+
+
+scaleKeyboard :
+    { channel : Midi.Channel
+    , velocity : Int
+    , key : EC.Key
+    , scaleId : EC.Scale
+    , octave : Int
+    , range : Int
+    }
+    -> Controller
+scaleKeyboard { channel, velocity, key, scaleId, octave, range } =
+    let
+        pitchClass =
+            keyToPitchClass key
+
+        scaleConstructor =
+            scaleToScaleConstructor scaleId
+
+        scale =
+            scaleConstructor pitchClass
+
+        intervals =
+            Scale.scaleType scale
+                |> ScaleType.toList
+
+        octaveNumbers =
+            List.range 0 (range - 1)
+                |> List.map ((+) octave)
+    in
+    octaveNumbers
+        |> List.map (makeNotesRow channel velocity intervals pitchClass)
+        -- This is to make the octaves ascend on the app
+        |> List.reverse
+        |> C.Column
+
+
+makeNotesRow : Midi.Channel -> Int -> List Interval -> PitchClass -> Int -> Controller
+makeNotesRow channel velocity intervals root octave =
+    intervals
+        |> List.map (\i -> Pitch.transposeUp i (Pitch.fromPitchClassInOctave octave root))
+        |> List.map (\p -> ( Pitch.toString p, Pitch.toMIDINoteNumber p ))
+        |> List.filter (\( _, n ) -> List.member n (List.range 1 127))
+        |> List.map
+            (\( s, n ) -> C.newNote s Medium Style.Green channel n velocity)
+        |> C.Row
+
+
+chordKeyboard :
+    { channel : Midi.Channel
+    , velocity : Int
+    , key : EC.Key
+    , scaleId : EC.Scale
+    , octave : Int
+    , range : Int
+    , chordType : EC.ChordType
+    }
+    -> Controller
+chordKeyboard { channel, velocity, key, scaleId, octave, range, chordType } =
+    let
+        pitchClass =
+            keyToPitchClass key
+
+        scaleConstructor =
+            scaleToScaleConstructor scaleId
+
+        minPitch =
+            Pitch.fromPitchClassInOctave octave pitchClass
+
+        maxPitch =
+            Pitch.fromPitchClassInOctave (octave + range) pitchClass
+
+        chords =
+            case chordType of
+                EC.Triad ->
+                    Scale.allChords ChordType.triads (scaleConstructor pitchClass)
+
+                EC.FourNote ->
+                    Scale.allChords ChordType.sixthAndSeventhChords (scaleConstructor pitchClass)
+
+        chordButtons =
+            case chordType of
+                EC.Triad ->
+                    List.map (makeTriadChordButtons channel velocity minPitch maxPitch) chords
+
+                EC.FourNote ->
+                    List.map (makeJazzChordButtons channel velocity minPitch maxPitch) chords
+
+        longest =
+            List.map List.length chordButtons
+                |> List.maximum
+                |> Maybe.withDefault 1
+
+        paddedChords =
+            List.map
+                (\cs ->
+                    if List.length cs < longest then
+                        cs ++ [ C.Space ]
+
+                    else
+                        cs
+                )
+                chordButtons
+                |> List.map List.reverse
+    in
+    List.map C.Column paddedChords
+        |> C.Row
+
+
+makeTriadChordButtons : Midi.Channel -> Int -> Pitch.Pitch -> Pitch.Pitch -> Chord.Chord -> List Controller
+makeTriadChordButtons channel velocity minPitch inMaxPitch chord =
+    let
+        maxPitch =
+            Pitch.transposeUp Interval.perfectFourth inMaxPitch
+
+        voicings =
+            Chord.voiceThreeParts
+                { voiceOne = Range.range minPitch maxPitch
+                , voiceTwo = Range.range minPitch maxPitch
+                , voiceThree = Range.range minPitch maxPitch
+                }
+                [ ThreePart.basic ]
+                chord
+
+        midiNumberList =
+            List.map ThreePart.toPitchList voicings
+                |> List.map (List.map Pitch.toMIDINoteNumber)
+
+        chordHelper midiNotes =
+            C.newChord (Chord.toString chord) Small LightGrey velocity (List.map (\p -> { channel = channel, pitch = p }) midiNotes)
+
+        chordButtons =
+            List.map chordHelper midiNumberList
+    in
+    chordButtons
+
+
+makeJazzChordButtons : Midi.Channel -> Int -> Pitch.Pitch -> Pitch.Pitch -> Chord.Chord -> List Controller
+makeJazzChordButtons channel velocity minPitch inMaxPitch chord =
+    let
+        maxPitch =
+            Pitch.transposeUp Interval.majorSeventh inMaxPitch
+
+        voicings =
+            Chord.voiceFourParts
+                { voiceOne = Range.range minPitch maxPitch
+                , voiceTwo = Range.range minPitch maxPitch
+                , voiceThree = Range.range minPitch maxPitch
+                , voiceFour = Range.range minPitch maxPitch
+                }
+                [ FourPart.basic ]
+                chord
+
+        midiNumberList =
+            List.map FourPart.toPitchList voicings
+                |> List.map (List.map Pitch.toMIDINoteNumber)
+
+        chordHelper midiNotes =
+            C.newChord (Chord.toString chord) Small LightGrey velocity (List.map (\p -> { channel = channel, pitch = p }) midiNotes)
+
+        chordButtons =
+            List.map chordHelper midiNumberList
+    in
+    chordButtons
 
 
 
@@ -639,6 +929,7 @@ type Msg
     | ExportSelectedPage Page
     | OpenShareMenu
     | ToggleNormalEdit
+    | UndoEdit
     | OpenEditPageMenu Int
     | DeletePage Int
     | OpenNewPageMenu
@@ -823,14 +1114,45 @@ update msg model =
                 | mode =
                     case model.mode of
                         Normal ->
-                            Edit False
+                            Edit
+                                ( Array.get model.activePage model.pages
+                                    |> Maybe.map .controller
+                                , []
+                                )
 
-                        Edit False ->
-                            Edit True
-
-                        Edit True ->
+                        Edit _ ->
                             Normal
               }
+            , Cmd.none
+            )
+
+        UndoEdit ->
+            ( case model.mode of
+                Edit ( first, next :: rest ) ->
+                    { model
+                        | pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = "0", updateFn = \_ -> next }
+                                model.pages
+                        , mode = Edit ( first, rest )
+                    }
+
+                Edit ( Just first, [] ) ->
+                    { model
+                        | pages =
+                            updateControllerOnActivePage
+                                model.activePage
+                                { id = "0", updateFn = \_ -> first }
+                                model.pages
+                        , mode = Edit ( Just first, [] )
+                    }
+
+                Edit ( Nothing, _ ) ->
+                    model
+
+                Normal ->
+                    model
             , Cmd.none
             )
 
@@ -868,7 +1190,7 @@ update msg model =
                                 |> Array.indexedMap Tuple.pair
                                 |> Array.filter (\( i, _ ) -> i /= index)
                                 |> Array.map Tuple.second
-                        , mode = resetMode model.mode
+                        , mode = Normal
                         , popup = Nothing
                     }
             in
@@ -939,7 +1261,6 @@ update msg model =
                                 -- I don't need to subtract 1 for zero indexing
                                 -- as this is the old array length
                                 , activePage = index
-                                , mode = resetMode model.mode
                                 , popup = Nothing
                             }
 
@@ -1004,9 +1325,9 @@ update msg model =
 
                         -- I don't need to subtract 1 for zero indexing
                         -- as this is the old array length
+                        , mode = Edit ( Just page.controller, [] )
                         , activePage = Array.length model.pages
                         , popup = Nothing
-                        , mode = resetMode model.mode
                     }
             in
             ( newModel
@@ -1052,8 +1373,25 @@ update msg model =
             let
                 newPopup =
                     case model.popup of
-                        Just (EditMenu id _) ->
-                            Just <| EditMenu id editType
+                        Just (EditMenu id oldController) ->
+                            (case ( oldController, editType ) of
+                                ( EditColumn items, EditRow _ ) ->
+                                    EditRow items
+
+                                ( EditColumn items, EditColumn _ ) ->
+                                    EditColumn items
+
+                                ( EditRow items, EditRow _ ) ->
+                                    EditRow items
+
+                                ( EditRow items, EditColumn _ ) ->
+                                    EditColumn items
+
+                                _ ->
+                                    editType
+                            )
+                                |> EditMenu id
+                                |> Just
 
                         _ ->
                             Nothing
@@ -1064,6 +1402,9 @@ update msg model =
             case model.popup of
                 Just (EditMenu id _) ->
                     let
+                        oldController =
+                            getControllerFromActivePage "0" model.activePage model.pages
+
                         newModel =
                             { model
                                 | popup = Nothing
@@ -1072,7 +1413,24 @@ update msg model =
                                         model.activePage
                                         { id = id, updateFn = \_ -> controller }
                                         model.pages
-                                , mode = resetMode model.mode
+                                , mode =
+                                    case model.mode of
+                                        Edit ( Just first, rest ) ->
+                                            Edit
+                                                ( Just first
+                                                , case oldController of
+                                                    Just oc ->
+                                                        oc :: rest
+
+                                                    Nothing ->
+                                                        rest
+                                                )
+
+                                        Edit ( Nothing, _ ) ->
+                                            Edit ( oldController, [] )
+
+                                        Normal ->
+                                            Normal
                             }
                     in
                     ( newModel
@@ -1126,6 +1484,12 @@ update msg model =
                     ( model, Cmd.none )
 
                 Just (C.Row _) ->
+                    ( model, Cmd.none )
+
+                Just (C.SizedColumn _) ->
+                    ( model, Cmd.none )
+
+                Just (C.SizedRow _) ->
                     ( model, Cmd.none )
 
                 Just ((C.Note _) as note) ->
@@ -1240,6 +1604,12 @@ update msg model =
                     ( model, Cmd.none )
 
                 Just (C.Row _) ->
+                    ( model, Cmd.none )
+
+                Just (C.SizedColumn _) ->
+                    ( model, Cmd.none )
+
+                Just (C.SizedRow _) ->
                     ( model, Cmd.none )
 
                 Just ((C.Note _) as note) ->
@@ -1465,7 +1835,7 @@ update msg model =
             )
 
         ClosePopUp ->
-            ( { model | popup = Nothing, mode = resetMode model.mode }
+            ( { model | popup = Nothing }
             , Cmd.none
             )
 
@@ -1478,7 +1848,7 @@ update msg model =
                 | popup =
                     case model.popup of
                         Just (EditMenu id state) ->
-                            EController.updateWithMidiMsg midiMsg state
+                            EC.updateWithMidiMsg midiMsg state
                                 |> EditMenu id
                                 |> Just
 
@@ -1505,7 +1875,7 @@ convertToEditable control =
             EditModule
                 { label = label
                 , controller = subController
-                , createMode = EController.New
+                , createMode = EC.New
                 , selectedModule = Nothing
                 }
 
@@ -1514,6 +1884,12 @@ convertToEditable control =
 
         C.Column subControls ->
             EditColumn subControls
+
+        C.SizedRow subControls ->
+            EditSizedRow subControls
+
+        C.SizedColumn subControls ->
+            EditSizedColumn subControls
 
         C.Note { label, labelSize, colour, pitch, channel, velocity } ->
             EditNote
@@ -1559,7 +1935,7 @@ convertToEditable control =
                 { label = label
                 , labelSize = Maybe.withDefault Small labelSize
                 , colour = colour
-                , editMode = EController.OnPressMsgs
+                , editMode = EC.OnPressMsgs
                 , onPressMsgs = onPressMsgs
                 , onReleaseMsgs = onReleaseMsgs
                 , newMsg = Nothing
@@ -1590,7 +1966,7 @@ convertToEditable control =
                 { label = state.label
                 , labelSize = Maybe.withDefault Small state.labelSize
                 , colour = state.colour
-                , active = EController.Params1
+                , active = EC.Params1
                 , channel1 = Midi.channelToString state.channel1
                 , ccNumber1 = String.fromInt state.ccNumber1
                 , valueMin1 = String.fromInt state.valueMin1
@@ -1751,100 +2127,151 @@ menuRow mode menuOpen =
                     |> html
             }
             :: (if menuOpen then
-                    [ row
-                        [ alignLeft
-                        , height fill
-                        , spacing 4
-                        , paddingXY 4 0
-                        , backgroundColour LightGrey
-                        ]
-                        [ Input.button
-                            [ padding 10
-                            , Border.width 4
-                            , backgroundColour White
-                            ]
-                            { onPress = Just OpenInfoPanel
-                            , label =
-                                Icons.info
-                                    |> Icons.withSize 28
-                                    |> Icons.toHtml []
-                                    |> html
-                            }
-                        , newTabLink
-                            [ padding 10
-                            , Border.width 4
-                            , backgroundColour White
-                            ]
-                            { url = "https://ko-fi.com/mochreach"
-                            , label =
-                                Icons.coffee
-                                    |> Icons.withSize 28
-                                    |> Icons.toHtml []
-                                    |> html
-                            }
-                        , Input.button
-                            [ padding 10
-                            , Border.width 4
-                            , backgroundColour White
-                            ]
-                            { onPress = Just OpenMidiMenu
-                            , label =
-                                Icons.gitPullRequest
-                                    |> Icons.withSize 28
-                                    |> Icons.toHtml []
-                                    |> html
-                            }
-                        , Input.button
-                            [ padding 10
-                            , Border.width 4
-                            , backgroundColour White
-                            ]
-                            { onPress = Just OpenSaveLoadMenu
-                            , label =
-                                Icons.save
-                                    |> Icons.withSize 28
-                                    |> Icons.toHtml []
-                                    |> html
-                            }
-                        , Input.button
-                            [ padding 10
-                            , Border.width 4
-                            , backgroundColour White
-                            ]
-                            { onPress = Just OpenShareMenu
-                            , label =
-                                Icons.share2
-                                    |> Icons.withSize 28
-                                    |> Icons.toHtml []
-                                    |> html
-                            }
-                        , Input.button
-                            [ padding 10
-                            , Border.width 4
-                            , case mode of
-                                Normal ->
-                                    backgroundColour White
+                    case mode of
+                        Normal ->
+                            defaultButtons
 
-                                Edit False ->
-                                    backgroundColour LightGrey
-
-                                Edit True ->
-                                    backgroundColour DarkGrey
-                            ]
-                            { onPress = Just ToggleNormalEdit
-                            , label =
-                                Icons.edit
-                                    |> Icons.withSize 28
-                                    |> Icons.toHtml []
-                                    |> html
-                            }
-                        ]
-                    ]
+                        Edit _ ->
+                            editButtons
 
                 else
                     []
                )
         )
+
+
+defaultButtons : List (Element Msg)
+defaultButtons =
+    [ row
+        [ alignLeft
+        , height fill
+        , spacing 4
+        , paddingXY 4 0
+        , backgroundColour LightGrey
+        ]
+        [ Input.button
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { onPress = Just OpenInfoPanel
+            , label =
+                Icons.info
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        , newTabLink
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { url = "https://ko-fi.com/mochreach"
+            , label =
+                Icons.coffee
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        , Input.button
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { onPress = Just OpenMidiMenu
+            , label =
+                Icons.gitPullRequest
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        , Input.button
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { onPress = Just OpenSaveLoadMenu
+            , label =
+                Icons.save
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        , Input.button
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { onPress = Just OpenShareMenu
+            , label =
+                Icons.share2
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        , newTabLink
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { url = "https://github.com/mochreach/midi-surf/blob/main/presets.md"
+            , label =
+                Icons.package
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        , Input.button
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { onPress = Just ToggleNormalEdit
+            , label =
+                Icons.edit
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        ]
+    ]
+
+
+editButtons : List (Element Msg)
+editButtons =
+    [ row
+        [ alignLeft
+        , height fill
+        , spacing 4
+        , paddingXY 4 0
+        , backgroundColour LightGrey
+        ]
+        [ Input.button
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { onPress = Just ToggleNormalEdit
+            , label =
+                Icons.x
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        , Input.button
+            [ padding 10
+            , Border.width 4
+            , backgroundColour White
+            ]
+            { onPress = Just UndoEdit
+            , label =
+                Icons.rotateCcw
+                    |> Icons.withSize 28
+                    |> Icons.toHtml []
+                    |> html
+            }
+        ]
+    ]
 
 
 pageButton : Mode -> Int -> Int -> Page -> Element Msg
@@ -2047,12 +2474,6 @@ infoPanel =
                         }
                     , text ")"
                     ]
-                , paragraph []
-                    [ text <|
-                        """The "No Wasted Effort" is here, you can now share your 
-                        presets with a URL! Scroll down for details.
-                        """
-                    ]
                 , Html.iframe
                     [ HAtt.height 300
                     , HAtt.width 360
@@ -2098,33 +2519,30 @@ infoPanel =
                     ]
                 , paragraph [ Font.bold ] [ text "Version History" ]
                 , paragraph []
-                    [ el [ Font.italic ] <| text "The No Wasted Effort Update (2022-01-30): "
+                    [ el [ Font.italic ] <| text "The Theory Craft Update (2024-02-03): "
                     , text <|
-                        """This update is all about saving and sharing your presets. You can
-                        share your presets with a URL, and the cool thing
-                        is that all the data for the preset is encoded in the link! You can also
-                        export your pages to files to back them up or move them to another device.
+                        """Quickly add customisable keyboard with either a scale or even
+                        a banks of chords!
                         """
                     ]
                 , paragraph []
-                    [ el [ Font.italic ] <| text "The Hands On Update (2022-01-22): "
+                    [ el [ Font.italic ] <| text "The No Wasted Effort Update (2023-01-30): "
                     , text <|
-                        """Adds a range of new controller types (commands, sequences,
-                        XY faders, pitch bend) as well as overhauling the edit menu to
-                        make it better utilise screen space and adding information about
-                        the controllers. I've made an effort to enable old controllers
-                        to be backwards compatible, so hopefully everything should work as
-                        normal.
+                        """ Export your presets as a link and share them with anyone!
+                        Alternatively, you can export them to a file to keep them safe.
                         """
                     ]
                 , paragraph []
-                    [ el [ Font.italic ] <| text "The Initial Release (2022-01-06): "
+                    [ el [ Font.italic ] <| text "The Hands On Update (2023-01-22): "
+                    , text <|
+                        """More controller types such as XY faders and pitch bend.
+                        """
+                    ]
+                , paragraph []
+                    [ el [ Font.italic ] <| text "The Initial Release (2023-01-06): "
                     , text <|
                         """Hurray, I've launched the first version of the app! We have
                         basic control types like notes, chords, CC values and faders.
-                        There are some obvious ommisions, but the app is useful enough to
-                        be released. Please either comment on GitHub or YouTube if you have
-                        any feedback!
                         """
                     ]
                 , paragraph [ Font.bold ] [ text "Analytics" ]
@@ -2437,102 +2855,55 @@ editMenu savedModules menuType =
             , backgroundColour White
             , Border.width 4
             ]
-            [ Input.radio
-                [ spacing 10 ]
-                { onChange = SetEditType
-                , selected = Just menuType
-                , label = Input.labelHidden "Type Selector"
-                , options =
-                    [ Input.option
-                        (EditModule
-                            { label = ""
-                            , controller = C.Space
-                            , createMode = EController.New
-                            , selectedModule = Nothing
-                            }
-                        )
-                        (text "Module")
-                    , Input.option
-                        (EditIsomorphic EController.defaultEditIsomorphicState)
-                        (text "Isomorphic")
-                    , Input.option (EditColumn []) (text "Column")
-                    , Input.option (EditRow []) (text "Row")
-                    , Input.option
-                        (case menuType of
-                            EditNote _ ->
-                                menuType
-
-                            _ ->
-                                EditNote EController.defaultEditNoteState
-                        )
-                        (text "Note")
-                    , Input.option
-                        (case menuType of
-                            EditChord _ ->
-                                menuType
-
-                            _ ->
-                                EditChord EController.defaultEditChordState
-                        )
-                        (text "Chord")
-                    , Input.option
-                        (case menuType of
-                            EditCCValue _ ->
-                                menuType
-
-                            _ ->
-                                EditCCValue EController.defaultEditCCValueState
-                        )
-                        (text "CC Value")
-                    , Input.option
-                        (case menuType of
-                            EditCommand _ ->
-                                menuType
-
-                            _ ->
-                                EditCommand EController.defaultEditCommandState
-                        )
-                        (text "Command")
-                    , Input.option
-                        (case menuType of
-                            EditSequence _ ->
-                                menuType
-
-                            _ ->
-                                EditSequence EController.defaultEditSequenceState
-                        )
-                        (text "Sequence")
-                    , Input.option
-                        (case menuType of
-                            EditFader _ ->
-                                menuType
-
-                            _ ->
-                                EditFader EController.defaultEditFaderState
-                        )
-                        (text "Fader")
-                    , Input.option
-                        (case menuType of
-                            EditXYFader _ ->
-                                menuType
-
-                            _ ->
-                                EditXYFader EController.defaultEditXYFaderState
-                        )
-                        (text "XY Fader")
-                    , Input.option
-                        (case menuType of
-                            EditPitchBend _ ->
-                                menuType
-
-                            _ ->
-                                EditPitchBend EController.defaultEditPitchBendState
-                        )
-                        (text "Pitch Bend")
-                    , Input.option EditMidiLog (text "MIDI Log")
-                    , Input.option EditSpace (text "Space")
-                    ]
-                }
+            [ column
+                []
+                [ selectorOption
+                    menuType
+                    (EditModule
+                        { label = ""
+                        , controller = C.Space
+                        , createMode = EC.New
+                        , selectedModule = Nothing
+                        }
+                    )
+                , selectorOption
+                    menuType
+                    (EditIsomorphic EC.defaultEditIsomorphicState)
+                , selectorOption
+                    menuType
+                    (EditScale EC.defaultEditScaleState)
+                , selectorOption
+                    menuType
+                    (EditChordBuilder EC.defaultEditChordBuilderState)
+                , selectorOption menuType (EditSizedColumn [])
+                , selectorOption menuType (EditSizedRow [])
+                , selectorOption
+                    menuType
+                    (EditNote EC.defaultEditNoteState)
+                , selectorOption
+                    menuType
+                    (EditChord EC.defaultEditChordState)
+                , selectorOption
+                    menuType
+                    (EditCCValue EC.defaultEditCCValueState)
+                , selectorOption
+                    menuType
+                    (EditCommand EC.defaultEditCommandState)
+                , selectorOption
+                    menuType
+                    (EditSequence EC.defaultEditSequenceState)
+                , selectorOption
+                    menuType
+                    (EditFader EC.defaultEditFaderState)
+                , selectorOption
+                    menuType
+                    (EditXYFader EC.defaultEditXYFaderState)
+                , selectorOption
+                    menuType
+                    (EditPitchBend EC.defaultEditPitchBendState)
+                , selectorOption menuType EditMidiLog
+                , selectorOption menuType EditSpace
+                ]
             , paragraph
                 [ alignTop
                 , height fill
@@ -2542,7 +2913,7 @@ editMenu savedModules menuType =
                 , Font.size 14
                 , Font.alignLeft
                 ]
-                [ text <| EController.description menuType ]
+                [ text <| EC.description menuType ]
             ]
         , case menuType of
             EditModule state ->
@@ -2551,11 +2922,23 @@ editMenu savedModules menuType =
             EditIsomorphic state ->
                 editIsomorphicPane state
 
+            EditScale state ->
+                editScalePane state
+
+            EditChordBuilder state ->
+                editChordBuilderPane state
+
             EditRow subControls ->
                 editRowPane subControls
 
             EditColumn subControls ->
                 editColumnPane subControls
+
+            EditSizedRow subControls ->
+                editSizedRowPane subControls
+
+            EditSizedColumn subControls ->
+                editSizedColumnPane subControls
 
             EditNote state ->
                 editNotePane state
@@ -2609,7 +2992,71 @@ editMenu savedModules menuType =
         ]
 
 
-editModulePane : Dict String Controller -> EController.EditModuleState -> Element Msg
+selectorOption : EditableController -> EditableController -> Element Msg
+selectorOption current new =
+    el
+        (fillSpace
+            ++ [ padding 5
+               , Events.onClick <|
+                    SetEditType new
+               ]
+            ++ (case ( current, new ) of
+                    ( EditModule _, EditModule _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditIsomorphic _, EditIsomorphic _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditScale _, EditScale _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditChordBuilder _, EditChordBuilder _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditColumn _, EditColumn _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditRow _, EditRow _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditNote _, EditNote _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditChord _, EditChord _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditCCValue _, EditCCValue _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditCommand _, EditCommand _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditSequence _, EditSequence _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditFader _, EditFader _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditXYFader _, EditXYFader _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditPitchBend _, EditPitchBend _ ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditMidiLog, EditMidiLog ) ->
+                        [ backgroundColour Blue ]
+
+                    ( EditSpace, EditSpace ) ->
+                        [ backgroundColour Blue ]
+
+                    ( _, _ ) ->
+                        []
+               )
+        )
+        (text <| EC.editableControllerToString new)
+
+
+editModulePane : Dict String Controller -> EC.EditModuleState -> Element Msg
 editModulePane savedModules state =
     column
         [ alignTop
@@ -2624,17 +3071,17 @@ editModulePane savedModules state =
             { onChange =
                 \newMode ->
                     { state | createMode = newMode }
-                        |> EController.EditModule
+                        |> EC.EditModule
                         |> UpdateControllerState
             , selected = Just state.createMode
             , label = Input.labelHidden "Create Mode"
             , options =
-                [ Input.option EController.New (text "New")
-                , Input.option EController.Load (text "Load")
+                [ Input.option EC.New (text "New")
+                , Input.option EC.Load (text "Load")
                 ]
             }
         , case state.createMode of
-            EController.New ->
+            EC.New ->
                 editTextBox
                     { placeholder = "label"
                     , label = "Label"
@@ -2647,7 +3094,7 @@ editModulePane savedModules state =
                             |> UpdateControllerState
                     )
 
-            EController.Load ->
+            EC.Load ->
                 column [ spacing 10, width fill ]
                     [ case state.selectedModule of
                         Just index ->
@@ -2692,10 +3139,10 @@ editModulePane savedModules state =
             "Ok"
             ClosePopUp
             (case state.createMode of
-                EController.New ->
+                EC.New ->
                     Just <| FinishedEdit <| C.Module state.label state.controller
 
-                EController.Load ->
+                EC.Load ->
                     state.selectedModule
                         |> Maybe.andThen
                             (\i ->
@@ -2708,7 +3155,7 @@ editModulePane savedModules state =
         ]
 
 
-editIsomorphicPane : EController.EditIsomorphicState -> Element Msg
+editIsomorphicPane : EC.EditIsomorphicState -> Element Msg
 editIsomorphicPane state =
     column
         [ alignTop
@@ -2789,9 +3236,288 @@ editIsomorphicPane state =
             ClosePopUp
             (Maybe.map
                 (\i -> FinishedEdit (isomorphicKeyboard i))
-                (EController.toIsomorphicInput state)
+                (EC.toIsomorphicInput state)
             )
         ]
+
+
+editScalePane : EC.EditScaleState -> Element Msg
+editScalePane state =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , editPanelWidth
+        , backgroundColour White
+        , Border.width 4
+        ]
+        [ editTextBox
+            { placeholder = "channel#"
+            , label = "Channel"
+            , current = state.channel
+            }
+            "number"
+            (\newChannel ->
+                { state | channel = newChannel }
+                    |> EditScale
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "velocity"
+            , label = "Velocity"
+            , current = state.velocity
+            }
+            "number"
+            (\newVelocity ->
+                { state | velocity = newVelocity }
+                    |> EditScale
+                    |> UpdateControllerState
+            )
+        , noteRadio
+            state.key
+            (\newNote ->
+                { state | key = newNote }
+                    |> EditScale
+                    |> UpdateControllerState
+            )
+        , scaleRadio
+            state.scale
+            (\newScale ->
+                { state | scale = newScale }
+                    |> EditScale
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "octave#"
+            , label = "Octave Number"
+            , current = state.octave
+            }
+            "number"
+            (\newOctave ->
+                { state | octave = newOctave }
+                    |> EditScale
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "# of octaves"
+            , label = "Range"
+            , current = state.range
+            }
+            "number"
+            (\newRange ->
+                { state | range = newRange }
+                    |> EditScale
+                    |> UpdateControllerState
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            ClosePopUp
+            (Maybe.map
+                (\i -> FinishedEdit (scaleKeyboard i))
+                (EC.toScaleKeyboardInput state)
+            )
+        ]
+
+
+editChordBuilderPane : EC.EditChordBuilderState -> Element Msg
+editChordBuilderPane state =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , editPanelWidth
+        , backgroundColour White
+        , Border.width 4
+        ]
+        [ editTextBox
+            { placeholder = "channel#"
+            , label = "Channel"
+            , current = state.channel
+            }
+            "number"
+            (\newChannel ->
+                { state | channel = newChannel }
+                    |> EditChordBuilder
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "velocity"
+            , label = "Velocity"
+            , current = state.velocity
+            }
+            "number"
+            (\newVelocity ->
+                { state | velocity = newVelocity }
+                    |> EditChordBuilder
+                    |> UpdateControllerState
+            )
+        , noteRadio
+            state.key
+            (\newNote ->
+                { state | key = newNote }
+                    |> EditChordBuilder
+                    |> UpdateControllerState
+            )
+        , scaleRadio
+            state.scale
+            (\newScale ->
+                { state | scale = newScale }
+                    |> EditChordBuilder
+                    |> UpdateControllerState
+            )
+        , chordTypeRadio
+            state.chordType
+            (\newChordType ->
+                { state | chordType = newChordType }
+                    |> EditChordBuilder
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "octave#"
+            , label = "Octave Number"
+            , current = state.octave
+            }
+            "number"
+            (\newOctave ->
+                { state | octave = newOctave }
+                    |> EditChordBuilder
+                    |> UpdateControllerState
+            )
+        , editTextBox
+            { placeholder = "# of octaves"
+            , label = "Range"
+            , current = state.range
+            }
+            "number"
+            (\newRange ->
+                { state | range = newRange }
+                    |> EditChordBuilder
+                    |> UpdateControllerState
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            ClosePopUp
+            (Maybe.map
+                (\i -> FinishedEdit (chordKeyboard i))
+                (EC.toChordBuildInput state)
+            )
+        ]
+
+
+noteRadio : EC.Key -> (EC.Key -> msg) -> Element msg
+noteRadio note msg =
+    Input.radio
+        [ padding 2
+        , spacing 10
+        , height (px 100)
+        , width fill
+        , scrollbarY
+        , Border.width 2
+        , Border.dashed
+        ]
+        { onChange = msg
+        , selected = Just note
+        , label =
+            Input.labelAbove
+                [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
+                ]
+                (text "Note")
+        , options =
+            [ Input.option EC.C (text "C")
+            , Input.option EC.Cs (text "C#")
+            , Input.option EC.D (text "D")
+            , Input.option EC.Ds (text "D#")
+            , Input.option EC.Db (text "Db")
+            , Input.option EC.E (text "E")
+            , Input.option EC.Eb (text "Eb")
+            , Input.option EC.F (text "F")
+            , Input.option EC.Fs (text "F#")
+            , Input.option EC.G (text "G")
+            , Input.option EC.Gs (text "G#")
+            , Input.option EC.Gb (text "Gb")
+            , Input.option EC.A (text "A")
+            , Input.option EC.As (text "A#")
+            , Input.option EC.Ab (text "Ab")
+            , Input.option EC.B (text "B")
+            , Input.option EC.Bb (text "Bb")
+            ]
+        }
+
+
+scaleRadio : EC.Scale -> (EC.Scale -> msg) -> Element msg
+scaleRadio scale msg =
+    Input.radio
+        [ padding 2
+        , spacing 10
+        , height (px 100)
+        , width fill
+        , scrollbarY
+        , Border.width 2
+        , Border.dashed
+        ]
+        { onChange = msg
+        , selected = Just scale
+        , label =
+            Input.labelAbove
+                [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
+                ]
+                (text "Scale")
+        , options =
+            [ Input.option EC.Major (text "Major")
+            , Input.option EC.NaturalMinor (text "Natural Minor")
+            , Input.option EC.Ionian (text "Ionian")
+            , Input.option EC.Dorian (text "Dorian")
+            , Input.option EC.Phrygian (text "Phrygian")
+            , Input.option EC.Lydian (text "Lydian")
+            , Input.option EC.Mixolydian (text "Mixolydian")
+            , Input.option EC.Aeolian (text "Aeolian")
+            , Input.option EC.Locrian (text "Locrian")
+            , Input.option EC.MelodicMinor (text "Melodic Minor")
+            , Input.option EC.DorianFlat2 (text "Dorian Flat2")
+            , Input.option EC.LydianAugmented (text "Lydian Augmented")
+            , Input.option EC.Acoustic (text "Acoustic")
+            , Input.option EC.MajorMinor (text "Major Minor")
+            , Input.option EC.MinorLocrian (text "Minor Locrian")
+            , Input.option EC.SuperLocrian (text "Superlocrian")
+            , Input.option EC.HarmonicMinor (text "Harmonic Minor")
+            , Input.option EC.LocrianNatural6 (text "Locrian Natural6")
+            , Input.option EC.MajorAugmented (text "Major Augmented")
+            , Input.option EC.LydianDiminished (text "Lydian Diminished")
+            , Input.option EC.PhrygianDominant (text "Phrygian Dominant")
+            , Input.option EC.AeolianHarmonic (text "Aeolian Harmonic")
+            , Input.option EC.UltraLocrian (text "Ultralocrian")
+            , Input.option EC.DiminishedWholeToneHalfTone (text "Diminished Whole Half Tone")
+            , Input.option EC.DiminishedHalfToneWholeTone (text "Diminished Half Whole Tone")
+            , Input.option EC.WholeTone (text "Whole Tone")
+            , Input.option EC.MajorPentatonic (text "Major Pentatonic")
+            , Input.option EC.MinorPentatonic (text "Minor Pentatonic")
+            ]
+        }
+
+
+chordTypeRadio : EC.ChordType -> (EC.ChordType -> msg) -> Element msg
+chordTypeRadio chordType msg =
+    Input.radioRow
+        [ padding 4
+        , spacing 10
+        , height (px 36)
+        , width fill
+        , scrollbarY
+        , Border.width 2
+        , Border.dashed
+        ]
+        { onChange = msg
+        , selected = Just chordType
+        , label =
+            Input.labelAbove
+                [ paddingEach { top = 0, bottom = 10, left = 0, right = 0 }
+                ]
+                (text "Chord Type")
+        , options =
+            [ Input.option EC.Triad (text "Triad")
+            , Input.option EC.FourNote (text "Four Note")
+            ]
+        }
 
 
 editRowPane : List Controller -> Element Msg
@@ -2916,7 +3642,229 @@ editColumnPane subControls =
         ]
 
 
-editNotePane : EController.EditNoteState -> Element Msg
+editSizedRowPane : List ( Int, Controller ) -> Element Msg
+editSizedRowPane subControls =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , editPanelWidth
+        , backgroundColour White
+        , Border.width 4
+        ]
+        [ row [ spacing 10 ]
+            [ Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , borderColour Black
+                ]
+                { onPress =
+                    List.append subControls [ ( 1, C.Space ) ]
+                        |> EditSizedRow
+                        |> UpdateControllerState
+                        |> Just
+                , label = text "Add"
+                }
+            , Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , borderColour Black
+                ]
+                { onPress =
+                    List.reverse subControls
+                        |> List.tail
+                        |> Maybe.withDefault []
+                        |> List.reverse
+                        |> EditSizedRow
+                        |> UpdateControllerState
+                        |> Just
+                , label = text "Remove"
+                }
+            ]
+        , paragraph [ Font.size 18 ] [ text "Listening for MIDI..." ]
+        , column
+            [ height (px 300)
+            , width fill
+            , padding 2
+            , spacing 4
+            , scrollbarY
+            , Border.width 2
+            , Border.dashed
+            ]
+            (List.indexedMap
+                (\i ( s, c ) ->
+                    row [ width fill ]
+                        [ el [] (C.controllerToString c |> text)
+                        , row [ alignRight, spacing 2 ]
+                            [ Input.button
+                                [ padding 5
+                                , Border.width 2
+                                , Border.solid
+                                , borderColour Black
+                                ]
+                                { onPress =
+                                    List.indexedMap
+                                        (\ci ( cs, cc ) ->
+                                            if ci == i then
+                                                ( max (cs - 1) 0, cc )
+
+                                            else
+                                                ( cs, cc )
+                                        )
+                                        subControls
+                                        |> EditSizedRow
+                                        |> UpdateControllerState
+                                        |> Just
+                                , label = text "-"
+                                }
+                            , el [ alignRight ] (String.fromInt s |> text)
+                            , Input.button
+                                [ padding 5
+                                , Border.width 2
+                                , Border.solid
+                                , borderColour Black
+                                ]
+                                { onPress =
+                                    List.indexedMap
+                                        (\ci ( cs, cc ) ->
+                                            if ci == i then
+                                                ( cs + 1, cc )
+
+                                            else
+                                                ( cs, cc )
+                                        )
+                                        subControls
+                                        |> EditSizedRow
+                                        |> UpdateControllerState
+                                        |> Just
+                                , label = text "+"
+                                }
+                            ]
+                        ]
+                )
+                subControls
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            ClosePopUp
+            (Just <| FinishedEdit <| C.SizedRow subControls)
+        ]
+
+
+editSizedColumnPane : List ( Int, Controller ) -> Element Msg
+editSizedColumnPane subControls =
+    column
+        [ alignTop
+        , padding 10
+        , spacing 10
+        , editPanelWidth
+        , backgroundColour White
+        , Border.width 4
+        ]
+        [ row [ spacing 10 ]
+            [ Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , borderColour Black
+                ]
+                { onPress =
+                    List.append subControls [ ( 1, C.Space ) ]
+                        |> EditSizedColumn
+                        |> UpdateControllerState
+                        |> Just
+                , label = text "Add"
+                }
+            , Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , borderColour Black
+                ]
+                { onPress =
+                    List.reverse subControls
+                        |> List.tail
+                        |> Maybe.withDefault []
+                        |> List.reverse
+                        |> EditSizedColumn
+                        |> UpdateControllerState
+                        |> Just
+                , label = text "Remove"
+                }
+            ]
+        , paragraph [ Font.size 18 ] [ text "Listening for MIDI..." ]
+        , column
+            [ height (px 300)
+            , width fill
+            , padding 2
+            , spacing 4
+            , scrollbarY
+            , Border.width 2
+            , Border.dashed
+            ]
+            (List.indexedMap
+                (\i ( s, c ) ->
+                    row [ width fill ]
+                        [ el [] (C.controllerToString c |> text)
+                        , row [ alignRight, spacing 2 ]
+                            [ Input.button
+                                [ padding 5
+                                , Border.width 2
+                                , Border.solid
+                                , borderColour Black
+                                ]
+                                { onPress =
+                                    List.indexedMap
+                                        (\ci ( cs, cc ) ->
+                                            if ci == i then
+                                                ( max (cs - 1) 0, cc )
+
+                                            else
+                                                ( cs, cc )
+                                        )
+                                        subControls
+                                        |> EditSizedColumn
+                                        |> UpdateControllerState
+                                        |> Just
+                                , label = text "-"
+                                }
+                            , el [ alignRight ] (String.fromInt s |> text)
+                            , Input.button
+                                [ padding 5
+                                , Border.width 2
+                                , Border.solid
+                                , borderColour Black
+                                ]
+                                { onPress =
+                                    List.indexedMap
+                                        (\ci ( cs, cc ) ->
+                                            if ci == i then
+                                                ( cs + 1, cc )
+
+                                            else
+                                                ( cs, cc )
+                                        )
+                                        subControls
+                                        |> EditSizedColumn
+                                        |> UpdateControllerState
+                                        |> Just
+                                , label = text "+"
+                                }
+                            ]
+                        ]
+                )
+                subControls
+            )
+        , acceptOrCloseButtons
+            "Ok"
+            ClosePopUp
+            (Just <| FinishedEdit <| C.SizedColumn subControls)
+        ]
+
+
+editNotePane : EC.EditNoteState -> Element Msg
 editNotePane state =
     column
         [ alignTop
@@ -2989,12 +3937,12 @@ editNotePane state =
             ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
-                (EController.editStateToNote state)
+                (EC.editStateToNote state)
             )
         ]
 
 
-editChordPane : EController.EditChordState -> Element Msg
+editChordPane : EC.EditChordState -> Element Msg
 editChordPane state =
     column
         [ alignTop
@@ -3087,12 +4035,12 @@ editChordPane state =
             ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
-                (EController.editStateToChord state)
+                (EC.editStateToChord state)
             )
         ]
 
 
-editCCValuePane : EController.EditCCValueState -> Element Msg
+editCCValuePane : EC.EditCCValueState -> Element Msg
 editCCValuePane state =
     column
         [ alignTop
@@ -3165,12 +4113,12 @@ editCCValuePane state =
             ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
-                (EController.editStateToCCValue state)
+                (EC.editStateToCCValue state)
             )
         ]
 
 
-editCommandPane : EController.EditCommandState -> Element Msg
+editCommandPane : EC.EditCommandState -> Element Msg
 editCommandPane state =
     column
         [ alignTop
@@ -3215,8 +4163,8 @@ editCommandPane state =
             , selected = Just state.editMode
             , label = Input.labelHidden "On Event Type"
             , options =
-                [ Input.option EController.OnPressMsgs (text "Button Press")
-                , Input.option EController.OnReleaseMsgs (text "Button Release")
+                [ Input.option EC.OnPressMsgs (text "Button Press")
+                , Input.option EC.OnReleaseMsgs (text "Button Release")
                 ]
             }
         , case state.newMsg of
@@ -3274,10 +4222,10 @@ editCommandPane state =
                                     ]
                                     { onPress =
                                         (case state.editMode of
-                                            EController.OnPressMsgs ->
+                                            EC.OnPressMsgs ->
                                                 { state | onPressMsgs = [] }
 
-                                            EController.OnReleaseMsgs ->
+                                            EC.OnReleaseMsgs ->
                                                 { state | onReleaseMsgs = [] }
                                         )
                                             |> EditCommand
@@ -3287,10 +4235,10 @@ editCommandPane state =
                                     }
                                 ]
                                 :: ((case state.editMode of
-                                        EController.OnPressMsgs ->
+                                        EC.OnPressMsgs ->
                                             state.onPressMsgs
 
-                                        EController.OnReleaseMsgs ->
+                                        EC.OnReleaseMsgs ->
                                             state.onReleaseMsgs
                                     )
                                         |> List.map
@@ -3309,12 +4257,12 @@ editCommandPane state =
             ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
-                (EController.editStateToCommand state)
+                (EC.editStateToCommand state)
             )
         ]
 
 
-newCommandMidiMsgView : Midi.EditMidiButtonMsg -> EController.EditCommandState -> Element Msg
+newCommandMidiMsgView : Midi.EditMidiButtonMsg -> EC.EditCommandState -> Element Msg
 newCommandMidiMsgView newMsg state =
     column
         [ padding 4
@@ -3358,7 +4306,7 @@ newCommandMidiMsgView newMsg state =
                     |> Maybe.map
                         (\completeMsg ->
                             case state.editMode of
-                                EController.OnPressMsgs ->
+                                EC.OnPressMsgs ->
                                     { state
                                         | onPressMsgs =
                                             List.append state.onPressMsgs [ completeMsg ]
@@ -3367,7 +4315,7 @@ newCommandMidiMsgView newMsg state =
                                         |> EditCommand
                                         |> UpdateControllerState
 
-                                EController.OnReleaseMsgs ->
+                                EC.OnReleaseMsgs ->
                                     { state
                                         | onReleaseMsgs =
                                             List.append state.onReleaseMsgs [ completeMsg ]
@@ -3380,7 +4328,7 @@ newCommandMidiMsgView newMsg state =
         ]
 
 
-editSequencePane : EController.EditSequenceState -> Element Msg
+editSequencePane : EC.EditSequenceState -> Element Msg
 editSequencePane state =
     column
         [ alignTop
@@ -3494,12 +4442,12 @@ editSequencePane state =
             ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
-                (EController.editStateToSequence state)
+                (EC.editStateToSequence state)
             )
         ]
 
 
-newSequenceMidiMsgView : Midi.EditMidiButtonMsg -> EController.EditSequenceState -> Element Msg
+newSequenceMidiMsgView : Midi.EditMidiButtonMsg -> EC.EditSequenceState -> Element Msg
 newSequenceMidiMsgView newMsg state =
     column
         [ padding 4
@@ -3555,7 +4503,7 @@ newSequenceMidiMsgView newMsg state =
         ]
 
 
-editFaderPane : EController.EditFaderState -> Element Msg
+editFaderPane : EC.EditFaderState -> Element Msg
 editFaderPane state =
     column
         [ alignTop
@@ -3639,12 +4587,12 @@ editFaderPane state =
             ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
-                (EController.editStateToFader state)
+                (EC.editStateToFader state)
             )
         ]
 
 
-editXYFaderPane : EController.EditXYFaderState -> Element Msg
+editXYFaderPane : EC.EditXYFaderState -> Element Msg
 editXYFaderPane state =
     column
         [ alignTop
@@ -3689,12 +4637,12 @@ editXYFaderPane state =
             , selected = Just state.active
             , label = Input.labelHidden "Param Select"
             , options =
-                [ Input.option EController.Params1 (text "Params X")
-                , Input.option EController.Params2 (text "Params Y")
+                [ Input.option EC.Params1 (text "Params X")
+                , Input.option EC.Params2 (text "Params Y")
                 ]
             }
         , case state.active of
-            EController.Params1 ->
+            EC.Params1 ->
                 column [ padding 5, Border.width 2, Border.dashed ]
                     [ editTextBox
                         { placeholder = "channel x#"
@@ -3742,7 +4690,7 @@ editXYFaderPane state =
                         )
                     ]
 
-            EController.Params2 ->
+            EC.Params2 ->
                 column [ padding 5, Border.width 2, Border.dashed ]
                     [ editTextBox
                         { placeholder = "channel y#"
@@ -3794,12 +4742,12 @@ editXYFaderPane state =
             ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
-                (EController.editStateToXYFader state)
+                (EC.editStateToXYFader state)
             )
         ]
 
 
-editPitchBendPane : EController.EditPitchBendState -> Element Msg
+editPitchBendPane : EC.EditPitchBendState -> Element Msg
 editPitchBendPane state =
     column
         [ alignTop
@@ -3850,7 +4798,7 @@ editPitchBendPane state =
             ClosePopUp
             (Maybe.map
                 (\c -> FinishedEdit c)
-                (EController.editStateToPitchBend state)
+                (EC.editStateToPitchBend state)
             )
         ]
 
@@ -4166,1062 +5114,29 @@ renderPage mode midiLog page =
                )
         )
     <|
-        renderController mode midiLog config [] controller 0
-
-
-renderController :
-    Mode
-    -> List String
-    -> PageConfig
-    -> List String
-    -> Controller
-    -> Int
-    -> Element Msg
-renderController mode midiLog config idParts controller id =
-    let
-        updatedParts =
-            String.fromInt id :: idParts
-    in
-    case controller of
-        C.Module label subControls ->
-            Lazy.lazy2
-                column
-                ([ padding config.gapSize
-                 , spacing config.gapSize
-                 ]
-                    ++ fillSpace
-                    ++ (case mode of
-                            Normal ->
-                                [ Border.dotted
-                                , Border.width 4
-                                ]
-
-                            Edit _ ->
-                                [ padding 2
-                                , Border.width 2
-                                , Border.dashed
-                                ]
-                       )
-                )
-                [ row [ width fill ]
-                    ((el [ padding 4 ] <| text label)
-                        :: (case mode of
-                                Normal ->
-                                    []
-
-                                Edit _ ->
-                                    [ el
-                                        [ alignRight
-                                        , padding 4
-                                        , backgroundColour White
-                                        ]
-                                      <|
-                                        renderEditButton config
-                                            C.EditContainer
-                                            (updatedParts
-                                                |> List.reverse
-                                                |> String.join "_"
-                                            )
-                                    ]
-                           )
-                    )
-                , renderController mode midiLog config updatedParts subControls 0
-                ]
-
-        C.Row subControls ->
-            Lazy.lazy2 row
-                ([ spacingXY config.gapSize 0
-                 , Events.onClick NoOp
-                 ]
-                    ++ fillSpace
-                    ++ (case mode of
-                            Normal ->
-                                []
-
-                            Edit _ ->
-                                [ padding 2
-                                , Border.width 2
-                                , Border.dashed
-                                ]
-                       )
-                )
-            <|
-                (List.map2
-                    (renderController mode midiLog config updatedParts)
-                    subControls
-                    (List.range 0 <| List.length subControls)
-                    ++ (case mode of
-                            Normal ->
-                                []
-
-                            Edit _ ->
-                                [ el
-                                    [ alignRight
-                                    , padding 4
-                                    , backgroundColour White
-                                    ]
-                                  <|
-                                    renderEditButton config
-                                        C.EditContainer
-                                        (updatedParts
-                                            |> List.reverse
-                                            |> String.join "_"
-                                        )
-                                ]
-                       )
-                )
-
-        C.Column subControls ->
-            case mode of
+        C.renderController
+            { addSpaceMsg = AddSpace
+            , buttonDownMsg = ButtonDown
+            , buttonUpMsg = ButtonUp
+            , editMsg = OpenEditController
+            , faderChangingMsg = FaderChanging
+            , faderChangingMouseMsg = FaderChangingMouse
+            , faderSetMsg = FaderSet
+            , noopMsg = NoOp
+            , removeItemMsg = RemoveItem
+            }
+            (case mode of
                 Normal ->
-                    Lazy.lazy2 column
-                        (spacingXY 0 config.gapSize
-                            :: fillSpace
-                            ++ (case mode of
-                                    Normal ->
-                                        []
-
-                                    Edit _ ->
-                                        [ padding 2
-                                        , Border.width 2
-                                        , Border.dashed
-                                        ]
-                               )
-                        )
-                    <|
-                        List.map2
-                            (renderController mode midiLog config updatedParts)
-                            subControls
-                            (List.range 0 <| List.length subControls)
+                    False
 
                 Edit _ ->
-                    Lazy.lazy2 column
-                        ([ paddingXY 0 5
-                         , spacing 5
-                         , Border.width 2
-                         , Border.dashed
-                         ]
-                            ++ fillSpace
-                        )
-                        [ renderEditButton config
-                            C.EditContainer
-                            (updatedParts
-                                |> List.reverse
-                                |> String.join "_"
-                            )
-                        , column
-                            ([ spacingXY 0 config.gapSize
-                             , padding config.gapSize
-                             ]
-                                ++ fillSpace
-                            )
-                          <|
-                            List.map2
-                                (renderController mode midiLog config updatedParts)
-                                subControls
-                                (List.range 0 <| List.length subControls)
-                        ]
-
-        C.Note state ->
-            renderNote
-                config
-                mode
-                state
-                (updatedParts
-                    |> List.reverse
-                    |> String.join "_"
-                )
-
-        C.Chord state ->
-            renderChord
-                config
-                mode
-                state
-                (updatedParts
-                    |> List.reverse
-                    |> String.join "_"
-                )
-
-        C.CCValue state ->
-            renderCCValue
-                config
-                mode
-                state
-                (updatedParts
-                    |> List.reverse
-                    |> String.join "_"
-                )
-
-        C.Command state ->
-            renderCommand
-                config
-                mode
-                state
-                (updatedParts
-                    |> List.reverse
-                    |> String.join "_"
-                )
-
-        C.Sequence state ->
-            renderSequence
-                config
-                mode
-                state
-                (updatedParts
-                    |> List.reverse
-                    |> String.join "_"
-                )
-
-        C.Fader state ->
-            renderFader
-                config
-                mode
-                state
-                (updatedParts
-                    |> List.reverse
-                    |> String.join "_"
-                )
-
-        C.XYFader state ->
-            renderXYFader
-                config
-                mode
-                state
-                (updatedParts
-                    |> List.reverse
-                    |> String.join "_"
-                )
-
-        C.PitchBend state ->
-            renderPitchBend
-                config
-                mode
-                state
-                (updatedParts
-                    |> List.reverse
-                    |> String.join "_"
-                )
-
-        C.MidiLog ->
-            case mode of
-                Normal ->
-                    column fillSpace
-                        [ column
-                            ([ padding 4
-                             , spacing 10
-                             , backgroundColour White
-                             , scrollbarY
-                             , clipX
-                             ]
-                                ++ fillSpace
-                            )
-                            (if List.isEmpty midiLog then
-                                [ el [ centerX, centerY ] <|
-                                    text "No MIDI events in log."
-                                ]
-
-                             else
-                                List.map
-                                    (\s ->
-                                        paragraph
-                                            [ Font.alignLeft
-                                            , Font.size 12
-                                            , padding 2
-                                            , Border.widthEach
-                                                { bottom = 1, top = 0, left = 0, right = 0 }
-                                            ]
-                                            [ text s ]
-                                    )
-                                    midiLog
-                            )
-                        ]
-
-                Edit _ ->
-                    el
-                        ([ backgroundColour LightGrey
-                         , Events.onClick <|
-                            OpenEditController
-                                (updatedParts
-                                    |> List.reverse
-                                    |> String.join "_"
-                                )
-                         ]
-                            ++ fillSpace
-                        )
-                        (el
-                            [ centerX
-                            , centerY
-                            ]
-                         <|
-                            text "MIDI Log"
-                        )
-
-        C.Space ->
-            case mode of
-                Normal ->
-                    el
-                        ([ backgroundColour White
-                         , borderColour LightGrey
-                         , Border.width 4
-                         ]
-                            ++ fillSpace
-                        )
-                        none
-
-                Edit _ ->
-                    el
-                        ([ backgroundColour LightGrey
-                         , Events.onClick <|
-                            OpenEditController
-                                (updatedParts
-                                    |> List.reverse
-                                    |> String.join "_"
-                                )
-                         ]
-                            ++ fillSpace
-                        )
-                        (el
-                            [ centerX
-                            , centerY
-                            ]
-                         <|
-                            text "SPACE"
-                        )
-
-
-renderNote : PageConfig -> Mode -> C.NoteState -> String -> Element Msg
-renderNote config mode state id =
-    case mode of
-        Normal ->
-            el
-                ([ padding 0
-                 , spacing 0
-                 , Border.width 4
-                 , case state.status of
-                    C.Off ->
-                        backgroundColour state.colour
-
-                    C.On ->
-                        Border.dashed
-                 , htmlAttribute <|
-                    Touch.onStart
-                        (\_ ->
-                            ButtonDown id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onDown
-                        (\_ ->
-                            ButtonDown id
-                        )
-                 , htmlAttribute <|
-                    Touch.onEnd
-                        (\_ ->
-                            ButtonUp id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onUp
-                        (\_ ->
-                            ButtonUp id
-                        )
-                 ]
-                    ++ Style.noSelect
-                    ++ fillSpace
-                )
-                ((if config.debug then
-                    Midi.channelToString state.channel ++ "\n"
-
-                  else
-                    ""
-                 )
-                    ++ state.label
-                    |> text
-                    |> el
-                        [ centerX
-                        , centerY
-                        , labelSizeToFontSize <| Maybe.withDefault Small state.labelSize
-                        ]
-                )
-
-        Edit _ ->
-            Input.button
-                ([ padding config.gapSize
-                 , spacing config.gapSize
-                 , Border.width 2
-                 , Border.dashed
-                 , Font.size 14
-                 , backgroundColour state.colour
-                 ]
-                    ++ Style.noSelect
-                    ++ fillSpace
-                )
-                { onPress = Just <| OpenEditController id
-                , label =
-                    state.label
-                        |> text
-                }
-
-
-renderChord : PageConfig -> Mode -> C.ChordState -> String -> Element Msg
-renderChord config mode state id =
-    case mode of
-        Normal ->
-            el
-                ([ padding 0
-                 , spacing 0
-                 , Border.width 4
-                 , case state.status of
-                    C.Off ->
-                        backgroundColour state.colour
-
-                    C.On ->
-                        Border.dashed
-                 , htmlAttribute <|
-                    Touch.onStart
-                        (\_ ->
-                            ButtonDown id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onDown
-                        (\_ ->
-                            ButtonDown id
-                        )
-                 , htmlAttribute <|
-                    Touch.onEnd
-                        (\_ ->
-                            ButtonUp id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onUp
-                        (\_ ->
-                            ButtonUp id
-                        )
-                 ]
-                    ++ Style.noSelect
-                    ++ fillSpace
-                )
-                (state.label
-                    |> text
-                    |> el
-                        [ centerX
-                        , centerY
-                        , labelSizeToFontSize <| Maybe.withDefault Small state.labelSize
-                        ]
-                )
-
-        Edit _ ->
-            Input.button
-                ([ padding config.gapSize
-                 , spacing config.gapSize
-                 , Border.width 2
-                 , Border.dashed
-                 , Font.size 14
-                 , backgroundColour state.colour
-                 ]
-                    ++ Style.noSelect
-                    ++ fillSpace
-                )
-                { onPress = Just <| OpenEditController id
-                , label =
-                    state.label
-                        |> text
-                }
-
-
-renderCCValue : PageConfig -> Mode -> C.CCValueState -> String -> Element Msg
-renderCCValue config mode state id =
-    case mode of
-        Normal ->
-            el
-                ([ padding 0
-                 , spacing 0
-                 , Border.width 4
-                 , case state.status of
-                    C.Off ->
-                        backgroundColour state.colour
-
-                    C.On ->
-                        Border.dashed
-                 , htmlAttribute <|
-                    Touch.onStart
-                        (\_ ->
-                            ButtonDown id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onDown
-                        (\_ ->
-                            ButtonDown id
-                        )
-                 , htmlAttribute <|
-                    Touch.onEnd
-                        (\_ ->
-                            ButtonUp id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onUp
-                        (\_ ->
-                            ButtonUp id
-                        )
-                 ]
-                    ++ Style.noSelect
-                    ++ fillSpace
-                )
-                ((if config.debug then
-                    case state.status of
-                        C.Off ->
-                            "Off\n" ++ Midi.channelToString state.channel ++ "\n"
-
-                        C.On ->
-                            "Off\n" ++ Midi.channelToString state.channel ++ "\n"
-
-                  else
-                    ""
-                 )
-                    ++ state.label
-                    |> text
-                    |> el
-                        [ centerX
-                        , centerY
-                        , labelSizeToFontSize <| Maybe.withDefault Small state.labelSize
-                        ]
-                )
-
-        Edit _ ->
-            Input.button
-                ([ padding config.gapSize
-                 , spacing config.gapSize
-                 , Border.width 2
-                 , Border.dashed
-                 , Font.size 14
-                 , backgroundColour state.colour
-                 ]
-                    ++ Style.noSelect
-                    ++ fillSpace
-                )
-                { onPress = Just <| OpenEditController id
-                , label =
-                    state.label
-                        |> text
-                }
-
-
-renderCommand : PageConfig -> Mode -> C.CommandState -> String -> Element Msg
-renderCommand config mode state id =
-    case mode of
-        Normal ->
-            el
-                ([ padding 0
-                 , spacing 0
-                 , Border.width 4
-                 , case state.status of
-                    C.Off ->
-                        backgroundColour state.colour
-
-                    C.On ->
-                        Border.dashed
-                 , htmlAttribute <|
-                    Touch.onStart
-                        (\_ ->
-                            ButtonDown id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onDown
-                        (\_ ->
-                            ButtonDown id
-                        )
-                 , htmlAttribute <|
-                    Touch.onEnd
-                        (\_ ->
-                            ButtonUp id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onUp
-                        (\_ ->
-                            ButtonUp id
-                        )
-                 ]
-                    ++ Style.noSelect
-                    ++ fillSpace
-                )
-                (state.label
-                    |> text
-                    |> el
-                        [ centerX
-                        , centerY
-                        , labelSizeToFontSize <| Maybe.withDefault Small state.labelSize
-                        ]
-                )
-
-        Edit _ ->
-            Input.button
-                ([ padding config.gapSize
-                 , spacing config.gapSize
-                 , Border.width 2
-                 , Border.dashed
-                 , Font.size 14
-                 , backgroundColour state.colour
-                 ]
-                    ++ Style.noSelect
-                    ++ fillSpace
-                )
-                { onPress = Just <| OpenEditController id
-                , label =
-                    state.label
-                        |> text
-                }
-
-
-renderSequence : PageConfig -> Mode -> C.SequenceState -> String -> Element Msg
-renderSequence config mode state id =
-    case mode of
-        Normal ->
-            el
-                ([ padding 0
-                 , spacing 0
-                 , Border.width 4
-                 , case state.status of
-                    C.Off ->
-                        backgroundColour state.colour
-
-                    C.On ->
-                        Border.dashed
-                 , htmlAttribute <|
-                    Touch.onStart
-                        (\_ ->
-                            ButtonDown id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onDown
-                        (\_ ->
-                            ButtonDown id
-                        )
-                 , htmlAttribute <|
-                    Touch.onEnd
-                        (\_ ->
-                            ButtonUp id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onUp
-                        (\_ ->
-                            ButtonUp id
-                        )
-                 ]
-                    ++ Style.noSelect
-                    ++ fillSpace
-                )
-                (state.label
-                    ++ "\n"
-                    ++ String.fromInt (state.index + 1)
-                    |> text
-                    |> el
-                        [ centerX
-                        , centerY
-                        , labelSizeToFontSize <| Maybe.withDefault Small state.labelSize
-                        ]
-                )
-
-        Edit _ ->
-            Input.button
-                ([ padding config.gapSize
-                 , spacing config.gapSize
-                 , Border.width 2
-                 , Border.dashed
-                 , Font.size 14
-                 , backgroundColour state.colour
-                 ]
-                    ++ Style.noSelect
-                    ++ fillSpace
-                )
-                { onPress = Just <| OpenEditController id
-                , label =
-                    state.label
-                        |> text
-                }
-
-
-renderFader : PageConfig -> Mode -> C.FaderState -> String -> Element Msg
-renderFader config mode state id =
-    case mode of
-        Normal ->
-            el
-                ([ padding 0
-                 , spacing 0
-                 , Border.width 4
-                 , case state.status of
-                    C.Set ->
-                        Border.solid
-
-                    C.Changing _ _ ->
-                        Border.dashed
-                 , htmlAttribute <|
-                    Touch.onStart
-                        (\event ->
-                            FaderChanging id event
-                        )
-                 , htmlAttribute <|
-                    Mouse.onDown
-                        (\event ->
-                            FaderChangingMouse id event
-                        )
-                 , htmlAttribute <|
-                    Touch.onMove
-                        (\event ->
-                            FaderChanging id event
-                        )
-                 , htmlAttribute <|
-                    Touch.onEnd
-                        (\_ ->
-                            FaderSet id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onUp
-                        (\_ ->
-                            FaderSet id
-                        )
-                 ]
-                    ++ (case state.status of
-                            Changing _ _ ->
-                                [ htmlAttribute <|
-                                    Mouse.onMove
-                                        (\event ->
-                                            FaderChangingMouse id event
-                                        )
-                                ]
-
-                            Set ->
-                                []
-                       )
-                    ++ Style.noSelect
-                    ++ fillSpace
-                )
-                (column
-                    (backgroundColour White :: fillSpace)
-                    [ el [ centerX, padding 10, Font.size 14 ] <|
-                        text (String.fromInt state.valuePercent ++ "%")
-                    , column
-                        fillSpace
-                        [ el
-                            [ height <| fillPortion (100 - state.valuePercent)
-                            , width fill
-                            , backgroundColour White
-                            ]
-                            none
-                        , el
-                            [ height <| fillPortion state.valuePercent
-                            , width fill
-                            , backgroundColour state.colour
-                            , Border.widthEach { bottom = 0, top = 8, left = 0, right = 0 }
-                            ]
-                            none
-                        ]
-                    , el
-                        [ centerX
-                        , padding 10
-                        , labelSizeToFontSize <| Maybe.withDefault Small state.labelSize
-                        ]
-                      <|
-                        text state.label
-                    ]
-                )
-
-        Edit _ ->
-            Input.button
-                ([ padding config.gapSize
-                 , spacing config.gapSize
-                 , Border.width 2
-                 , Border.dashed
-                 , Font.size 14
-                 , backgroundColour state.colour
-                 ]
-                    ++ Style.noSelect
-                    ++ fillSpace
-                )
-                { onPress = Just <| OpenEditController id
-                , label =
-                    state.label
-                        |> text
-                }
-
-
-renderXYFader : PageConfig -> Mode -> C.XYFaderState -> String -> Element Msg
-renderXYFader config mode state id =
-    case mode of
-        Normal ->
-            el
-                ([ padding 0
-                 , spacing 0
-                 , Border.width 4
-                 , case state.status of
-                    C.Set ->
-                        Border.solid
-
-                    C.Changing _ _ ->
-                        Border.dashed
-                 , htmlAttribute <|
-                    Touch.onStart
-                        (\event ->
-                            FaderChanging id event
-                        )
-                 , htmlAttribute <|
-                    Mouse.onDown
-                        (\event ->
-                            FaderChangingMouse id event
-                        )
-                 , htmlAttribute <|
-                    Touch.onMove
-                        (\event ->
-                            FaderChanging id event
-                        )
-                 , htmlAttribute <|
-                    Touch.onEnd
-                        (\_ ->
-                            FaderSet id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onUp
-                        (\_ ->
-                            FaderSet id
-                        )
-                 ]
-                    ++ (case state.status of
-                            Changing _ _ ->
-                                [ htmlAttribute <|
-                                    Mouse.onMove
-                                        (\event ->
-                                            FaderChangingMouse id event
-                                        )
-                                ]
-
-                            Set ->
-                                []
-                       )
-                    ++ Style.noSelect
-                    ++ fillSpace
-                )
-                (column
-                    (backgroundColour White :: fillSpace)
-                    [ el [ centerX, padding 10, Font.size 14 ] <|
-                        text
-                            ("X "
-                                ++ String.fromInt state.valuePercent1
-                                ++ "%, "
-                                ++ "Y "
-                                ++ String.fromInt state.valuePercent2
-                                ++ "%"
-                            )
-                    , column
-                        ([ inFront <|
-                            row
-                                fillSpace
-                                [ el
-                                    [ height fill
-                                    , width <| fillPortion state.valuePercent1
-                                    ]
-                                    none
-                                , el
-                                    [ height fill
-                                    , width <| fillPortion (100 - state.valuePercent1)
-                                    , Border.widthEach { bottom = 0, top = 0, left = 8, right = 0 }
-                                    ]
-                                    none
-                                ]
-                         , backgroundColour state.colour
-                         ]
-                            ++ fillSpace
-                        )
-                        [ el
-                            [ height <| fillPortion (100 - state.valuePercent2)
-                            , width fill
-                            ]
-                            none
-                        , el
-                            [ height <| fillPortion state.valuePercent2
-                            , width fill
-                            , Border.widthEach { bottom = 0, top = 8, left = 0, right = 0 }
-                            ]
-                            none
-                        ]
-                    , el
-                        [ centerX
-                        , padding 10
-                        , labelSizeToFontSize <| Maybe.withDefault Small state.labelSize
-                        ]
-                      <|
-                        text state.label
-                    ]
-                )
-
-        Edit _ ->
-            Input.button
-                ([ padding config.gapSize
-                 , spacing config.gapSize
-                 , Border.width 2
-                 , Border.dashed
-                 , Font.size 14
-                 , backgroundColour state.colour
-                 ]
-                    ++ Style.noSelect
-                    ++ fillSpace
-                )
-                { onPress = Just <| OpenEditController id
-                , label =
-                    state.label
-                        |> text
-                }
-
-
-renderPitchBend : PageConfig -> Mode -> C.PitchBendState -> String -> Element Msg
-renderPitchBend config mode state id =
-    let
-        fillFraction =
-            round <| 100 * (toFloat state.bendValue / 16383)
-    in
-    case mode of
-        Normal ->
-            el
-                ([ padding 0
-                 , spacing 0
-                 , Border.width 4
-                 , case state.status of
-                    C.Set ->
-                        Border.solid
-
-                    C.Changing _ _ ->
-                        Border.dashed
-                 , htmlAttribute <|
-                    Touch.onStart
-                        (\event ->
-                            FaderChanging id event
-                        )
-                 , htmlAttribute <|
-                    Mouse.onDown
-                        (\event ->
-                            FaderChangingMouse id event
-                        )
-                 , htmlAttribute <|
-                    Touch.onMove
-                        (\event ->
-                            FaderChanging id event
-                        )
-                 , htmlAttribute <|
-                    Touch.onEnd
-                        (\_ ->
-                            FaderSet id
-                        )
-                 , htmlAttribute <|
-                    Mouse.onUp
-                        (\_ ->
-                            FaderSet id
-                        )
-                 ]
-                    ++ (case state.status of
-                            Changing _ _ ->
-                                [ htmlAttribute <|
-                                    Mouse.onMove
-                                        (\event ->
-                                            FaderChangingMouse id event
-                                        )
-                                ]
-
-                            Set ->
-                                []
-                       )
-                    ++ Style.noSelect
-                    ++ fillSpace
-                )
-                (column
-                    (backgroundColour White :: fillSpace)
-                    [ column
-                        fillSpace
-                        [ el
-                            [ height <| fillPortion (100 - fillFraction)
-                            , width fill
-                            , backgroundColour state.colour
-                            ]
-                            none
-                        , el
-                            [ height <| fillPortion fillFraction
-                            , width fill
-                            , backgroundColour state.colour
-                            , Border.widthEach { bottom = 0, top = 8, left = 0, right = 0 }
-                            ]
-                            none
-                        ]
-                    , el
-                        [ centerX
-                        , padding 10
-                        , labelSizeToFontSize <| Maybe.withDefault Small state.labelSize
-                        ]
-                      <|
-                        text state.label
-                    ]
-                )
-
-        Edit _ ->
-            Input.button
-                ([ padding config.gapSize
-                 , spacing config.gapSize
-                 , Border.width 2
-                 , Border.dashed
-                 , Font.size 14
-                 , backgroundColour state.colour
-                 ]
-                    ++ Style.noSelect
-                    ++ fillSpace
-                )
-                { onPress = Just <| OpenEditController id
-                , label =
-                    state.label
-                        |> text
-                }
-
-
-renderEditButton : PageConfig -> C.EditOperation -> String -> Element Msg
-renderEditButton config editOperation parentId =
-    case editOperation of
-        C.EditContainer ->
-            Input.button
-                [ centerX
-                , padding config.gapSize
-                , spacing config.gapSize
-                , Border.width 2
-                ]
-                { onPress = Just <| OpenEditController parentId
-                , label =
-                    Icons.edit2
-                        |> Icons.withSize 20
-                        |> Icons.toHtml []
-                        |> html
-                }
-
-        C.Add ->
-            Input.button
-                [ centerX
-                , padding config.gapSize
-                , spacing config.gapSize
-                , Border.width 2
-                ]
-                { onPress = Just <| AddSpace parentId
-                , label =
-                    Icons.plus
-                        |> Icons.withSize 20
-                        |> Icons.toHtml []
-                        |> html
-                }
-
-        C.Remove ->
-            Input.button
-                [ centerX
-                , padding config.gapSize
-                , spacing config.gapSize
-                , Border.width 2
-                ]
-                { onPress = Just <| RemoveItem parentId
-                , label =
-                    Icons.minus
-                        |> Icons.withSize 20
-                        |> Icons.toHtml []
-                        |> html
-                }
+                    True
+            )
+            midiLog
+            config
+            []
+            controller
+            0
 
 
 

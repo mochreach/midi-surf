@@ -11,8 +11,12 @@ import Utils
 type EditableController
     = EditModule EditModuleState
     | EditIsomorphic EditIsomorphicState
+    | EditScale EditScaleState
+    | EditChordBuilder EditChordBuilderState
     | EditColumn (List Controller)
     | EditRow (List Controller)
+    | EditSizedColumn (List ( Int, Controller ))
+    | EditSizedRow (List ( Int, Controller ))
     | EditNote EditNoteState
     | EditChord EditChordState
     | EditCCValue EditCCValueState
@@ -23,6 +27,64 @@ type EditableController
     | EditPitchBend EditPitchBendState
     | EditMidiLog
     | EditSpace
+
+
+editableControllerToString : EditableController -> String
+editableControllerToString eController =
+    case eController of
+        EditModule _ ->
+            "Module"
+
+        EditIsomorphic _ ->
+            "Isomorphic Keyboard"
+
+        EditScale _ ->
+            "Scale"
+
+        EditChordBuilder _ ->
+            "Chord Keyboard"
+
+        EditColumn _ ->
+            "Column"
+
+        EditRow _ ->
+            "Row"
+
+        EditSizedColumn _ ->
+            "Column"
+
+        EditSizedRow _ ->
+            "Row"
+
+        EditNote _ ->
+            "Note"
+
+        EditChord _ ->
+            "Chord"
+
+        EditCCValue _ ->
+            "CC Value"
+
+        EditCommand _ ->
+            "Command"
+
+        EditSequence _ ->
+            "Sequence"
+
+        EditFader _ ->
+            "Fader"
+
+        EditXYFader _ ->
+            "XY Fader"
+
+        EditPitchBend _ ->
+            "Pitch Bend"
+
+        EditMidiLog ->
+            "Midi Log"
+
+        EditSpace ->
+            "Space"
 
 
 description : EditableController -> String
@@ -39,6 +101,18 @@ description eController =
             you can customise colours and labels of individual notes.
             """
 
+        EditScale _ ->
+            """A tool to create a keyboards in a particular scale. Once created,
+            you can customise colours and labels of individual notes.
+            """
+
+        EditChordBuilder _ ->
+            """A tool for creating a palette of chords. Once created,
+            you can customise colours and labels of individual chords.
+            You can choose between triads and four note chords, which
+            contain sixth and seventh chords.
+            """
+
         EditColumn _ ->
             """A container that holds multiple controls in a column.
             Press "Add" to add a space that you can edit later.
@@ -50,7 +124,29 @@ description eController =
             """A container that holds multiple controls in a row.
             Press "Add" to add a space that you can edit later.
             While creating, you can press MIDI notes and send CC on your
-            device to automatically add them to the row. 
+            device to automatically add them to the row.
+            """
+
+        EditSizedColumn _ ->
+            """A container that holds multiple controls in a column.
+            Press "Add" to add a space that you can edit later.
+            While creating, you can press MIDI notes and send CC on your
+            device to automatically add them to the column. You can set
+            the fill fraction using the "+" and "-" buttons. For example,
+            if you have 3 elements with the first set to 2 and the others
+            set to 1, then the first will fill half the space and the
+            others will fill a quarter each.
+            """
+
+        EditSizedRow _ ->
+            """A container that holds multiple controls in a row.
+            Press "Add" to add a space that you can edit later.
+            While creating, you can press MIDI notes and send CC on your
+            device to automatically add them to the row. You can set
+            the fill fraction using the "+" and "-" buttons. For example,
+            if you have 3 elements with the first set to 2 and the others
+            set to 1, then the first will fill half the space and the
+            others will fill a quarter each.
             """
 
         EditNote _ ->
@@ -196,6 +292,211 @@ toIsomorphicInput state =
         mNumberOfRows
         mOffset
         mRowLength
+
+
+type alias EditScaleState =
+    { channel : String
+    , velocity : String
+    , key : Key
+    , scale : Scale
+    , octave : String
+    , range : String
+    }
+
+
+defaultEditScaleState : EditScaleState
+defaultEditScaleState =
+    { channel = ""
+    , velocity = ""
+    , key = C
+    , scale = Major
+    , octave = ""
+    , range = ""
+    }
+
+
+type Key
+    = C
+    | Cs
+    | D
+    | Ds
+    | Db
+    | E
+    | Eb
+    | F
+    | Fs
+    | G
+    | Gs
+    | Gb
+    | A
+    | As
+    | Ab
+    | B
+    | Bb
+
+
+type Scale
+    = Major
+    | NaturalMinor
+      -- Modes of the major scale
+    | Ionian
+    | Dorian
+    | Phrygian
+    | Lydian
+    | Mixolydian
+    | Aeolian
+    | Locrian
+      -- Modes of the melodic minor scale
+    | MelodicMinor
+    | DorianFlat2
+    | LydianAugmented
+    | Acoustic
+    | MajorMinor
+    | MinorLocrian
+    | SuperLocrian
+      -- Modes of the harmonic minor scale
+    | HarmonicMinor
+    | LocrianNatural6
+    | MajorAugmented
+    | LydianDiminished
+    | PhrygianDominant
+    | AeolianHarmonic
+    | UltraLocrian
+      -- Symmetrical scales
+    | DiminishedWholeToneHalfTone
+    | DiminishedHalfToneWholeTone
+    | WholeTone
+      -- Pentatonic scales
+    | MajorPentatonic
+    | MinorPentatonic
+
+
+toScaleKeyboardInput :
+    EditScaleState
+    ->
+        Maybe
+            { channel : Midi.Channel
+            , velocity : Int
+            , key : Key
+            , scaleId : Scale
+            , octave : Int
+            , range : Int
+            }
+toScaleKeyboardInput state =
+    let
+        mChannel =
+            Midi.stringToChannel state.channel
+
+        mVelocity =
+            String.toInt state.velocity
+
+        mKey =
+            Just state.key
+
+        mScale =
+            Just state.scale
+
+        mOctave =
+            String.toInt state.octave
+
+        mRange =
+            String.toInt state.range
+    in
+    Utils.mmap6
+        (\c v n s o r ->
+            { channel = c
+            , velocity = v
+            , key = n
+            , scaleId = s
+            , octave = o
+            , range = r
+            }
+        )
+        mChannel
+        mVelocity
+        mKey
+        mScale
+        mOctave
+        mRange
+
+
+type alias EditChordBuilderState =
+    { channel : String
+    , velocity : String
+    , key : Key
+    , scale : Scale
+    , octave : String
+    , range : String
+    , chordType : ChordType
+    }
+
+
+type ChordType
+    = Triad
+    | FourNote
+
+
+defaultEditChordBuilderState : EditChordBuilderState
+defaultEditChordBuilderState =
+    { channel = ""
+    , velocity = ""
+    , key = C
+    , scale = Major
+    , octave = ""
+    , range = ""
+    , chordType = Triad
+    }
+
+
+toChordBuildInput :
+    EditChordBuilderState
+    ->
+        Maybe
+            { channel : Midi.Channel
+            , velocity : Int
+            , key : Key
+            , scaleId : Scale
+            , octave : Int
+            , range : Int
+            , chordType : ChordType
+            }
+toChordBuildInput state =
+    let
+        mChannel =
+            Midi.stringToChannel state.channel
+
+        mVelocity =
+            String.toInt state.velocity
+
+        mKey =
+            Just state.key
+
+        mScale =
+            Just state.scale
+
+        mOctave =
+            String.toInt state.octave
+
+        mRange =
+            String.toInt state.range
+    in
+    Utils.mmap6
+        (\c v n s o r ->
+            { channel = c
+            , velocity = v
+            , key = n
+            , scaleId = s
+            , octave = o
+            , range = r
+            , chordType = state.chordType
+            }
+        )
+        mChannel
+        mVelocity
+        mKey
+        mScale
+        mOctave
+        mRange
 
 
 type alias EditNoteState =
@@ -670,6 +971,12 @@ updateWithMidiMsg midiMsg state =
         EditIsomorphic _ ->
             state
 
+        EditScale _ ->
+            state
+
+        EditChordBuilder _ ->
+            state
+
         EditColumn subControls ->
             case midiMsg of
                 Midi.NoteOn { channel, pitch, velocity } ->
@@ -778,6 +1085,126 @@ updateWithMidiMsg midiMsg state =
                             }
                         ]
                         |> EditRow
+
+                _ ->
+                    state
+
+        EditSizedColumn subControls ->
+            case midiMsg of
+                Midi.NoteOn { channel, pitch, velocity } ->
+                    let
+                        ch =
+                            Midi.intToChannel channel
+                                |> Maybe.withDefault Midi.Ch1
+
+                        label =
+                            "Ch"
+                                ++ Midi.channelToString ch
+                                ++ "#"
+                                ++ String.fromInt pitch
+                    in
+                    List.append subControls
+                        [ ( 1
+                          , Controller.newNote
+                                label
+                                Medium
+                                (pitchToAppColour pitch)
+                                ch
+                                pitch
+                                velocity
+                          )
+                        ]
+                        |> EditSizedColumn
+
+                Midi.ControllerChange { channel, controller } ->
+                    let
+                        ch =
+                            Midi.intToChannel channel
+                                |> Maybe.withDefault Midi.Ch1
+
+                        label =
+                            "Ch"
+                                ++ Midi.channelToString ch
+                                ++ " CC "
+                                ++ String.fromInt controller
+                    in
+                    List.append
+                        subControls
+                        [ ( 1
+                          , Controller.Fader
+                                { status = Controller.Set
+                                , label = label
+                                , labelSize = Just Medium
+                                , colour = Yellow
+                                , channel = ch
+                                , ccNumber = controller
+                                , valuePercent = 50
+                                , valueMin = 0
+                                , valueMax = 127
+                                }
+                          )
+                        ]
+                        |> EditSizedColumn
+
+                _ ->
+                    state
+
+        EditSizedRow subControls ->
+            case midiMsg of
+                Midi.NoteOn { channel, pitch, velocity } ->
+                    let
+                        ch =
+                            Midi.intToChannel channel
+                                |> Maybe.withDefault Midi.Ch1
+
+                        label =
+                            "Ch"
+                                ++ Midi.channelToString ch
+                                ++ "#"
+                                ++ String.fromInt pitch
+                    in
+                    List.append subControls
+                        [ ( 1
+                          , Controller.newNote
+                                label
+                                Medium
+                                (pitchToAppColour pitch)
+                                ch
+                                pitch
+                                velocity
+                          )
+                        ]
+                        |> EditSizedRow
+
+                Midi.ControllerChange { channel, controller } ->
+                    let
+                        ch =
+                            Midi.intToChannel channel
+                                |> Maybe.withDefault Midi.Ch1
+
+                        label =
+                            "Ch"
+                                ++ Midi.channelToString ch
+                                ++ " CC "
+                                ++ String.fromInt controller
+                    in
+                    List.append
+                        subControls
+                        [ ( 1
+                          , Controller.Fader
+                                { status = Controller.Set
+                                , label = label
+                                , labelSize = Just Medium
+                                , colour = Yellow
+                                , channel = ch
+                                , ccNumber = controller
+                                , valuePercent = 50
+                                , valueMin = 0
+                                , valueMax = 127
+                                }
+                          )
+                        ]
+                        |> EditSizedRow
 
                 _ ->
                     state

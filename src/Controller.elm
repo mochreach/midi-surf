@@ -2,14 +2,26 @@ module Controller exposing (..)
 
 import Array exposing (Array)
 import Codec exposing (Codec)
+import Element exposing (..)
+import Element.Border as Border
+import Element.Events as Events
+import Element.Font as Font
+import Element.Input as Input
+import Element.Lazy as Lazy
+import FeatherIcons as Icons
+import Html.Events.Extra.Mouse as Mouse
+import Html.Events.Extra.Touch as Touch
 import Midi exposing (Channel(..), MidiMsg(..))
 import Style exposing (..)
+import Utils exposing (PageConfig)
 
 
 type Controller
     = Module String Controller
     | Row (List Controller)
     | Column (List Controller)
+    | SizedRow (List ( Int, Controller ))
+    | SizedColumn (List ( Int, Controller ))
     | Note NoteState
     | Chord ChordState
     | CCValue CCValueState
@@ -27,7 +39,7 @@ controllerCodec =
     Codec.recursive
         (\rmeta ->
             Codec.custom
-                (\mod row col note cho ccv com seq fad xy pb mid spa value ->
+                (\mod row col srw scl note cho ccv com seq fad xy pb mid spa value ->
                     case value of
                         Module l c ->
                             mod l c
@@ -37,6 +49,12 @@ controllerCodec =
 
                         Column cs ->
                             col cs
+
+                        SizedRow cs ->
+                            srw cs
+
+                        SizedColumn cs ->
+                            scl cs
 
                         Note s ->
                             note s
@@ -71,6 +89,8 @@ controllerCodec =
                 |> Codec.variant2 "Module" Module Codec.string rmeta
                 |> Codec.variant1 "Row" Row (Codec.list rmeta)
                 |> Codec.variant1 "Column" Column (Codec.list rmeta)
+                |> Codec.variant1 "SizedRow" SizedRow (Codec.list (Codec.tuple Codec.int rmeta))
+                |> Codec.variant1 "SizedColumn" SizedColumn (Codec.list (Codec.tuple Codec.int rmeta))
                 |> Codec.variant1 "Note" Note noteStateCodec
                 |> Codec.variant1 "Chord" Chord chordStateCodec
                 |> Codec.variant1 "CCValue" CCValue ccValueStateCodec
@@ -95,6 +115,12 @@ controllerToString control =
             "Row: " ++ (String.fromInt <| List.length subcontrols) ++ " items"
 
         Column subcontrols ->
+            "Column: " ++ (String.fromInt <| List.length subcontrols) ++ " items"
+
+        SizedRow subcontrols ->
+            "Row: " ++ (String.fromInt <| List.length subcontrols) ++ " items"
+
+        SizedColumn subcontrols ->
             "Column: " ++ (String.fromInt <| List.length subcontrols) ++ " items"
 
         Note { channel, pitch, velocity } ->
@@ -636,6 +662,32 @@ getWithId currentId id control =
                     |> List.filterMap identity
                     |> List.head
 
+        SizedRow controllers ->
+            if currentId == id then
+                Just control
+
+            else
+                List.indexedMap
+                    (\i ( _, c ) ->
+                        getWithId (currentId ++ "_" ++ String.fromInt i) id c
+                    )
+                    controllers
+                    |> List.filterMap identity
+                    |> List.head
+
+        SizedColumn controllers ->
+            if currentId == id then
+                Just control
+
+            else
+                List.indexedMap
+                    (\i ( _, c ) ->
+                        getWithId (currentId ++ "_" ++ String.fromInt i) id c
+                    )
+                    controllers
+                    |> List.filterMap identity
+                    |> List.head
+
         Note _ ->
             if currentId == id then
                 Just control
@@ -745,6 +797,30 @@ updateWithId currentId toUpdate updateInfo =
                     )
                     controllers
                     |> Column
+
+        SizedRow controllers ->
+            if currentId == id then
+                updateFn toUpdate
+
+            else
+                List.indexedMap
+                    (\i ( s, c ) ->
+                        ( s, updateWithId (currentId ++ "_" ++ String.fromInt i) c updateInfo )
+                    )
+                    controllers
+                    |> SizedRow
+
+        SizedColumn controllers ->
+            if currentId == id then
+                updateFn toUpdate
+
+            else
+                List.indexedMap
+                    (\i ( s, c ) ->
+                        ( s, updateWithId (currentId ++ "_" ++ String.fromInt i) c updateInfo )
+                    )
+                    controllers
+                    |> SizedColumn
 
         Note state ->
             if currentId == id then
@@ -1074,6 +1150,14 @@ setChannel channel controller =
             Column <|
                 List.map (setChannel channel) subcontrols
 
+        SizedRow subcontrols ->
+            SizedRow <|
+                List.map (\( s, c ) -> ( s, setChannel channel c )) subcontrols
+
+        SizedColumn subcontrols ->
+            SizedColumn <|
+                List.map (\( s, c ) -> ( s, setChannel channel c )) subcontrols
+
         Note state ->
             Note { state | channel = channel }
 
@@ -1130,3 +1214,1209 @@ setChannel channel controller =
 
         Space ->
             Space
+
+
+
+-- {{ Views
+
+
+renderController :
+    { addSpaceMsg : String -> msg
+    , buttonDownMsg : String -> msg
+    , buttonUpMsg : String -> msg
+    , editMsg : String -> msg
+    , faderChangingMsg : String -> Touch.Event -> msg
+    , faderChangingMouseMsg : String -> Mouse.Event -> msg
+    , faderSetMsg : String -> msg
+    , noopMsg : msg
+    , removeItemMsg : String -> msg
+    }
+    -> Bool
+    -> List String
+    -> PageConfig
+    -> List String
+    -> Controller
+    -> Int
+    -> Element msg
+renderController msgs editing midiLog config idParts controller id =
+    let
+        updatedParts =
+            String.fromInt id :: idParts
+
+        parentId =
+            updatedParts
+                |> List.reverse
+                |> String.join "_"
+    in
+    case controller of
+        Module label subControls ->
+            Lazy.lazy2
+                column
+                ([ padding config.gapSize
+                 , spacing config.gapSize
+                 ]
+                    ++ fillSpace
+                    ++ (if not editing then
+                            [ Border.dotted
+                            , Border.width 4
+                            ]
+
+                        else
+                            [ padding 2
+                            , Border.width 2
+                            , Border.dashed
+                            ]
+                       )
+                )
+                [ row [ width fill ]
+                    ((el [ padding 4 ] <| text label)
+                        :: (if not editing then
+                                []
+
+                            else
+                                [ el
+                                    [ alignRight
+                                    , padding 4
+                                    , backgroundColour White
+                                    ]
+                                  <|
+                                    renderEditButton
+                                        { editMsg =
+                                            msgs.editMsg parentId
+                                        , addMsg = msgs.addSpaceMsg parentId
+                                        , removeMsg = msgs.removeItemMsg parentId
+                                        }
+                                        config
+                                        EditContainer
+                                ]
+                           )
+                    )
+                , renderController msgs editing midiLog config updatedParts subControls 0
+                ]
+
+        Row subControls ->
+            Lazy.lazy2 row
+                ([ spacingXY config.gapSize 0
+                 , Events.onClick msgs.noopMsg
+                 ]
+                    ++ fillSpace
+                    ++ (if not editing then
+                            []
+
+                        else
+                            [ padding 2
+                            , Border.width 2
+                            , Border.dashed
+                            ]
+                       )
+                )
+            <|
+                (List.map2
+                    (renderController msgs editing midiLog config updatedParts)
+                    subControls
+                    (List.range 0 <| List.length subControls)
+                    ++ (if not editing then
+                            []
+
+                        else
+                            [ el
+                                [ alignRight
+                                , padding 4
+                                , backgroundColour White
+                                ]
+                              <|
+                                renderEditButton
+                                    { editMsg =
+                                        msgs.editMsg parentId
+                                    , addMsg = msgs.addSpaceMsg parentId
+                                    , removeMsg = msgs.removeItemMsg parentId
+                                    }
+                                    config
+                                    EditContainer
+                            ]
+                       )
+                )
+
+        Column subControls ->
+            if not editing then
+                Lazy.lazy2 column
+                    (spacingXY 0 config.gapSize
+                        :: fillSpace
+                        ++ (if not editing then
+                                []
+
+                            else
+                                [ padding 2
+                                , Border.width 2
+                                , Border.dashed
+                                ]
+                           )
+                    )
+                <|
+                    List.map2
+                        (renderController msgs editing midiLog config updatedParts)
+                        subControls
+                        (List.range 0 <| List.length subControls)
+
+            else
+                Lazy.lazy2 column
+                    ([ paddingXY 0 5
+                     , spacing 5
+                     , Border.width 2
+                     , Border.dashed
+                     ]
+                        ++ fillSpace
+                    )
+                    [ renderEditButton
+                        { editMsg =
+                            msgs.editMsg parentId
+                        , addMsg = msgs.addSpaceMsg parentId
+                        , removeMsg = msgs.removeItemMsg parentId
+                        }
+                        config
+                        EditContainer
+                    , column
+                        ([ spacingXY 0 config.gapSize
+                         , padding config.gapSize
+                         ]
+                            ++ fillSpace
+                        )
+                      <|
+                        List.map2
+                            (renderController msgs editing midiLog config updatedParts)
+                            subControls
+                            (List.range 0 <| List.length subControls)
+                    ]
+
+        SizedRow subControls ->
+            Lazy.lazy2 row
+                ([ spacingXY config.gapSize 0
+                 , Events.onClick msgs.noopMsg
+                 ]
+                    ++ fillSpace
+                    ++ (if not editing then
+                            []
+
+                        else
+                            [ padding 2
+                            , Border.width 2
+                            , Border.dashed
+                            ]
+                       )
+                )
+            <|
+                (List.map2
+                    (\( s, c ) i ->
+                        el [ height fill, width <| fillPortion s ]
+                            (renderController msgs editing midiLog config updatedParts c i)
+                    )
+                    subControls
+                    (List.range 0 <| List.length subControls)
+                    ++ (if not editing then
+                            []
+
+                        else
+                            [ el
+                                [ alignRight
+                                , padding 4
+                                , backgroundColour White
+                                ]
+                              <|
+                                renderEditButton
+                                    { editMsg =
+                                        msgs.editMsg parentId
+                                    , addMsg = msgs.addSpaceMsg parentId
+                                    , removeMsg = msgs.removeItemMsg parentId
+                                    }
+                                    config
+                                    EditContainer
+                            ]
+                       )
+                )
+
+        SizedColumn subControls ->
+            if not editing then
+                Lazy.lazy2 column
+                    (spacingXY 0 config.gapSize
+                        :: fillSpace
+                        ++ (if not editing then
+                                []
+
+                            else
+                                [ padding 2
+                                , Border.width 2
+                                , Border.dashed
+                                ]
+                           )
+                    )
+                <|
+                    List.map2
+                        (\( s, c ) i ->
+                            el [ height <| fillPortion s, width fill ]
+                                (renderController msgs editing midiLog config updatedParts c i)
+                        )
+                        subControls
+                        (List.range 0 <| List.length subControls)
+
+            else
+                Lazy.lazy2 column
+                    ([ paddingXY 0 5
+                     , spacing 5
+                     , Border.width 2
+                     , Border.dashed
+                     ]
+                        ++ fillSpace
+                    )
+                    [ renderEditButton
+                        { editMsg =
+                            msgs.editMsg parentId
+                        , addMsg = msgs.addSpaceMsg parentId
+                        , removeMsg = msgs.removeItemMsg parentId
+                        }
+                        config
+                        EditContainer
+                    , column
+                        ([ spacingXY 0 config.gapSize
+                         , padding config.gapSize
+                         ]
+                            ++ fillSpace
+                        )
+                      <|
+                        List.map2
+                            (\( s, c ) i ->
+                                el [ height <| fillPortion s, width fill ]
+                                    (renderController msgs editing midiLog config updatedParts c i)
+                            )
+                            subControls
+                            (List.range 0 <| List.length subControls)
+                    ]
+
+        Note state ->
+            renderNote
+                { buttonDownMsg = msgs.buttonDownMsg parentId
+                , buttonUpMsg = msgs.buttonUpMsg parentId
+                , editMsg = msgs.editMsg parentId
+                }
+                config
+                editing
+                state
+
+        Chord state ->
+            renderChord
+                { buttonDownMsg = msgs.buttonDownMsg parentId
+                , buttonUpMsg = msgs.buttonUpMsg parentId
+                , editMsg = msgs.editMsg parentId
+                }
+                config
+                editing
+                state
+
+        CCValue state ->
+            renderCCValue
+                { buttonDownMsg = msgs.buttonDownMsg parentId
+                , buttonUpMsg = msgs.buttonUpMsg parentId
+                , editMsg = msgs.editMsg parentId
+                }
+                config
+                editing
+                state
+
+        Command state ->
+            renderCommand
+                { buttonDownMsg = msgs.buttonDownMsg parentId
+                , buttonUpMsg = msgs.buttonUpMsg parentId
+                , editMsg = msgs.editMsg parentId
+                }
+                config
+                editing
+                state
+
+        Sequence state ->
+            renderSequence
+                { buttonDownMsg = msgs.buttonDownMsg parentId
+                , buttonUpMsg = msgs.buttonUpMsg parentId
+                , editMsg = msgs.editMsg parentId
+                }
+                config
+                editing
+                state
+
+        Fader state ->
+            renderFader
+                { faderChangingMsg = msgs.faderChangingMsg parentId
+                , faderChangingMouseMsg = msgs.faderChangingMouseMsg parentId
+                , faderSetMsg = msgs.faderSetMsg parentId
+                , editMsg = msgs.editMsg parentId
+                }
+                config
+                editing
+                state
+
+        XYFader state ->
+            renderXYFader
+                { faderChangingMsg = msgs.faderChangingMsg parentId
+                , faderChangingMouseMsg = msgs.faderChangingMouseMsg parentId
+                , faderSetMsg = msgs.faderSetMsg parentId
+                , editMsg = msgs.editMsg parentId
+                }
+                config
+                editing
+                state
+
+        PitchBend state ->
+            renderPitchBend
+                { faderChangingMsg = msgs.faderChangingMsg parentId
+                , faderChangingMouseMsg = msgs.faderChangingMouseMsg parentId
+                , faderSetMsg = msgs.faderSetMsg parentId
+                , editMsg = msgs.editMsg parentId
+                }
+                config
+                editing
+                state
+
+        MidiLog ->
+            if not editing then
+                column fillSpace
+                    [ column
+                        ([ padding 4
+                         , spacing 10
+                         , backgroundColour White
+                         , scrollbarY
+                         , clipX
+                         ]
+                            ++ fillSpace
+                        )
+                        (if List.isEmpty midiLog then
+                            [ el [ centerX, centerY ] <|
+                                text "No MIDI events in log."
+                            ]
+
+                         else
+                            List.map
+                                (\s ->
+                                    paragraph
+                                        [ Font.alignLeft
+                                        , Font.size 12
+                                        , padding 2
+                                        , Border.widthEach
+                                            { bottom = 1, top = 0, left = 0, right = 0 }
+                                        ]
+                                        [ text s ]
+                                )
+                                midiLog
+                        )
+                    ]
+
+            else
+                el
+                    ([ backgroundColour LightGrey
+                     , Events.onClick <|
+                        msgs.editMsg parentId
+                     ]
+                        ++ fillSpace
+                    )
+                    (el
+                        [ centerX
+                        , centerY
+                        ]
+                     <|
+                        text "MIDI Log"
+                    )
+
+        Space ->
+            if not editing then
+                el
+                    ([ backgroundColour White
+                     , borderColour LightGrey
+                     , Border.width 4
+                     ]
+                        ++ fillSpace
+                    )
+                    none
+
+            else
+                el
+                    ([ backgroundColour LightGrey
+                     , Events.onClick <|
+                        msgs.editMsg parentId
+                     ]
+                        ++ fillSpace
+                    )
+                    (el
+                        [ centerX
+                        , centerY
+                        ]
+                     <|
+                        text "SPACE"
+                    )
+
+
+renderNote :
+    { buttonDownMsg : msg, buttonUpMsg : msg, editMsg : msg }
+    -> PageConfig
+    -> Bool
+    -> NoteState
+    -> Element msg
+renderNote msgs config editing state =
+    if not editing then
+        el
+            ([ padding 0
+             , spacing 0
+             , Border.width 4
+             , case state.status of
+                Off ->
+                    backgroundColour state.colour
+
+                On ->
+                    Border.dashed
+             , htmlAttribute <|
+                Touch.onStart
+                    (\_ ->
+                        msgs.buttonDownMsg
+                    )
+             , htmlAttribute <|
+                Mouse.onDown
+                    (\event ->
+                        msgs.buttonDownMsg
+                    )
+             , htmlAttribute <|
+                Touch.onEnd
+                    (\_ ->
+                        msgs.buttonUpMsg
+                    )
+             , htmlAttribute <|
+                Mouse.onUp
+                    (\_ ->
+                        msgs.buttonUpMsg
+                    )
+             ]
+                ++ Style.noSelect
+                ++ fillSpace
+            )
+            ((if config.debug then
+                Midi.channelToString state.channel ++ "\n"
+
+              else
+                ""
+             )
+                ++ state.label
+                |> text
+                |> el
+                    [ centerX
+                    , centerY
+                    , labelSizeToFontSize <| Maybe.withDefault Small state.labelSize
+                    ]
+            )
+
+    else
+        Input.button
+            ([ padding config.gapSize
+             , spacing config.gapSize
+             , Border.width 2
+             , Border.dashed
+             , Font.size 14
+             , backgroundColour state.colour
+             ]
+                ++ Style.noSelect
+                ++ fillSpace
+            )
+            { onPress = Just <| msgs.editMsg
+            , label =
+                state.label
+                    |> text
+            }
+
+
+renderChord :
+    { buttonDownMsg : msg, buttonUpMsg : msg, editMsg : msg }
+    -> PageConfig
+    -> Bool
+    -> ChordState
+    -> Element msg
+renderChord msgs config editing state =
+    if not editing then
+        el
+            ([ padding 0
+             , spacing 0
+             , Border.width 4
+             , case state.status of
+                Off ->
+                    backgroundColour state.colour
+
+                On ->
+                    Border.dashed
+             , htmlAttribute <|
+                Touch.onStart
+                    (\_ ->
+                        msgs.buttonDownMsg
+                    )
+             , htmlAttribute <|
+                Mouse.onDown
+                    (\_ ->
+                        msgs.buttonDownMsg
+                    )
+             , htmlAttribute <|
+                Touch.onEnd
+                    (\_ ->
+                        msgs.buttonUpMsg
+                    )
+             , htmlAttribute <|
+                Mouse.onUp
+                    (\_ ->
+                        msgs.buttonUpMsg
+                    )
+             ]
+                ++ Style.noSelect
+                ++ fillSpace
+            )
+            (state.label
+                |> text
+                |> el
+                    [ centerX
+                    , centerY
+                    , labelSizeToFontSize <| Maybe.withDefault Small state.labelSize
+                    ]
+            )
+
+    else
+        Input.button
+            ([ padding config.gapSize
+             , spacing config.gapSize
+             , Border.width 2
+             , Border.dashed
+             , Font.size 14
+             , backgroundColour state.colour
+             ]
+                ++ Style.noSelect
+                ++ fillSpace
+            )
+            { onPress = Just <| msgs.editMsg
+            , label =
+                state.label
+                    |> text
+            }
+
+
+renderCCValue :
+    { buttonDownMsg : msg, buttonUpMsg : msg, editMsg : msg }
+    -> PageConfig
+    -> Bool
+    -> CCValueState
+    -> Element msg
+renderCCValue msgs config editing state =
+    if not editing then
+        el
+            ([ padding 0
+             , spacing 0
+             , Border.width 4
+             , case state.status of
+                Off ->
+                    backgroundColour state.colour
+
+                On ->
+                    Border.dashed
+             , htmlAttribute <|
+                Touch.onStart
+                    (\_ ->
+                        msgs.buttonDownMsg
+                    )
+             , htmlAttribute <|
+                Mouse.onDown
+                    (\_ ->
+                        msgs.buttonDownMsg
+                    )
+             , htmlAttribute <|
+                Touch.onEnd
+                    (\_ ->
+                        msgs.buttonUpMsg
+                    )
+             , htmlAttribute <|
+                Mouse.onUp
+                    (\_ ->
+                        msgs.buttonUpMsg
+                    )
+             ]
+                ++ Style.noSelect
+                ++ fillSpace
+            )
+            ((if config.debug then
+                case state.status of
+                    Off ->
+                        "Off\n" ++ Midi.channelToString state.channel ++ "\n"
+
+                    On ->
+                        "Off\n" ++ Midi.channelToString state.channel ++ "\n"
+
+              else
+                ""
+             )
+                ++ state.label
+                |> text
+                |> el
+                    [ centerX
+                    , centerY
+                    , labelSizeToFontSize <| Maybe.withDefault Small state.labelSize
+                    ]
+            )
+
+    else
+        Input.button
+            ([ padding config.gapSize
+             , spacing config.gapSize
+             , Border.width 2
+             , Border.dashed
+             , Font.size 14
+             , backgroundColour state.colour
+             ]
+                ++ Style.noSelect
+                ++ fillSpace
+            )
+            { onPress = Just <| msgs.editMsg
+            , label =
+                state.label
+                    |> text
+            }
+
+
+renderCommand :
+    { buttonDownMsg : msg, buttonUpMsg : msg, editMsg : msg }
+    -> PageConfig
+    -> Bool
+    -> CommandState
+    -> Element msg
+renderCommand msgs config editing state =
+    if not editing then
+        el
+            ([ padding 0
+             , spacing 0
+             , Border.width 4
+             , case state.status of
+                Off ->
+                    backgroundColour state.colour
+
+                On ->
+                    Border.dashed
+             , htmlAttribute <|
+                Touch.onStart
+                    (\_ ->
+                        msgs.buttonDownMsg
+                    )
+             , htmlAttribute <|
+                Mouse.onDown
+                    (\_ ->
+                        msgs.buttonDownMsg
+                    )
+             , htmlAttribute <|
+                Touch.onEnd
+                    (\_ ->
+                        msgs.buttonUpMsg
+                    )
+             , htmlAttribute <|
+                Mouse.onUp
+                    (\_ ->
+                        msgs.buttonUpMsg
+                    )
+             ]
+                ++ Style.noSelect
+                ++ fillSpace
+            )
+            (state.label
+                |> text
+                |> el
+                    [ centerX
+                    , centerY
+                    , labelSizeToFontSize <| Maybe.withDefault Small state.labelSize
+                    ]
+            )
+
+    else
+        Input.button
+            ([ padding config.gapSize
+             , spacing config.gapSize
+             , Border.width 2
+             , Border.dashed
+             , Font.size 14
+             , backgroundColour state.colour
+             ]
+                ++ Style.noSelect
+                ++ fillSpace
+            )
+            { onPress = Just <| msgs.editMsg
+            , label =
+                state.label
+                    |> text
+            }
+
+
+renderSequence :
+    { buttonDownMsg : msg, buttonUpMsg : msg, editMsg : msg }
+    -> PageConfig
+    -> Bool
+    -> SequenceState
+    -> Element msg
+renderSequence msgs config editing state =
+    if not editing then
+        el
+            ([ padding 0
+             , spacing 0
+             , Border.width 4
+             , case state.status of
+                Off ->
+                    backgroundColour state.colour
+
+                On ->
+                    Border.dashed
+             , htmlAttribute <|
+                Touch.onStart
+                    (\_ ->
+                        msgs.buttonDownMsg
+                    )
+             , htmlAttribute <|
+                Mouse.onDown
+                    (\_ ->
+                        msgs.buttonDownMsg
+                    )
+             , htmlAttribute <|
+                Touch.onEnd
+                    (\_ ->
+                        msgs.buttonUpMsg
+                    )
+             , htmlAttribute <|
+                Mouse.onUp
+                    (\_ ->
+                        msgs.buttonUpMsg
+                    )
+             ]
+                ++ Style.noSelect
+                ++ fillSpace
+            )
+            (state.label
+                ++ "\n"
+                ++ String.fromInt (state.index + 1)
+                |> text
+                |> el
+                    [ centerX
+                    , centerY
+                    , labelSizeToFontSize <| Maybe.withDefault Small state.labelSize
+                    ]
+            )
+
+    else
+        Input.button
+            ([ padding config.gapSize
+             , spacing config.gapSize
+             , Border.width 2
+             , Border.dashed
+             , Font.size 14
+             , backgroundColour state.colour
+             ]
+                ++ Style.noSelect
+                ++ fillSpace
+            )
+            { onPress = Just <| msgs.editMsg
+            , label =
+                state.label
+                    |> text
+            }
+
+
+renderFader :
+    { faderChangingMsg : Touch.Event -> msg, faderChangingMouseMsg : Mouse.Event -> msg, faderSetMsg : msg, editMsg : msg }
+    -> PageConfig
+    -> Bool
+    -> FaderState
+    -> Element msg
+renderFader msgs config editing state =
+    if not editing then
+        el
+            ([ padding 0
+             , spacing 0
+             , Border.width 4
+             , case state.status of
+                Set ->
+                    Border.solid
+
+                Changing _ _ ->
+                    Border.dashed
+             , htmlAttribute <|
+                Touch.onStart
+                    (\event ->
+                        msgs.faderChangingMsg event
+                    )
+             , htmlAttribute <|
+                Mouse.onDown
+                    (\event ->
+                        msgs.faderChangingMouseMsg event
+                    )
+             , htmlAttribute <|
+                Touch.onMove
+                    (\event ->
+                        msgs.faderChangingMsg event
+                    )
+             , htmlAttribute <|
+                Touch.onEnd
+                    (\_ ->
+                        msgs.faderSetMsg
+                    )
+             , htmlAttribute <|
+                Mouse.onUp
+                    (\_ ->
+                        msgs.faderSetMsg
+                    )
+             ]
+                ++ (case state.status of
+                        Changing _ _ ->
+                            [ htmlAttribute <|
+                                Mouse.onMove
+                                    (\event ->
+                                        msgs.faderChangingMouseMsg event
+                                    )
+                            ]
+
+                        Set ->
+                            []
+                   )
+                ++ Style.noSelect
+                ++ fillSpace
+            )
+            (column
+                (backgroundColour White :: fillSpace)
+                [ el [ centerX, padding 10, Font.size 14 ] <|
+                    text (String.fromInt state.valuePercent ++ "%")
+                , column
+                    fillSpace
+                    [ el
+                        [ height <| fillPortion (100 - state.valuePercent)
+                        , width fill
+                        , backgroundColour White
+                        ]
+                        none
+                    , el
+                        [ height <| fillPortion state.valuePercent
+                        , width fill
+                        , backgroundColour state.colour
+                        , Border.widthEach { bottom = 0, top = 8, left = 0, right = 0 }
+                        ]
+                        none
+                    ]
+                , el
+                    [ centerX
+                    , padding 10
+                    , labelSizeToFontSize <| Maybe.withDefault Small state.labelSize
+                    ]
+                  <|
+                    text state.label
+                ]
+            )
+
+    else
+        Input.button
+            ([ padding config.gapSize
+             , spacing config.gapSize
+             , Border.width 2
+             , Border.dashed
+             , Font.size 14
+             , backgroundColour state.colour
+             ]
+                ++ Style.noSelect
+                ++ fillSpace
+            )
+            { onPress = Just <| msgs.editMsg
+            , label =
+                state.label
+                    |> text
+            }
+
+
+renderXYFader :
+    { faderChangingMsg : Touch.Event -> msg, faderChangingMouseMsg : Mouse.Event -> msg, faderSetMsg : msg, editMsg : msg }
+    -> PageConfig
+    -> Bool
+    -> XYFaderState
+    -> Element msg
+renderXYFader msgs config editing state =
+    if not editing then
+        el
+            ([ padding 0
+             , spacing 0
+             , Border.width 4
+             , case state.status of
+                Set ->
+                    Border.solid
+
+                Changing _ _ ->
+                    Border.dashed
+             , htmlAttribute <|
+                Touch.onStart
+                    (\event ->
+                        msgs.faderChangingMsg event
+                    )
+             , htmlAttribute <|
+                Mouse.onDown
+                    (\event ->
+                        msgs.faderChangingMouseMsg event
+                    )
+             , htmlAttribute <|
+                Touch.onMove
+                    (\event ->
+                        msgs.faderChangingMsg event
+                    )
+             , htmlAttribute <|
+                Touch.onEnd
+                    (\_ ->
+                        msgs.faderSetMsg
+                    )
+             , htmlAttribute <|
+                Mouse.onUp
+                    (\_ ->
+                        msgs.faderSetMsg
+                    )
+             ]
+                ++ (case state.status of
+                        Changing _ _ ->
+                            [ htmlAttribute <|
+                                Mouse.onMove
+                                    (\event ->
+                                        msgs.faderChangingMouseMsg event
+                                    )
+                            ]
+
+                        Set ->
+                            []
+                   )
+                ++ Style.noSelect
+                ++ fillSpace
+            )
+            (column
+                (backgroundColour White :: fillSpace)
+                [ el [ centerX, padding 10, Font.size 14 ] <|
+                    text
+                        ("X "
+                            ++ String.fromInt state.valuePercent1
+                            ++ "%, "
+                            ++ "Y "
+                            ++ String.fromInt state.valuePercent2
+                            ++ "%"
+                        )
+                , column
+                    ([ inFront <|
+                        row
+                            fillSpace
+                            [ el
+                                [ height fill
+                                , width <| fillPortion state.valuePercent1
+                                ]
+                                none
+                            , el
+                                [ height fill
+                                , width <| fillPortion (100 - state.valuePercent1)
+                                , Border.widthEach { bottom = 0, top = 0, left = 8, right = 0 }
+                                ]
+                                none
+                            ]
+                     , backgroundColour state.colour
+                     ]
+                        ++ fillSpace
+                    )
+                    [ el
+                        [ height <| fillPortion (100 - state.valuePercent2)
+                        , width fill
+                        ]
+                        none
+                    , el
+                        [ height <| fillPortion state.valuePercent2
+                        , width fill
+                        , Border.widthEach { bottom = 0, top = 8, left = 0, right = 0 }
+                        ]
+                        none
+                    ]
+                , el
+                    [ centerX
+                    , padding 10
+                    , labelSizeToFontSize <| Maybe.withDefault Small state.labelSize
+                    ]
+                  <|
+                    text state.label
+                ]
+            )
+
+    else
+        Input.button
+            ([ padding config.gapSize
+             , spacing config.gapSize
+             , Border.width 2
+             , Border.dashed
+             , Font.size 14
+             , backgroundColour state.colour
+             ]
+                ++ Style.noSelect
+                ++ fillSpace
+            )
+            { onPress = Just <| msgs.editMsg
+            , label =
+                state.label
+                    |> text
+            }
+
+
+renderPitchBend :
+    { faderChangingMsg : Touch.Event -> msg, faderChangingMouseMsg : Mouse.Event -> msg, faderSetMsg : msg, editMsg : msg }
+    -> PageConfig
+    -> Bool
+    -> PitchBendState
+    -> Element msg
+renderPitchBend msgs config editing state =
+    let
+        fillFraction =
+            round <| 100 * (toFloat state.bendValue / 16383)
+    in
+    if not editing then
+        el
+            ([ padding 0
+             , spacing 0
+             , Border.width 4
+             , case state.status of
+                Set ->
+                    Border.solid
+
+                Changing _ _ ->
+                    Border.dashed
+             , htmlAttribute <|
+                Touch.onStart
+                    (\event ->
+                        msgs.faderChangingMsg event
+                    )
+             , htmlAttribute <|
+                Mouse.onDown
+                    (\event ->
+                        msgs.faderChangingMouseMsg event
+                    )
+             , htmlAttribute <|
+                Touch.onMove
+                    (\event ->
+                        msgs.faderChangingMsg event
+                    )
+             , htmlAttribute <|
+                Touch.onEnd
+                    (\_ ->
+                        msgs.faderSetMsg
+                    )
+             , htmlAttribute <|
+                Mouse.onUp
+                    (\_ ->
+                        msgs.faderSetMsg
+                    )
+             ]
+                ++ (case state.status of
+                        Changing _ _ ->
+                            [ htmlAttribute <|
+                                Mouse.onMove
+                                    (\event ->
+                                        msgs.faderChangingMouseMsg event
+                                    )
+                            ]
+
+                        Set ->
+                            []
+                   )
+                ++ Style.noSelect
+                ++ fillSpace
+            )
+            (column
+                (backgroundColour White :: fillSpace)
+                [ column
+                    fillSpace
+                    [ el
+                        [ height <| fillPortion (100 - fillFraction)
+                        , width fill
+                        , backgroundColour state.colour
+                        ]
+                        none
+                    , el
+                        [ height <| fillPortion fillFraction
+                        , width fill
+                        , backgroundColour state.colour
+                        , Border.widthEach { bottom = 0, top = 8, left = 0, right = 0 }
+                        ]
+                        none
+                    ]
+                , el
+                    [ centerX
+                    , padding 10
+                    , labelSizeToFontSize <| Maybe.withDefault Small state.labelSize
+                    ]
+                  <|
+                    text state.label
+                ]
+            )
+
+    else
+        Input.button
+            ([ padding config.gapSize
+             , spacing config.gapSize
+             , Border.width 2
+             , Border.dashed
+             , Font.size 14
+             , backgroundColour state.colour
+             ]
+                ++ Style.noSelect
+                ++ fillSpace
+            )
+            { onPress = Just <| msgs.editMsg
+            , label =
+                state.label
+                    |> text
+            }
+
+
+renderEditButton : { editMsg : msg, addMsg : msg, removeMsg : msg } -> PageConfig -> EditOperation -> Element msg
+renderEditButton msgs config editOperation =
+    case editOperation of
+        EditContainer ->
+            Input.button
+                [ centerX
+                , padding config.gapSize
+                , spacing config.gapSize
+                , Border.width 2
+                ]
+                { onPress = Just <| msgs.editMsg
+                , label =
+                    Icons.edit2
+                        |> Icons.withSize 20
+                        |> Icons.toHtml []
+                        |> html
+                }
+
+        Add ->
+            Input.button
+                [ centerX
+                , padding config.gapSize
+                , spacing config.gapSize
+                , Border.width 2
+                ]
+                { onPress = Just <| msgs.addMsg
+                , label =
+                    Icons.plus
+                        |> Icons.withSize 20
+                        |> Icons.toHtml []
+                        |> html
+                }
+
+        Remove ->
+            Input.button
+                [ centerX
+                , padding config.gapSize
+                , spacing config.gapSize
+                , Border.width 2
+                ]
+                { onPress = Just <| msgs.removeMsg
+                , label =
+                    Icons.minus
+                        |> Icons.withSize 20
+                        |> Icons.toHtml []
+                        |> html
+                }
+
+
+
+-- }}

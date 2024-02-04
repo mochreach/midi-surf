@@ -1,8 +1,23 @@
-module Utils exposing (mmap6, onContextMenu)
+module Utils exposing (PageConfig, mmap6, onContextMenu, pageConfigCodec)
 
+import Codec exposing (Codec, Value)
 import Html
 import Html.Events exposing (preventDefaultOn)
 import Json.Decode as Json
+
+
+type alias PageConfig =
+    { gapSize : Int
+    , debug : Bool
+    }
+
+
+pageConfigCodec : Codec PageConfig
+pageConfigCodec =
+    Codec.object PageConfig
+        |> Codec.field "gapSize" .gapSize Codec.int
+        |> Codec.field "debug" .debug Codec.bool
+        |> Codec.buildObject
 
 
 onContextMenu : msg -> Html.Attribute msg
