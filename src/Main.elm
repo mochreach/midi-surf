@@ -2489,6 +2489,17 @@ infoPanel =
                     |> html
                     |> el [ centerX ]
                     |> el [ width fill ]
+                , paragraph [ Font.bold ] [ text "iOS" ]
+                , paragraph []
+                    [ text "If you're having trouble running this on iOS, please check out this "
+                    , newTabLink
+                        linkStyle
+                        { url = "https://op-forums.com/t/midi-surf-a-free-customisable-web-based-midi-controller/23708/17"
+                        , label = text "post"
+                        }
+                    , text
+                        " for instructions from a user on how to get it working."
+                    ]
                 , paragraph [ Font.bold ] [ text "Supporting Development" ]
                 , paragraph []
                     [ """Please consider supporting the development of this
@@ -2500,7 +2511,7 @@ infoPanel =
                         , label = text "Patreon"
                         }
                     , """ and help guide the direction the app (and future software
-                    from Mo Chreach!) takes, or buy me a coffee/beer/cup of tea/sausage roll on
+                    from Mo Chreach!), or buy me a coffee/beer/cup of tea/sausage roll on
                     """ |> text
                     , newTabLink
                         linkStyle
