@@ -6,6 +6,7 @@ import Codec exposing (Codec)
 import Element exposing (..)
 import Element.Border as Border
 import Element.Input as Input
+import Hex
 import Style exposing (..)
 
 
@@ -21,7 +22,7 @@ type MidiMsg
     | ProgramChange { channel : Int, preset : Int }
     | ChannelPressure { channel : Int, pressure : Int }
     | PitchBend { channel : Int, bendLSB : Int, bendMSB : Int }
-    | SystemExclusive { vendorId : Int, data : Array Int }
+    | SystemExclusive (Array Int)
     | SongPosition { positionLSB : Int, positionMSB : Int }
     | SongSelect Int
     | UnofficialBusSelect Int
@@ -85,12 +86,9 @@ midiMsgCodec =
                 |> Codec.field "bendMSB" .bendMSB Codec.int
                 |> Codec.buildObject
 
-        sysExParamsCodec : Codec { vendorId : Int, data : Array Int }
+        sysExParamsCodec : Codec (Array Int)
         sysExParamsCodec =
-            Codec.object (\v d -> { vendorId = v, data = d })
-                |> Codec.field "vendorId" .vendorId Codec.int
-                |> Codec.field "data" .data (Codec.array Codec.int)
-                |> Codec.buildObject
+            Codec.array Codec.int
 
         songPosParamsCodec : Codec { positionLSB : Int, positionMSB : Int }
         songPosParamsCodec =
@@ -238,10 +236,8 @@ midiMsgToString midiMsg =
                 ++ ", comb "
                 ++ String.fromInt (bendLSB + Bitwise.shiftLeftBy 7 bendMSB)
 
-        SystemExclusive { vendorId, data } ->
-            "System Exclusive: Vendor ID "
-                ++ String.fromInt vendorId
-                ++ ", Data "
+        SystemExclusive data ->
+            "System Exclusive: "
                 ++ (Array.map String.fromInt data |> Array.toList |> String.join " ")
 
         SongPosition { positionLSB, positionMSB } ->
@@ -311,8 +307,8 @@ midiMsgToIntArray midiMsg =
         PitchBend { channel, bendLSB, bendMSB } ->
             Array.fromList [ 0xE0 + channel, bendLSB, bendMSB ]
 
-        SystemExclusive { vendorId, data } ->
-            Array.fromList [ 0xF0, vendorId ]
+        SystemExclusive data ->
+            Array.fromList [ 0xF0 ]
                 |> Array.append data
 
         SongPosition { positionLSB, positionMSB } ->
@@ -371,11 +367,8 @@ intArrayToMidiMsg intArray =
             Array.get 2 intArray
     in
     case ( firstByte, secondByte, thirdByte ) of
-        ( Just 0xF0, Just vendorId, _ ) ->
-            SystemExclusive
-                { vendorId = vendorId
-                , data = intArray
-                }
+        ( Just 0xF0, _, _ ) ->
+            SystemExclusive intArray
 
         ( Just 0xF2, Just positionLSB, Just positionMSB ) ->
             SongPosition { positionLSB = positionLSB, positionMSB = positionMSB }
@@ -527,9 +520,10 @@ type EditMidiButtonMsg
     | ENoteOff { channel : String, pitch : String, velocity : String }
     | EControllerChange { channel : String, controller : String, value : String }
     | EProgramChange { channel : String, preset : String }
-    | ESongSelect String
+    | ESystemExclusive String
       -- Some message types are commented out as they seem to break web midi
       -- | EUnofficialBusSelect String
+    | ESongSelect String
     | ETuneRequest
       -- | EEndOfSysEx
       -- | ETimingTick
@@ -598,6 +592,34 @@ editMidiButtonToMidiMsg eMidiButtonMsg =
             toByteInt songNumber
                 |> Maybe.map SongSelect
 
+        ESystemExclusive dataString ->
+            let
+                hex_values =
+                    String.split "," dataString
+                        |> List.map String.trim
+                        |> List.map Hex.fromString
+
+                all_okay =
+                    List.all
+                        (\h ->
+                            case h of
+                                Ok _ ->
+                                    True
+
+                                Err _ ->
+                                    False
+                        )
+                        hex_values
+            in
+            if all_okay then
+                List.filterMap Result.toMaybe hex_values
+                    |> Array.fromList
+                    |> SystemExclusive
+                    |> Just
+
+            else
+                Nothing
+
         -- EUnofficialBusSelect busNumber ->
         --     toByteInt busNumber
         --         |> Maybe.map UnofficialBusSelect
@@ -650,6 +672,9 @@ editMidiButtonSelector selectMsg selected =
             , Input.option
                 (EProgramChange { channel = "", preset = "" })
                 (text "Program Change")
+            , Input.option
+                (ESystemExclusive "")
+                (text "SysEx")
             , Input.option
                 (ESongSelect "")
                 (text "Song Select")
@@ -832,6 +857,21 @@ editMidiButtonMsgView editMsg midiButtonMsg =
                         )
                     ]
 
+            ESystemExclusive data ->
+                column
+                    [ spacing 4, width fill ]
+                    [ editTextBox
+                        { placeholder = "Enter comma sep hex e.g. 2D, 46, 4A"
+                        , label = "SysEx Data"
+                        , current = data
+                        }
+                        "text"
+                        (\newDataString ->
+                            ESystemExclusive newDataString
+                                |> editMsg
+                        )
+                    ]
+
             ESongSelect songNumber ->
                 column
                     [ spacing 4, width fill ]
@@ -920,6 +960,13 @@ midiMsgToEditMidiButtonMsg midiMsg =
                 { channel = String.fromInt (channel + 1)
                 , preset = String.fromInt preset
                 }
+                |> Just
+
+        SystemExclusive data ->
+            Array.toList data
+                |> List.map String.fromInt
+                |> String.join ", "
+                |> ESystemExclusive
                 |> Just
 
         SongSelect songNumber ->

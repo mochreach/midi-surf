@@ -21,7 +21,8 @@
             "folkertdev/elm-flate": "2.0.5",
             "mdgriffith/elm-ui": "1.1.8",
             "miniBill/elm-codec": "2.0.0",
-            "mpizenberg/elm-pointer-events": "5.0.0"
+            "mpizenberg/elm-pointer-events": "5.0.0",
+            "rtfeldman/elm-hex": "1.0.0"
         },
         "indirect": {
             "JoshuaHall/elm-fraction": "2.2.0",

@@ -216,11 +216,13 @@ type alias EditModuleState =
     , controller : Controller
     , createMode : CreateMode
     , selectedModule : Maybe Int
+    , oldController : Controller
     }
 
 
 type CreateMode
     = New
+    | Wrap
     | Load
 
 

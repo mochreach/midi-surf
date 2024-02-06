@@ -54,12 +54,12 @@ import Utils
 
 version : String
 version =
-    "0.4.0"
+    "0.5.0"
 
 
 date : String
 date =
-    "2024-02-03"
+    "2024-02-06"
 
 
 
@@ -121,7 +121,7 @@ type PopUp
     | MidiMenu
     | SaveMenu SaveMenuState
     | ShareMenu (Maybe Page)
-    | EditMenu String EditableController
+    | EditMenu String Controller EditableController
     | NewPageMenu PageMenuState
     | ImportPageFromUrl String
     | EditPageMenu Int PageMenuState
@@ -298,10 +298,10 @@ isomorphicKeyboard { channel, velocity, firstNote, numberOfRows, offset, rowLeng
     in
     List.map (makeIsomorphicRow channel velocity noteRange offset (rowLength - 1)) rowNumbers
         |> List.reverse
-        |> C.Column
+        |> C.SizedColumn
 
 
-makeIsomorphicRow : Midi.Channel -> Int -> List Int -> Int -> Int -> Int -> Controller
+makeIsomorphicRow : Midi.Channel -> Int -> List Int -> Int -> Int -> Int -> ( Int, Controller )
 makeIsomorphicRow channel velocity noteRange offset rowLength rowNumber =
     let
         start =
@@ -316,9 +316,9 @@ makeIsomorphicRow channel velocity noteRange offset rowLength rowNumber =
         |> List.map Tuple.second
         |> List.map
             (\i ->
-                C.newNote "" Small (Style.pitchToAppColour i) channel i velocity
+                ( 1, C.newNote "" Small (Style.pitchToAppColour i) channel i velocity )
             )
-        |> C.Row
+        |> (\n -> ( 1, C.SizedRow n ))
 
 
 scaleToScaleConstructor : EC.Scale -> (PitchClass.PitchClass -> Scale.Scale)
@@ -496,18 +496,18 @@ scaleKeyboard { channel, velocity, key, scaleId, octave, range } =
         |> List.map (makeNotesRow channel velocity intervals pitchClass)
         -- This is to make the octaves ascend on the app
         |> List.reverse
-        |> C.Column
+        |> C.SizedColumn
 
 
-makeNotesRow : Midi.Channel -> Int -> List Interval -> PitchClass -> Int -> Controller
+makeNotesRow : Midi.Channel -> Int -> List Interval -> PitchClass -> Int -> ( Int, Controller )
 makeNotesRow channel velocity intervals root octave =
     intervals
         |> List.map (\i -> Pitch.transposeUp i (Pitch.fromPitchClassInOctave octave root))
         |> List.map (\p -> ( Pitch.toString p, Pitch.toMIDINoteNumber p ))
         |> List.filter (\( _, n ) -> List.member n (List.range 1 127))
         |> List.map
-            (\( s, n ) -> C.newNote s Medium Style.Green channel n velocity)
-        |> C.Row
+            (\( s, n ) -> ( 1, C.newNote s Medium Style.Green channel n velocity ))
+        |> (\n -> ( 1, C.SizedRow n ))
 
 
 chordKeyboard :
@@ -559,7 +559,7 @@ chordKeyboard { channel, velocity, key, scaleId, octave, range, chordType } =
             List.map
                 (\cs ->
                     if List.length cs < longest then
-                        cs ++ [ C.Space ]
+                        cs ++ [ ( 1, C.Space ) ]
 
                     else
                         cs
@@ -567,11 +567,11 @@ chordKeyboard { channel, velocity, key, scaleId, octave, range, chordType } =
                 chordButtons
                 |> List.map List.reverse
     in
-    List.map C.Column paddedChords
-        |> C.Row
+    List.map (\c -> ( 1, C.SizedColumn c )) paddedChords
+        |> C.SizedRow
 
 
-makeTriadChordButtons : Midi.Channel -> Int -> Pitch.Pitch -> Pitch.Pitch -> Chord.Chord -> List Controller
+makeTriadChordButtons : Midi.Channel -> Int -> Pitch.Pitch -> Pitch.Pitch -> Chord.Chord -> List ( Int, Controller )
 makeTriadChordButtons channel velocity minPitch inMaxPitch chord =
     let
         maxPitch =
@@ -596,10 +596,10 @@ makeTriadChordButtons channel velocity minPitch inMaxPitch chord =
         chordButtons =
             List.map chordHelper midiNumberList
     in
-    chordButtons
+    List.map (\b -> ( 1, b )) chordButtons
 
 
-makeJazzChordButtons : Midi.Channel -> Int -> Pitch.Pitch -> Pitch.Pitch -> Chord.Chord -> List Controller
+makeJazzChordButtons : Midi.Channel -> Int -> Pitch.Pitch -> Pitch.Pitch -> Chord.Chord -> List ( Int, Controller )
 makeJazzChordButtons channel velocity minPitch inMaxPitch chord =
     let
         maxPitch =
@@ -625,7 +625,7 @@ makeJazzChordButtons channel velocity minPitch inMaxPitch chord =
         chordButtons =
             List.map chordHelper midiNumberList
     in
-    chordButtons
+    List.map (\b -> ( 1, b )) chordButtons
 
 
 
@@ -645,106 +645,128 @@ synthWidePage =
 
 synthWideController : Controller
 synthWideController =
-    C.Row
-        [ C.Column
-            [ C.Row
-                [ C.XYFader
-                    { status = C.Set
-                    , label = "P1"
-                    , labelSize = Just Small
-                    , colour = White
-                    , channel1 = Midi.Ch6
-                    , ccNumber1 = 1
-                    , valuePercent1 = 50
-                    , valueMin1 = 0
-                    , valueMax1 = 127
-                    , channel2 = Midi.Ch6
-                    , ccNumber2 = 2
-                    , valuePercent2 = 50
-                    , valueMin2 = 0
-                    , valueMax2 = 127
-                    }
-                , C.XYFader
-                    { status = C.Set
-                    , label = "Fil"
-                    , labelSize = Just Small
-                    , colour = White
-                    , channel1 = Midi.Ch6
-                    , ccNumber1 = 3
-                    , valuePercent1 = 50
-                    , valueMin1 = 0
-                    , valueMax1 = 127
-                    , channel2 = Midi.Ch6
-                    , ccNumber2 = 4
-                    , valuePercent2 = 50
-                    , valueMin2 = 0
-                    , valueMax2 = 127
-                    }
-                , C.PitchBend
-                    { status = C.Set
-                    , label = "Ch6 Bend"
-                    , labelSize = Just Small
-                    , colour = DarkGrey
-                    , channel = Midi.Ch6
-                    , bendValue = 8192
-                    }
+    C.SizedRow
+        [ ( 1
+          , C.SizedColumn
+                [ ( 1
+                  , C.SizedRow
+                        [ ( 1
+                          , C.XYFader
+                                { status = C.Set
+                                , label = "P1"
+                                , labelSize = Just Small
+                                , colour = White
+                                , channel1 = Midi.Ch6
+                                , ccNumber1 = 1
+                                , valuePercent1 = 50
+                                , valueMin1 = 0
+                                , valueMax1 = 127
+                                , channel2 = Midi.Ch6
+                                , ccNumber2 = 2
+                                , valuePercent2 = 50
+                                , valueMin2 = 0
+                                , valueMax2 = 127
+                                }
+                          )
+                        , ( 1
+                          , C.XYFader
+                                { status = C.Set
+                                , label = "Fil"
+                                , labelSize = Just Small
+                                , colour = White
+                                , channel1 = Midi.Ch6
+                                , ccNumber1 = 3
+                                , valuePercent1 = 50
+                                , valueMin1 = 0
+                                , valueMax1 = 127
+                                , channel2 = Midi.Ch6
+                                , ccNumber2 = 4
+                                , valuePercent2 = 50
+                                , valueMin2 = 0
+                                , valueMax2 = 127
+                                }
+                          )
+                        , ( 1
+                          , C.PitchBend
+                                { status = C.Set
+                                , label = "Ch6 Bend"
+                                , labelSize = Just Small
+                                , colour = DarkGrey
+                                , channel = Midi.Ch6
+                                , bendValue = 8192
+                                }
+                          )
+                        ]
+                  )
+                , ( 1
+                  , C.SizedRow
+                        [ ( 1
+                          , C.Fader
+                                { status = C.Set
+                                , label = "Att"
+                                , labelSize = Just Small
+                                , colour = Green
+                                , channel = Midi.Ch6
+                                , ccNumber = 5
+                                , valuePercent = 50
+                                , valueMin = 0
+                                , valueMax = 127
+                                }
+                          )
+                        , ( 1
+                          , C.Fader
+                                { status = C.Set
+                                , label = "Dec"
+                                , labelSize = Just Small
+                                , colour = Blue
+                                , channel = Midi.Ch6
+                                , ccNumber = 6
+                                , valuePercent = 50
+                                , valueMin = 0
+                                , valueMax = 127
+                                }
+                          )
+                        , ( 1
+                          , C.Fader
+                                { status = C.Set
+                                , label = "Sus"
+                                , labelSize = Just Small
+                                , colour = Yellow
+                                , channel = Midi.Ch6
+                                , ccNumber = 7
+                                , valuePercent = 50
+                                , valueMin = 0
+                                , valueMax = 127
+                                }
+                          )
+                        , ( 1
+                          , C.Fader
+                                { status = C.Set
+                                , label = "Rel"
+                                , labelSize = Just Small
+                                , colour = Red
+                                , channel = Midi.Ch6
+                                , ccNumber = 8
+                                , valuePercent = 50
+                                , valueMin = 0
+                                , valueMax = 127
+                                }
+                          )
+                        ]
+                  )
                 ]
-            , C.Row
-                [ C.Fader
-                    { status = C.Set
-                    , label = "Att"
-                    , labelSize = Just Small
-                    , colour = Green
-                    , channel = Midi.Ch6
-                    , ccNumber = 5
-                    , valuePercent = 50
-                    , valueMin = 0
-                    , valueMax = 127
+          )
+        , ( 1
+          , C.Module "Isomorphic Keyboard (Ch 6)" <|
+                isomorphicKeyboard
+                    { channel = Midi.Ch6
+                    , velocity = 100
+                    , firstNote = 48
+                    , numberOfRows = 8
+                    , offset = 5
+                    , rowLength = 9
                     }
-                , C.Fader
-                    { status = C.Set
-                    , label = "Dec"
-                    , labelSize = Just Small
-                    , colour = Blue
-                    , channel = Midi.Ch6
-                    , ccNumber = 6
-                    , valuePercent = 50
-                    , valueMin = 0
-                    , valueMax = 127
-                    }
-                , C.Fader
-                    { status = C.Set
-                    , label = "Sus"
-                    , labelSize = Just Small
-                    , colour = Yellow
-                    , channel = Midi.Ch6
-                    , ccNumber = 7
-                    , valuePercent = 50
-                    , valueMin = 0
-                    , valueMax = 127
-                    }
-                , C.Fader
-                    { status = C.Set
-                    , label = "Rel"
-                    , labelSize = Just Small
-                    , colour = Red
-                    , channel = Midi.Ch6
-                    , ccNumber = 8
-                    , valuePercent = 50
-                    , valueMin = 0
-                    , valueMax = 127
-                    }
-                ]
-            ]
-        , C.Module "Isomorphic Keyboard (Ch 6)" <|
-            isomorphicKeyboard
-                { channel = Midi.Ch6
-                , velocity = 100
-                , firstNote = 48
-                , numberOfRows = 8
-                , offset = 5
-                , rowLength = 9
-                }
+          )
         ]
 
 
@@ -761,141 +783,171 @@ drumPage =
 
 drumsController : Controller
 drumsController =
-    C.Column
-        [ C.Column
-            [ C.Row
-                [ C.CCValue
-                    { status = C.Off
-                    , label = "Unmute\nKick"
-                    , labelSize = Just Small
-                    , colour = LightGrey
-                    , channel = Midi.Ch1
-                    , controller = 53
-                    , value = 0
-                    }
-                , C.CCValue
-                    { status = C.Off
-                    , label = "Unmute\nSnare"
-                    , labelSize = Just Small
-                    , colour = LightGrey
-                    , channel = Midi.Ch2
-                    , controller = 53
-                    , value = 0
-                    }
-                , C.CCValue
-                    { status = C.Off
-                    , label = "Unmute\nHat"
-                    , labelSize = Just Small
-                    , colour = LightGrey
-                    , channel = Midi.Ch3
-                    , controller = 53
-                    , value = 0
-                    }
-                ]
-            , C.Row
-                [ C.CCValue
-                    { status = C.Off
-                    , label = "Mute\nKick"
-                    , labelSize = Just Small
-                    , colour = DarkGrey
-                    , channel = Midi.Ch1
-                    , controller = 53
-                    , value = 1
-                    }
-                , C.CCValue
-                    { status = C.Off
-                    , label = "Mute\nSnare"
-                    , labelSize = Just Small
-                    , colour = DarkGrey
-                    , channel = Midi.Ch2
-                    , controller = 53
-                    , value = 1
-                    }
-                , C.CCValue
-                    { status = C.Off
-                    , label = "Mute\nHat"
-                    , labelSize = Just Small
-                    , colour = DarkGrey
-                    , channel = Midi.Ch3
-                    , controller = 53
-                    , value = 1
-                    }
-                ]
-            , C.Row
-                [ C.Command
-                    { status = C.Off
-                    , label = "Hold for\nReverse Snare"
-                    , labelSize = Just Small
-                    , colour = Yellow
-                    , onPressMsgs =
-                        [ Midi.ControllerChange
-                            { channel = 1
-                            , controller = 2
-                            , value = 127
+    C.SizedColumn
+        [ ( 1
+          , C.SizedColumn
+                [ ( 1
+                  , C.Row
+                        [ C.CCValue
+                            { status = C.Off
+                            , label = "Unmute\nKick"
+                            , labelSize = Just Small
+                            , colour = LightGrey
+                            , channel = Midi.Ch1
+                            , controller = 53
+                            , value = 0
                             }
-                        ]
-                    , onReleaseMsgs =
-                        [ Midi.ControllerChange
-                            { channel = 1
-                            , controller = 2
+                        , C.CCValue
+                            { status = C.Off
+                            , label = "Unmute\nSnare"
+                            , labelSize = Just Small
+                            , colour = LightGrey
+                            , channel = Midi.Ch2
+                            , controller = 53
+                            , value = 0
+                            }
+                        , C.CCValue
+                            { status = C.Off
+                            , label = "Unmute\nHat"
+                            , labelSize = Just Small
+                            , colour = LightGrey
+                            , channel = Midi.Ch3
+                            , controller = 53
                             , value = 0
                             }
                         ]
-                    }
-                , C.Sequence
-                    { status = C.Off
-                    , label = "Play/Stop"
-                    , labelSize = Just Small
-                    , colour = White
-                    , midiMsgs =
-                        Array.fromList
-                            [ Midi.StartSong
-                            , Midi.StopSong
-                            ]
-                    , index = 0
-                    }
+                  )
+                , ( 1
+                  , C.SizedRow
+                        [ ( 1
+                          , C.CCValue
+                                { status = C.Off
+                                , label = "Mute\nKick"
+                                , labelSize = Just Small
+                                , colour = DarkGrey
+                                , channel = Midi.Ch1
+                                , controller = 53
+                                , value = 1
+                                }
+                          )
+                        , ( 1
+                          , C.CCValue
+                                { status = C.Off
+                                , label = "Mute\nSnare"
+                                , labelSize = Just Small
+                                , colour = DarkGrey
+                                , channel = Midi.Ch2
+                                , controller = 53
+                                , value = 1
+                                }
+                          )
+                        , ( 1
+                          , C.CCValue
+                                { status = C.Off
+                                , label = "Mute\nHat"
+                                , labelSize = Just Small
+                                , colour = DarkGrey
+                                , channel = Midi.Ch3
+                                , controller = 53
+                                , value = 1
+                                }
+                          )
+                        ]
+                  )
+                , ( 1
+                  , C.SizedRow
+                        [ ( 1
+                          , C.Command
+                                { status = C.Off
+                                , label = "Hold for\nReverse Snare"
+                                , labelSize = Just Small
+                                , colour = Yellow
+                                , onPressMsgs =
+                                    [ Midi.ControllerChange
+                                        { channel = 1
+                                        , controller = 2
+                                        , value = 127
+                                        }
+                                    ]
+                                , onReleaseMsgs =
+                                    [ Midi.ControllerChange
+                                        { channel = 1
+                                        , controller = 2
+                                        , value = 0
+                                        }
+                                    ]
+                                }
+                          )
+                        , ( 1
+                          , C.Sequence
+                                { status = C.Off
+                                , label = "Play/Stop"
+                                , labelSize = Just Small
+                                , colour = White
+                                , midiMsgs =
+                                    Array.fromList
+                                        [ Midi.StartSong
+                                        , Midi.StopSong
+                                        ]
+                                , index = 0
+                                }
+                          )
+                        ]
+                  )
                 ]
-            ]
-        , Row
-            [ C.Note
-                { status = C.Off
-                , label = "Snare"
-                , labelSize = Just Small
-                , colour = Green
-                , channel = Midi.Ch2
-                , pitch = 53
-                , velocity = 100
-                }
-            , C.Note
-                { status = C.Off
-                , label = "Hat 50"
-                , labelSize = Just Small
-                , colour = Blue
-                , channel = Midi.Ch3
-                , pitch = 53
-                , velocity = 50
-                }
-            ]
-        , Row
-            [ C.Note
-                { status = C.Off
-                , label = "Kick"
-                , labelSize = Just Small
-                , colour = Red
-                , channel = Midi.Ch1
-                , pitch = 53
-                , velocity = 100
-                }
-            , C.Note
-                { status = C.Off
-                , label = "Hat 100"
-                , labelSize = Just Small
-                , colour = Blue
-                , channel = Midi.Ch3
-                , pitch = 53
-                , velocity = 100
-                }
-            ]
+          )
+        , ( 1
+          , SizedRow
+                [ ( 1
+                  , C.Note
+                        { status = C.Off
+                        , label = "Snare"
+                        , labelSize = Just Small
+                        , colour = Green
+                        , channel = Midi.Ch2
+                        , pitch = 53
+                        , velocity = 100
+                        }
+                  )
+                , ( 1
+                  , C.Note
+                        { status = C.Off
+                        , label = "Hat 50"
+                        , labelSize = Just Small
+                        , colour = Blue
+                        , channel = Midi.Ch3
+                        , pitch = 53
+                        , velocity = 50
+                        }
+                  )
+                ]
+          )
+        , ( 1
+          , SizedRow
+                [ ( 1
+                  , C.Note
+                        { status = C.Off
+                        , label = "Kick"
+                        , labelSize = Just Small
+                        , colour = Red
+                        , channel = Midi.Ch1
+                        , pitch = 53
+                        , velocity = 100
+                        }
+                  )
+                , ( 1
+                  , C.Note
+                        { status = C.Off
+                        , label = "Hat 100"
+                        , labelSize = Just Small
+                        , colour = Blue
+                        , channel = Midi.Ch3
+                        , pitch = 53
+                        , velocity = 100
+                        }
+                  )
+                ]
+          )
         ]
 
 
@@ -1358,13 +1410,10 @@ update msg model =
             )
 
         OpenEditController id ->
-            let
-                control =
-                    getControllerFromActivePage id model.activePage model.pages
-            in
             ( { model
                 | popup =
-                    Maybe.map (EditMenu id << convertToEditable) control
+                    getControllerFromActivePage id model.activePage model.pages
+                        |> Maybe.map (\controller -> EditMenu id controller (convertToEditable controller))
               }
             , Cmd.none
             )
@@ -1373,24 +1422,24 @@ update msg model =
             let
                 newPopup =
                     case model.popup of
-                        Just (EditMenu id oldController) ->
-                            (case ( oldController, editType ) of
-                                ( EditColumn items, EditRow _ ) ->
-                                    EditRow items
+                        Just (EditMenu id baseController oldEController) ->
+                            (case ( oldEController, editType ) of
+                                ( EditSizedColumn items, EditSizedRow _ ) ->
+                                    EditSizedRow items
 
-                                ( EditColumn items, EditColumn _ ) ->
-                                    EditColumn items
+                                ( EditSizedColumn items, EditSizedColumn _ ) ->
+                                    EditSizedColumn items
 
-                                ( EditRow items, EditRow _ ) ->
-                                    EditRow items
+                                ( EditSizedRow items, EditSizedRow _ ) ->
+                                    EditSizedRow items
 
-                                ( EditRow items, EditColumn _ ) ->
-                                    EditColumn items
+                                ( EditSizedRow items, EditSizedColumn _ ) ->
+                                    EditSizedColumn items
 
                                 _ ->
                                     editType
                             )
-                                |> EditMenu id
+                                |> EditMenu id baseController
                                 |> Just
 
                         _ ->
@@ -1400,11 +1449,8 @@ update msg model =
 
         FinishedEdit controller ->
             case model.popup of
-                Just (EditMenu id _) ->
+                Just (EditMenu id oldController _) ->
                     let
-                        oldController =
-                            getControllerFromActivePage "0" model.activePage model.pages
-
                         newModel =
                             { model
                                 | popup = Nothing
@@ -1418,16 +1464,11 @@ update msg model =
                                         Edit ( Just first, rest ) ->
                                             Edit
                                                 ( Just first
-                                                , case oldController of
-                                                    Just oc ->
-                                                        oc :: rest
-
-                                                    Nothing ->
-                                                        rest
+                                                , oldController :: rest
                                                 )
 
                                         Edit ( Nothing, _ ) ->
-                                            Edit ( oldController, [] )
+                                            Edit ( Just oldController, [] )
 
                                         Normal ->
                                             Normal
@@ -1443,21 +1484,33 @@ update msg model =
                         | popup = Nothing
                         , mode = Normal
                       }
-                    , Cmd.none
+                    , Task.perform
+                        (\viewport ->
+                            PageResized
+                                (floor viewport.scene.width)
+                                (floor viewport.scene.height)
+                        )
+                        Browser.Dom.getViewport
                     )
 
         SelectActivePage activePage ->
             ( { model | activePage = activePage }
-            , Cmd.none
+            , Task.perform
+                (\viewport ->
+                    PageResized
+                        (floor viewport.scene.width)
+                        (floor viewport.scene.height)
+                )
+                Browser.Dom.getViewport
             )
 
         UpdateControllerState state ->
             case model.popup of
-                Just (EditMenu id _) ->
+                Just (EditMenu id oldController _) ->
                     ( { model
                         | popup =
                             Just <|
-                                EditMenu id state
+                                EditMenu id oldController state
                       }
                     , Cmd.none
                     )
@@ -1847,9 +1900,9 @@ update msg model =
             ( { model
                 | popup =
                     case model.popup of
-                        Just (EditMenu id state) ->
+                        Just (EditMenu id oldController state) ->
                             EC.updateWithMidiMsg midiMsg state
-                                |> EditMenu id
+                                |> EditMenu id oldController
                                 |> Just
 
                         _ ->
@@ -1877,6 +1930,7 @@ convertToEditable control =
                 , controller = subController
                 , createMode = EC.New
                 , selectedModule = Nothing
+                , oldController = Space
                 }
 
         C.Row subControls ->
@@ -2374,8 +2428,8 @@ renderPopup screen midiStatus savedPages savedModules popup =
             ShareMenu mPage ->
                 shareMenu mPage
 
-            EditMenu _ state ->
-                editMenu savedModules state
+            EditMenu _ oldController state ->
+                editMenu oldController savedModules state
 
             NewPageMenu state ->
                 newPageMenu savedPages state
@@ -2489,6 +2543,17 @@ infoPanel =
                     |> html
                     |> el [ centerX ]
                     |> el [ width fill ]
+                , paragraph [ Font.bold ] [ text "iOS" ]
+                , paragraph []
+                    [ text "If you're having trouble running this on iOS, please check out this "
+                    , newTabLink
+                        linkStyle
+                        { url = "https://op-forums.com/t/midi-surf-a-free-customisable-web-based-midi-controller/23708/17"
+                        , label = text "post"
+                        }
+                    , text
+                        " for instructions from a user on how to get it working."
+                    ]
                 , paragraph [ Font.bold ] [ text "Supporting Development" ]
                 , paragraph []
                     [ """Please consider supporting the development of this
@@ -2500,7 +2565,7 @@ infoPanel =
                         , label = text "Patreon"
                         }
                     , """ and help guide the direction the app (and future software
-                    from Mo Chreach!) takes, or buy me a coffee/beer/cup of tea/sausage roll on
+                    from Mo Chreach!), or buy me a coffee/beer/cup of tea/sausage roll on
                     """ |> text
                     , newTabLink
                         linkStyle
@@ -2840,8 +2905,8 @@ editPanelWidth =
     width <| minimum 320 <| maximum 540 <| fill
 
 
-editMenu : Dict String Controller -> EditableController -> Element Msg
-editMenu savedModules menuType =
+editMenu : Controller -> Dict String Controller -> EditableController -> Element Msg
+editMenu oldController savedModules menuType =
     wrappedRow
         [ spacing 4
         , width fill
@@ -2864,6 +2929,7 @@ editMenu savedModules menuType =
                         , controller = C.Space
                         , createMode = EC.New
                         , selectedModule = Nothing
+                        , oldController = oldController
                         }
                     )
                 , selectorOption
@@ -3013,10 +3079,10 @@ selectorOption current new =
                     ( EditChordBuilder _, EditChordBuilder _ ) ->
                         [ backgroundColour Blue ]
 
-                    ( EditColumn _, EditColumn _ ) ->
+                    ( EditSizedColumn _, EditSizedColumn _ ) ->
                         [ backgroundColour Blue ]
 
-                    ( EditRow _, EditRow _ ) ->
+                    ( EditSizedRow _, EditSizedRow _ ) ->
                         [ backgroundColour Blue ]
 
                     ( EditNote _, EditNote _ ) ->
@@ -3077,6 +3143,7 @@ editModulePane savedModules state =
             , label = Input.labelHidden "Create Mode"
             , options =
                 [ Input.option EC.New (text "New")
+                , Input.option EC.Wrap (text "Wrap")
                 , Input.option EC.Load (text "Load")
                 ]
             }
@@ -3093,6 +3160,22 @@ editModulePane savedModules state =
                             |> EditModule
                             |> UpdateControllerState
                     )
+
+            EC.Wrap ->
+                column [ spacing 10, width fill ]
+                    [ paragraph [] [ text "Will wrap the current controller in a module." ]
+                    , editTextBox
+                        { placeholder = "label"
+                        , label = "Label"
+                        , current = state.label
+                        }
+                        "text"
+                        (\newLabel ->
+                            { state | label = newLabel }
+                                |> EditModule
+                                |> UpdateControllerState
+                        )
+                    ]
 
             EC.Load ->
                 column [ spacing 10, width fill ]
@@ -3141,6 +3224,9 @@ editModulePane savedModules state =
             (case state.createMode of
                 EC.New ->
                     Just <| FinishedEdit <| C.Module state.label state.controller
+
+                EC.Wrap ->
+                    Just <| FinishedEdit <| C.Module state.label state.oldController
 
                 EC.Load ->
                     state.selectedModule
@@ -3694,56 +3780,7 @@ editSizedRowPane subControls =
             , Border.dashed
             ]
             (List.indexedMap
-                (\i ( s, c ) ->
-                    row [ width fill ]
-                        [ el [] (C.controllerToString c |> text)
-                        , row [ alignRight, spacing 2 ]
-                            [ Input.button
-                                [ padding 5
-                                , Border.width 2
-                                , Border.solid
-                                , borderColour Black
-                                ]
-                                { onPress =
-                                    List.indexedMap
-                                        (\ci ( cs, cc ) ->
-                                            if ci == i then
-                                                ( max (cs - 1) 0, cc )
-
-                                            else
-                                                ( cs, cc )
-                                        )
-                                        subControls
-                                        |> EditSizedRow
-                                        |> UpdateControllerState
-                                        |> Just
-                                , label = text "-"
-                                }
-                            , el [ alignRight ] (String.fromInt s |> text)
-                            , Input.button
-                                [ padding 5
-                                , Border.width 2
-                                , Border.solid
-                                , borderColour Black
-                                ]
-                                { onPress =
-                                    List.indexedMap
-                                        (\ci ( cs, cc ) ->
-                                            if ci == i then
-                                                ( cs + 1, cc )
-
-                                            else
-                                                ( cs, cc )
-                                        )
-                                        subControls
-                                        |> EditSizedRow
-                                        |> UpdateControllerState
-                                        |> Just
-                                , label = text "+"
-                                }
-                            ]
-                        ]
-                )
+                (editSizedItemView subControls)
                 subControls
             )
         , acceptOrCloseButtons
@@ -3805,62 +3842,99 @@ editSizedColumnPane subControls =
             , Border.dashed
             ]
             (List.indexedMap
-                (\i ( s, c ) ->
-                    row [ width fill ]
-                        [ el [] (C.controllerToString c |> text)
-                        , row [ alignRight, spacing 2 ]
-                            [ Input.button
-                                [ padding 5
-                                , Border.width 2
-                                , Border.solid
-                                , borderColour Black
-                                ]
-                                { onPress =
-                                    List.indexedMap
-                                        (\ci ( cs, cc ) ->
-                                            if ci == i then
-                                                ( max (cs - 1) 0, cc )
-
-                                            else
-                                                ( cs, cc )
-                                        )
-                                        subControls
-                                        |> EditSizedColumn
-                                        |> UpdateControllerState
-                                        |> Just
-                                , label = text "-"
-                                }
-                            , el [ alignRight ] (String.fromInt s |> text)
-                            , Input.button
-                                [ padding 5
-                                , Border.width 2
-                                , Border.solid
-                                , borderColour Black
-                                ]
-                                { onPress =
-                                    List.indexedMap
-                                        (\ci ( cs, cc ) ->
-                                            if ci == i then
-                                                ( cs + 1, cc )
-
-                                            else
-                                                ( cs, cc )
-                                        )
-                                        subControls
-                                        |> EditSizedColumn
-                                        |> UpdateControllerState
-                                        |> Just
-                                , label = text "+"
-                                }
-                            ]
-                        ]
-                )
+                (editSizedItemView subControls)
                 subControls
             )
         , acceptOrCloseButtons
             "Ok"
             ClosePopUp
             (Just <| FinishedEdit <| C.SizedColumn subControls)
+        ]
+
+
+editSizedItemView :
+    List ( Int, Controller )
+    -> Int
+    -> ( Int, Controller )
+    -> Element Msg
+editSizedItemView subControls i ( s, c ) =
+    row [ spacing 5, width fill ]
+        [ Input.button
+            [ padding 5
+            , Border.width 2
+            , Border.solid
+            , borderColour Black
+            , backgroundColour Red
+            , Font.color <| appColourToRGB White
+            ]
+            { onPress =
+                subControls
+                    |> List.indexedMap Tuple.pair
+                    |> List.filter (\( ci, _ ) -> i /= ci)
+                    |> List.map Tuple.second
+                    |> EditSizedRow
+                    |> UpdateControllerState
+                    |> Just
+            , label =
+                Icons.trash2
+                    |> Icons.withSize 10
+                    |> Icons.toHtml []
+                    |> html
+            }
+        , el [] (C.controllerToString c |> String.left 16 |> text)
+        , row [ alignRight, spacing 2 ]
+            [ Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , borderColour Black
+                ]
+                { onPress =
+                    List.indexedMap
+                        (\ci ( cs, cc ) ->
+                            if ci == i then
+                                ( max (cs - 1) 0, cc )
+
+                            else
+                                ( cs, cc )
+                        )
+                        subControls
+                        |> EditSizedRow
+                        |> UpdateControllerState
+                        |> Just
+                , label =
+                    Icons.plus
+                        |> Icons.withSize 10
+                        |> Icons.toHtml []
+                        |> html
+                }
+            , el [ alignRight ] (String.fromInt s |> text)
+            , Input.button
+                [ padding 5
+                , Border.width 2
+                , Border.solid
+                , borderColour Black
+                ]
+                { onPress =
+                    List.indexedMap
+                        (\ci ( cs, cc ) ->
+                            if ci == i then
+                                ( cs + 1, cc )
+
+                            else
+                                ( cs, cc )
+                        )
+                        subControls
+                        |> EditSizedRow
+                        |> UpdateControllerState
+                        |> Just
+                , label =
+                    Icons.plus
+                        |> Icons.withSize 10
+                        |> Icons.toHtml []
+                        |> html
+                }
+            ]
         ]
 
 
