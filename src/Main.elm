@@ -54,7 +54,7 @@ import Utils
 
 version : String
 version =
-    "0.5.0"
+    "0.5.1"
 
 
 date : String
@@ -213,8 +213,8 @@ init { mInitialState } url _ =
             [ Task.perform
                 (\viewport ->
                     PageResized
-                        (floor viewport.scene.width)
-                        (floor viewport.scene.height)
+                        (floor viewport.viewport.width)
+                        (floor viewport.viewport.height)
                 )
                 Browser.Dom.getViewport
             ]
@@ -1487,8 +1487,8 @@ update msg model =
                     , Task.perform
                         (\viewport ->
                             PageResized
-                                (floor viewport.scene.width)
-                                (floor viewport.scene.height)
+                                (floor viewport.viewport.width)
+                                (floor viewport.viewport.height)
                         )
                         Browser.Dom.getViewport
                     )
@@ -1498,8 +1498,8 @@ update msg model =
             , Task.perform
                 (\viewport ->
                     PageResized
-                        (floor viewport.scene.width)
-                        (floor viewport.scene.height)
+                        (floor viewport.viewport.width)
+                        (floor viewport.viewport.height)
                 )
                 Browser.Dom.getViewport
             )

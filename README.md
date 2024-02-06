@@ -53,6 +53,7 @@ Here is a list of presets you can import: https://github.com/mochreach/midi-surf
 
 ## Update History
 
+- 0.5.1 (2024-02-06): Fixes a bug with setting the viewport.
 - 0.5.0 (2024-02-06): Adds SysEx msgs, deleting items in rows/columns, wrapping containers in modules.
 - 0.4.0 (2024-02-03): Theory Craft - Adds chords keyboard and scale keyboard. Adds sized columns and rows.
 - 0.3.4 (2023-03-05): Fixes a bug with commands.
