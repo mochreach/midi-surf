@@ -50,3 +50,14 @@ current browser compatibility.
 ## Presets
 
 Here is a list of presets you can import: https://github.com/mochreach/midi-surf/blob/main/presets.md
+
+## Update History
+
+- 0.5.0 (2024-02-06): Adds SysEx msgs, deleting items in rows/columns, wrapping containers in modules.
+- 0.4.0 (2024-02-03): Theory Craft - Adds chords keyboard and scale keyboard. Adds sized columns and rows.
+- 0.3.4 (2023-03-05): Fixes a bug with commands.
+- 0.3.3 (2023-02-28): Fixes scaling issues.
+- 0.3.2 (2023-02-11): Fixes fader bug with min max value not being used and web midi error reporting.
+- 0.3.1 (2023-02-06): Fixes fader max value bug and midi indexing.
+- 0.3.0 (2023-01-30): No Wasted Effort - Adds ways to save and export presets.
+- 0.2.0 (2023-01-22): The Hands On Update - New controller types.

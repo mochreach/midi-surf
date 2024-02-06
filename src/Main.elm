@@ -54,12 +54,12 @@ import Utils
 
 version : String
 version =
-    "0.4.0"
+    "0.5.0"
 
 
 date : String
 date =
-    "2024-02-03"
+    "2024-02-06"
 
 
 
