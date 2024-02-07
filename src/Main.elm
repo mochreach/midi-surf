@@ -54,12 +54,12 @@ import Utils
 
 version : String
 version =
-    "0.5.1"
+    "0.5.2"
 
 
 date : String
 date =
-    "2024-02-06"
+    "2024-02-07"
 
 
 
@@ -1449,8 +1449,11 @@ update msg model =
 
         FinishedEdit controller ->
             case model.popup of
-                Just (EditMenu id oldController _) ->
+                Just (EditMenu id _ _) ->
                     let
+                        oldController =
+                            getControllerFromActivePage "0" model.activePage model.pages
+
                         newModel =
                             { model
                                 | popup = Nothing
@@ -1464,11 +1467,16 @@ update msg model =
                                         Edit ( Just first, rest ) ->
                                             Edit
                                                 ( Just first
-                                                , oldController :: rest
+                                                , case oldController of
+                                                    Just oc ->
+                                                        oc :: rest
+
+                                                    Nothing ->
+                                                        rest
                                                 )
 
                                         Edit ( Nothing, _ ) ->
-                                            Edit ( Just oldController, [] )
+                                            Edit ( oldController, [] )
 
                                         Normal ->
                                             Normal
