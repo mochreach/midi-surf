@@ -910,6 +910,20 @@ getModules currentModules controller =
                 |> List.concat
                 |> List.append currentModules
 
+        SizedRow subControls ->
+            subControls
+                |> List.map Tuple.second
+                |> List.map (getModules [])
+                |> List.concat
+                |> List.append currentModules
+
+        SizedColumn subControls ->
+            subControls
+                |> List.map Tuple.second
+                |> List.map (getModules [])
+                |> List.concat
+                |> List.append currentModules
+
         _ ->
             []
 
