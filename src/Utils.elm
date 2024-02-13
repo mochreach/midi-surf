@@ -1,6 +1,6 @@
 module Utils exposing (PageConfig, mmap6, onContextMenu, pageConfigCodec)
 
-import Codec exposing (Codec, Value)
+import Codec exposing (Codec)
 import Html
 import Html.Events exposing (preventDefaultOn)
 import Json.Decode as Json

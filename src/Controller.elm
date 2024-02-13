@@ -1690,7 +1690,7 @@ renderNote msgs config editing state =
                     )
              , htmlAttribute <|
                 Mouse.onDown
-                    (\event ->
+                    (\_ ->
                         msgs.buttonDownMsg
                     )
              , htmlAttribute <|
