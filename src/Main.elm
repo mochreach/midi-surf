@@ -54,12 +54,12 @@ import Utils
 
 version : String
 version =
-    "0.5.2"
+    "0.5.3"
 
 
 date : String
 date =
-    "2024-02-07"
+    "2024-02-13"
 
 
 
@@ -77,6 +77,7 @@ type alias Model =
     , popup : Maybe PopUp
     , midiLog : List String
     , screen : Maybe Screen
+    , navKey : Maybe Navigation.Key
     }
 
 
@@ -93,6 +94,7 @@ modelCodec =
         |> Codec.field "popup" .popup (Codec.constant Nothing)
         |> Codec.field "midiLog" .midiLog (Codec.constant [])
         |> Codec.maybeField "screen" .screen screenCodec
+        |> Codec.field "navKey" .navKey (Codec.constant Nothing)
         |> Codec.buildObject
 
 
@@ -207,7 +209,7 @@ type alias Flags =
 
 
 init : Flags -> Url -> Navigation.Key -> ( Model, Cmd Msg )
-init { mInitialState } url _ =
+init { mInitialState } url navKey =
     let
         defaultCmds =
             [ Task.perform
@@ -234,6 +236,7 @@ init { mInitialState } url _ =
 
                         _ ->
                             Just InfoPanel
+                , navKey = Just navKey
               }
             , Cmd.batch defaultCmds
             )
@@ -255,6 +258,7 @@ init { mInitialState } url _ =
                             Just InfoPanel
               , midiLog = []
               , screen = Nothing
+              , navKey = Just navKey
               }
             , Cmd.batch defaultCmds
             )
@@ -1383,8 +1387,22 @@ update msg model =
                     }
             in
             ( newModel
-            , Ports.saveState <|
-                Codec.encodeToValue modelCodec newModel
+            , Cmd.batch
+                [ Ports.saveState <|
+                    Codec.encodeToValue modelCodec newModel
+                , case model.navKey of
+                    Just key ->
+                        Navigation.pushUrl
+                            key
+                            (Builder.crossOrigin
+                                "https://midisurf.app"
+                                []
+                                []
+                            )
+
+                    Nothing ->
+                        Cmd.none
+                ]
             )
 
         AddSpace id ->
@@ -2539,7 +2557,7 @@ infoPanel =
                 , Html.iframe
                     [ HAtt.height 300
                     , HAtt.width 360
-                    , HAtt.src "https://www.youtube.com/embed/c5BpeMxs5ZU"
+                    , HAtt.src "https://www.youtube.com/embed/a2TxqJtEovM"
                     , HAtt.title "YouTube video player"
                     , HAtt.attribute "frameborder" "0"
                     , HAtt.attribute
